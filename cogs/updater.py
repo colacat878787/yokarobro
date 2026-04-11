@@ -12,34 +12,47 @@ class AutoUpdaterCog(commands.Cog):
     def cog_unload(self):
         self.check_update.cancel()
 
-    @tasks.loop(seconds=60) # 每 60 秒自動檢查一次 Git 更新
+    @tasks.loop(seconds=3) # 每 3 秒自動檢查一次 Git 更新
     async def check_update(self):
         try:
             env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
-            # 1. 抓取遠部遠端最新狀態
-            await asyncio.to_thread(subprocess.run, ["git", "fetch"], check=True, timeout=15, env=env, capture_output=True)
             
-            # 2. 比較本地 HEAD 與遠端 origin/main 的 Commit Hash 是否不同
-            local_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "HEAD"], timeout=5)
-            remote_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "origin/main"], timeout=5)
+            # 使用 ls-remote 輕量化取得遠端最新的 commit hash (不佔用磁碟存取)
+            process = await asyncio.to_thread(subprocess.run, ["git", "ls-remote", "origin", "main"], capture_output=True, text=True, timeout=10, env=env)
+            if process.returncode != 0:
+                print(f"⚠️ [自動更新] 無法獲取遠端狀態，Git 錯誤:\n{process.stderr}")
+                return
+                
+            out_lines = process.stdout.strip().split()
+            if not out_lines:
+                return
+            remote_hash = out_lines[0]
             
-            if local_hash.strip() != remote_hash.strip():
-                print("🔄 [自動更新] 偵測到遠端 GitHub 有新版本！正在自動拉取更新...")
+            local_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "HEAD"], text=True)
+            local_hash = local_hash.strip()
+            
+            if local_hash != remote_hash:
+                print("====================================")
+                print(f"🔄 [自動更新] 發現遠端 GitHub 有新版本！")
+                print(f"📌 本地版本: {local_hash[:7]}")
+                print(f"⭐ 遠端版本: {remote_hash[:7]}")
+                print("⏬ [自動更新] 正在執行 git fetch 與 git pull...")
                 
-                # 3. 執行 git pull 更新程式碼
-                await asyncio.to_thread(subprocess.run, ["git", "pull", "origin", "main"], check=True, timeout=15, env=env)
+                # 正式執行拉取
+                await asyncio.to_thread(subprocess.run, ["git", "fetch"], check=True, timeout=15, env=env)
+                pull_res = await asyncio.to_thread(subprocess.run, ["git", "pull", "origin", "main"], check=True, capture_output=True, text=True, timeout=15, env=env)
                 
-                print("✅ [自動更新] 更新完成，準備重新啟動機器人拉取新系統...")
-                
-                # 4. 強制結束程序，Pterodactyl 面板會秒速自動將機器人重啟，完美銜接新代碼
+                print(f"📥 [自動更新] 拉取成功！日誌：\n{pull_res.stdout}")
+                print("✅ [自動更新] 代碼合併完畢，準備呼叫翼龍面板自動重新啟動機器人...")
+                print("====================================")
                 os._exit(0)
         except Exception as e:
-            # 原諒我偷偷忽略錯誤，可能是沒有 git 目錄或沒設好 origin
-            pass
+            print(f"❌ [自動更新] 發生例外錯誤: {e}")
 
     @check_update.before_loop
     async def before_check(self):
         await self.bot.wait_until_ready()
+        print("🚀 [自動更新] 模組準備就緒！已開始每 3 秒進行極速心跳檢查！")
 
     @commands.command(name='update', aliases=['系統更新', '強制更新'])
     @commands.has_permissions(administrator=True)
