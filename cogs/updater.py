@@ -12,7 +12,7 @@ class AutoUpdaterCog(commands.Cog):
     def cog_unload(self):
         self.check_update.cancel()
 
-    @tasks.loop(minutes=3) # 每 3 分鐘自動檢查一次 Git 更新
+    @tasks.loop(seconds=60) # 每 60 秒自動檢查一次 Git 更新
     async def check_update(self):
         try:
             # 1. 抓取遠部遠端最新狀態 (這不會變動本地檔案)
@@ -39,6 +39,25 @@ class AutoUpdaterCog(commands.Cog):
     @check_update.before_loop
     async def before_check(self):
         await self.bot.wait_until_ready()
+
+    @commands.command(name='update', aliases=['系統更新', '強制更新'])
+    @commands.has_permissions(administrator=True)
+    async def manual_update(self, ctx):
+        """手動觸發拉取 GitHub 更新"""
+        msg = await ctx.send("🏃 洛洛正在向 GitHub 小跑步請求最新代碼...")
+        try:
+            await asyncio.to_thread(subprocess.run, ["git", "fetch"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            local_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "HEAD"])
+            remote_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "origin/main"])
+            
+            if local_hash.strip() != remote_hash.strip():
+                await msg.edit(content="🔄 哇塞！發現熱騰騰的新代碼！正在下載安裝，洛洛馬上重啟！嗷嗷嗷～")
+                await asyncio.to_thread(subprocess.run, ["git", "pull", "origin", "main"], check=True)
+                os._exit(0)
+            else:
+                await msg.edit(content="✅ 目前洛洛已經是最新的程式碼囉！不需要更新。")
+        except Exception as e:
+            await msg.edit(content=f"❌ 嗷...從 GitHub 抓取代碼失敗惹：{e}")
 
 async def setup(bot):
     await bot.add_cog(AutoUpdaterCog(bot))
