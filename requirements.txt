@@ -1,0 +1,11 @@
+discord.py[voice]
+aiohttp==3.9.1
+yt-dlp
+beautifulsoup4
+feedparser
+python-dotenv
+pillow
+PyNaCl
+audioop-lts; python_version >= "3.13"
+gTTS==2.5.1
+requests
