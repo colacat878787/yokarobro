@@ -24,7 +24,8 @@ class YokaroBot(commands.Bot):
             'cogs.info',
             'cogs.fun',
             'cogs.twitter',
-            'cogs.tts'
+            'cogs.tts',
+            'cogs.updater'
         ]
 
     async def setup_hook(self):
