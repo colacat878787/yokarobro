@@ -15,18 +15,19 @@ class AutoUpdaterCog(commands.Cog):
     @tasks.loop(seconds=60) # 每 60 秒自動檢查一次 Git 更新
     async def check_update(self):
         try:
-            # 1. 抓取遠部遠端最新狀態 (這不會變動本地檔案)
-            await asyncio.to_thread(subprocess.run, ["git", "fetch"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+            # 1. 抓取遠部遠端最新狀態
+            await asyncio.to_thread(subprocess.run, ["git", "fetch"], check=True, timeout=15, env=env, capture_output=True)
             
             # 2. 比較本地 HEAD 與遠端 origin/main 的 Commit Hash 是否不同
-            local_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "HEAD"])
-            remote_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "origin/main"])
+            local_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "HEAD"], timeout=5)
+            remote_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "origin/main"], timeout=5)
             
             if local_hash.strip() != remote_hash.strip():
                 print("🔄 [自動更新] 偵測到遠端 GitHub 有新版本！正在自動拉取更新...")
                 
                 # 3. 執行 git pull 更新程式碼
-                await asyncio.to_thread(subprocess.run, ["git", "pull", "origin", "main"], check=True)
+                await asyncio.to_thread(subprocess.run, ["git", "pull", "origin", "main"], check=True, timeout=15, env=env)
                 
                 print("✅ [自動更新] 更新完成，準備重新啟動機器人拉取新系統...")
                 
@@ -46,18 +47,24 @@ class AutoUpdaterCog(commands.Cog):
         """手動觸發拉取 GitHub 更新"""
         msg = await ctx.send("🏃 洛洛正在向 GitHub 小跑步請求最新代碼...")
         try:
-            await asyncio.to_thread(subprocess.run, ["git", "fetch"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            local_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "HEAD"])
-            remote_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "origin/main"])
+            env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+            await asyncio.to_thread(subprocess.run, ["git", "fetch"], check=True, timeout=15, env=env, capture_output=True)
+            local_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "HEAD"], timeout=5)
+            remote_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "origin/main"], timeout=5)
             
             if local_hash.strip() != remote_hash.strip():
                 await msg.edit(content="🔄 哇塞！發現熱騰騰的新代碼！正在下載安裝，洛洛馬上重啟！嗷嗷嗷～")
-                await asyncio.to_thread(subprocess.run, ["git", "pull", "origin", "main"], check=True)
+                await asyncio.to_thread(subprocess.run, ["git", "pull", "origin", "main"], check=True, timeout=15, env=env)
                 os._exit(0)
             else:
                 await msg.edit(content="✅ 目前洛洛已經是最新的程式碼囉！不需要更新。")
+        except subprocess.TimeoutExpired:
+            await msg.edit(content="❌ 嗷...連線 GitHub 超時！面板可能把外網封鎖了，或者 Git 卡住了。")
+        except subprocess.CalledProcessError as e:
+            err_msg = e.stderr.decode('utf-8', errors='ignore') if getattr(e, 'stderr', None) else str(e)
+            await msg.edit(content=f"❌ 嗷...從 GitHub 抓取代碼失敗惹：\n```\n{err_msg[:500]}\n```")
         except Exception as e:
-            await msg.edit(content=f"❌ 嗷...從 GitHub 抓取代碼失敗惹：{e}")
+            await msg.edit(content=f"❌ 發生未知錯誤：{e}")
 
 async def setup(bot):
     await bot.add_cog(AutoUpdaterCog(bot))
