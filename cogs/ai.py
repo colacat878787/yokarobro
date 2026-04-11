@@ -27,7 +27,9 @@ class AICog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.conversation_history = {}
-        self.ai_channels = set() # 用來記錄免標記可以直接聊天的頻道ID
+        self.ai_channels = set()
+        self.load_ai_channels() # 讀取紀錄的 AI 頻道
+        
         # 優先使用 API Key
         self.openai_key = os.getenv("OPENAI_API_KEY")
         self.model = os.getenv("AI_MODEL", "gpt-4o-mini")
@@ -118,15 +120,33 @@ class AICog(commands.Cog):
             print(f"AI Error: {e}")
             return "嗷嗷嗷～手機訊號不好，或是 OpenAI 伺服器怪怪的？"
 
+    def load_ai_channels(self):
+        if os.path.exists('ai_channels.json'):
+            try:
+                with open('ai_channels.json', 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.ai_channels = set(data)
+            except Exception as e:
+                print(f"無法讀取 AI 頻道設定: {e}")
+
+    def save_ai_channels(self):
+        try:
+            with open('ai_channels.json', 'w', encoding='utf-8') as f:
+                json.dump(list(self.ai_channels), f)
+        except Exception as e:
+            print(f"無法儲存 AI 頻道設定: {e}")
+
     @commands.command(name='set_ai', aliases=['設定AI頻道', 'ai_channel'])
     @commands.has_permissions(administrator=True)
     async def set_ai_channel(self, ctx):
         """將當前頻道設定/取消為 AI 專屬頻道 (免標記即可對話)"""
         if ctx.channel.id in self.ai_channels:
             self.ai_channels.remove(ctx.channel.id)
+            self.save_ai_channels()
             await ctx.send("🛑 洛洛的專屬頻道被取消惹，以後這裡要標記我我才會回話喔！")
         else:
             self.ai_channels.add(ctx.channel.id)
+            self.save_ai_channels()
             await ctx.send("✨ 嗷嗷嗷！已將本頻道設定為【AI 專屬對話頻道】！現在大家可以直接在這裡傳訊息跟我聊天，不用再特別標記我囉！")
 
 async def setup(bot):
