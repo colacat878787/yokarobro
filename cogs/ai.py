@@ -27,6 +27,7 @@ class AICog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.conversation_history = {}
+        self.ai_channels = set() # 用來記錄免標記可以直接聊天的頻道ID
         # 優先使用 API Key
         self.openai_key = os.getenv("OPENAI_API_KEY")
         self.model = os.getenv("AI_MODEL", "gpt-4o-mini")
@@ -56,8 +57,9 @@ class AICog(commands.Cog):
                 pass
                 
         is_dm = isinstance(message.channel, discord.DMChannel)
+        is_ai_channel = message.channel.id in self.ai_channels
 
-        if is_mentioned or is_reply_to_bot or is_dm:
+        if is_mentioned or is_reply_to_bot or is_dm or is_ai_channel:
             user_input = message.content.replace(f'<@{self.bot.user.id}>', '').replace(f'<@!{self.bot.user.id}>', '').strip()
             
             if not user_input:
@@ -115,6 +117,17 @@ class AICog(commands.Cog):
         except Exception as e:
             print(f"AI Error: {e}")
             return "嗷嗷嗷～手機訊號不好，或是 OpenAI 伺服器怪怪的？"
+
+    @commands.command(name='set_ai', aliases=['設定AI頻道', 'ai_channel'])
+    @commands.has_permissions(administrator=True)
+    async def set_ai_channel(self, ctx):
+        """將當前頻道設定/取消為 AI 專屬頻道 (免標記即可對話)"""
+        if ctx.channel.id in self.ai_channels:
+            self.ai_channels.remove(ctx.channel.id)
+            await ctx.send("🛑 洛洛的專屬頻道被取消惹，以後這裡要標記我我才會回話喔！")
+        else:
+            self.ai_channels.add(ctx.channel.id)
+            await ctx.send("✨ 嗷嗷嗷！已將本頻道設定為【AI 專屬對話頻道】！現在大家可以直接在這裡傳訊息跟我聊天，不用再特別標記我囉！")
 
 async def setup(bot):
     await bot.add_cog(AICog(bot))
