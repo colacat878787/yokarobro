@@ -46,7 +46,7 @@ class MusicCog(commands.Cog):
         self.bot = bot
         self.queue = []
 
-    @commands.command(name='加入')
+    @commands.command(name='join', aliases=['加入', '進來'])
     async def join(self, ctx):
         if not ctx.message.author.voice:
             await ctx.send("嗷～你沒在語音頻道耶！")
@@ -71,7 +71,7 @@ class MusicCog(commands.Cog):
         except Exception as e:
             await ctx.send(f"嗷～嘗試連線失敗：{e}")
 
-    @commands.command(name='播放')
+    @commands.command(name='play', aliases=['播放', '播'])
     async def play(self, ctx, *, search):
         async with ctx.typing():
             try:
@@ -114,7 +114,7 @@ class MusicCog(commands.Cog):
             ctx.voice_client.play(player, after=lambda e: self.play_next(ctx))
             asyncio.run_coroutine_threadsafe(ctx.send(f"嗷～下一首：**{player.title}**"), self.bot.loop)
 
-    @commands.command(name='停止')
+    @commands.command(name='stop', aliases=['停止', '離開'])
     async def stop(self, ctx):
         if ctx.voice_client:
             ctx.voice_client.stop()
@@ -122,20 +122,20 @@ class MusicCog(commands.Cog):
             self.queue.clear()
             await ctx.send("洛洛下班啦，大家掰掰！")
 
-    @commands.command(name='跳過')
+    @commands.command(name='skip', aliases=['跳過', '下一首'])
     async def skip(self, ctx):
         if ctx.voice_client and ctx.voice_client.is_playing():
             ctx.voice_client.stop()
             await ctx.send("嗷～跳過這首歌！")
 
-    @commands.command(name='強制跳過')
+    @commands.command(name='force_skip', aliases=['強制跳過'])
     @commands.has_permissions(administrator=True)
     async def force_skip(self, ctx):
         if ctx.voice_client and ctx.voice_client.is_playing():
             ctx.voice_client.stop()
             await ctx.send("🚨 管理員強制跳過了這首歌！")
             
-    @commands.command(name='插歌')
+    @commands.command(name='insert_play', aliases=['插歌'])
     @commands.has_permissions(administrator=True)
     async def insert_play(self, ctx, *, search):
         async with ctx.typing():

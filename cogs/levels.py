@@ -53,7 +53,7 @@ class LevelsCog(commands.Cog):
             
         self.save_levels()
 
-    @commands.command(name='等級')
+    @commands.command(name='profile', aliases=['等級'])
     async def profile(self, ctx, member: discord.Member = None):
         member = member or ctx.author
         user_id = str(member.id)

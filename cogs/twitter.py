@@ -24,7 +24,7 @@ class TwitterCog(commands.Cog):
     def cog_unload(self):
         self.check_twitter.cancel()
 
-    @commands.command(name='追蹤推特')
+    @commands.command(name='track_x', aliases=['追蹤推特'])
     async def track_x(self, ctx, username: str):
         """新增追蹤 Twitter(X) 使用者"""
         if username not in self.monitored_users:

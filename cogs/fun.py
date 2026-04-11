@@ -8,7 +8,7 @@ class FunCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name='運勢')
+    @commands.command(name='fortune', aliases=['運勢'])
     async def fortune(self, ctx):
         """每日抽籤"""
         fortunes = ["大吉", "吉", "中吉", "小吉", "末吉", "末小吉", "凶", "大凶"]
@@ -39,7 +39,7 @@ class FunCog(commands.Cog):
         await ctx.send(embed=embed)
         random.seed() # reset random seeds
 
-    @commands.command(name='拉霸')
+    @commands.command(name='slot', aliases=['拉霸'])
     async def slot(self, ctx):
         """拉霸機"""
         items = ["🍒", "🍋", "🍇", "💎", "7️⃣", "🔔", "⭐"]
@@ -60,7 +60,7 @@ class FunCog(commands.Cog):
         embed.set_footer(text=f"由 {ctx.author.display_name} 啟動")
         await ctx.send(content=msg, embed=embed)
 
-    @commands.command(name='抽獎')
+    @commands.command(name='giveaway', aliases=['抽獎'])
     async def giveaway(self, ctx, duration: int, *, prize: str):
         """抽獎功能"""
         embed = discord.Embed(title="🎉 抽獎時間到！", description=f"獎品：**{prize}**\n時間：**{duration}** 秒\n\n點擊下方的 🎉 參與抽獎！", color=0x9b59b6)

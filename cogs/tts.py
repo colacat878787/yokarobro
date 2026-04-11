@@ -17,7 +17,7 @@ class TTSCog(commands.Cog):
             'options': '-vn'
         }
 
-    @commands.command(name='廣播')
+    @commands.command(name='say', aliases=['廣播'])
     async def set_tts_channel(self, ctx):
         # 必須在語音頻道內才能綁定
         if not ctx.author.voice:

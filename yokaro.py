@@ -64,29 +64,29 @@ class YokaroBot(commands.Bot):
 bot = YokaroBot()
 
 # --- 基礎全域指令 ---
-@bot.command(name='延遲')
+@bot.command(name='ping', aliases=['延遲'])
 async def ping(ctx):
     """檢查機器人延遲"""
     await ctx.send(f'🏓 砰！延遲是 {round(bot.latency * 1000)}ms')
 
-@bot.command(name='重啟')
+@bot.command(name='reboot', aliases=['重啟'])
 @commands.has_permissions(administrator=True)
 async def reboot(ctx):
     """(管理員) 重啟機器人"""
     await ctx.send("⚙️ 洛洛正在重啟中，請稍候一下喔！嗷～")
     exit(0) # 搭配 start.sh 循環實現自動重啟
 
-@bot.command(name='幫助', aliases=['求救'])
+@bot.command(name='help', aliases=['幫助', '求救'])
 async def help(ctx):
     """顯示詳細的功能說明"""
-    embed = discord.Embed(title="🌟 祈星‧優卡洛 指令清單", description="洛洛是你的全能小幫手！", color=0xffc0cb)
+    embed = discord.Embed(title="🌟 祈星‧優卡洛 指令清單", description="洛洛是你的全能小幫手！(所有指令支援中/英通用)", color=0xffc0cb)
     
-    embed.add_field(name="🛡️ 安全管理", value="`!設定驗證` 設定入群驗證\n(自動偵測廣告 & 過量連結)", inline=False)
-    embed.add_field(name="🎵 音樂播放", value="`!播放 [歌名/網址]` 播放音樂\n`!插歌 [歌名/網址]` 插歌 (管理員)\n`!跳過` 跳過 / `!強制跳過` (管理員)\n`!停止` 停止", inline=False)
-    embed.add_field(name="🎮 遊戲與運勢", value="`!運勢` 每日抽籤\n`!拉霸` 拉霸機\n`!抽獎 [秒數] [獎品]` 辦抽獎\n`!等級` 查詢等級 XP", inline=False)
-    embed.add_field(name="🔍 資訊查詢", value="`!天氣 [城市]` 查天氣\n`!維基 [關鍵字]` 查維基\n`!股價 [代號]` 查股價", inline=False)
-    embed.add_field(name="🐦 Twitter 通知", value="`!追蹤推特 [帳號]` 設定推文通知頻道", inline=False)
-    embed.add_field(name="💬 AI 對話 & 實況", value="`!廣播` 設定廣播頻道，或是直接標記聊天", inline=False)
+    embed.add_field(name="🛡️ 安全管理", value="`!setup_verify / !設定驗證` 設定入群驗證\n(自動偵測廣告 & 過量連結)", inline=False)
+    embed.add_field(name="🎵 音樂播放", value="`!play / !播放 [歌名]` 播放音樂\n`!insert_play / !插歌` 插歌 (管理員)\n`!skip / !跳過` 跳過 / `!force_skip` (管理員)\n`!stop / !停止` 停止", inline=False)
+    embed.add_field(name="🎮 遊戲與運勢", value="`!fortune / !運勢` 每日抽籤\n`!slot / !拉霸` 拉霸機\n`!giveaway / !抽獎 [秒數] [獎品]` 辦抽獎\n`!profile / !等級` 查詢等級 XP", inline=False)
+    embed.add_field(name="🔍 資訊查詢", value="`!weather / !天氣 [城市]` 查天氣\n`!wiki / !維基 [關鍵字]` 查維基\n`!stock / !股價 [代號]` 查股價", inline=False)
+    embed.add_field(name="🐦 Twitter 通知", value="`!track_x / !追蹤推特 [帳號]` 設定推文通知頻道", inline=False)
+    embed.add_field(name="💬 AI 對話 & 實況", value="`!say / !廣播` 設定廣播頻道，或是直接標記聊天", inline=False)
     
     embed.set_footer(text="還有什麼洛洛能幫你的嗎？嗷嗷嗷～")
     await ctx.send(embed=embed)

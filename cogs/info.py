@@ -10,7 +10,7 @@ class InfoCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name='天氣')
+    @commands.command(name='weather', aliases=['天氣'])
     async def weather(self, ctx, *, city: str):
         """查詢天氣資訊 (使用 wttr.in)"""
         async with aiohttp.ClientSession() as session:
@@ -22,7 +22,7 @@ class InfoCog(commands.Cog):
                 else:
                     await ctx.send("嗷～氣象衛星斷線了，查不到那裡的天氣。")
 
-    @commands.command(name='維基')
+    @commands.command(name='wiki', aliases=['維基', '查'])
     async def wiki(self, ctx, *, query: str):
         """搜尋維基百科並抓取大頭圖"""
         async with ctx.typing():
@@ -67,7 +67,7 @@ class InfoCog(commands.Cog):
                     else:
                         await ctx.send("嗷嗷嗷～連接維基百科失敗！")
 
-    @commands.command(name='股價')
+    @commands.command(name='stock', aliases=['股價'])
     async def stock(self, ctx, symbol: str):
         """查詢美股/台股即時股價 (使用 Yahoo Finance 網頁爬蟲)"""
         async with ctx.typing():

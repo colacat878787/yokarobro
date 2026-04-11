@@ -53,7 +53,7 @@ class SecurityCog(commands.Cog):
                     await message.author.timeout(discord.utils.utcnow() + discord.utils.datetime.timedelta(hours=1))
                 except: pass
 
-    @commands.command(name='設定驗證')
+    @commands.command(name='setup_verify', aliases=['設定驗證'])
     @commands.has_permissions(administrator=True)
     async def setup_verify(self, ctx):
         embed = discord.Embed(title="📜 入群驗證", description="點擊下方按鈕以獲取身分組並加入對話！", color=0x27ae60)
