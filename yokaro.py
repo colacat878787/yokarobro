@@ -35,6 +35,7 @@ class YokaroBot(commands.Bot):
             'cogs.tts',
             'cogs.updater',
             'cogs.welcome',
+            'cogs.record',
             'cogs.economy',
             'cogs.kuji',
             'cogs.admin'

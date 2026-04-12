@@ -11,3 +11,7 @@ gTTS==2.5.1
 requests
 easy-pil
 psutil
+discord-ext-voice-recv
+faster-whisper
+pydub
+moviepy
