@@ -73,6 +73,16 @@ async def ping(ctx):
     """檢查機器人延遲"""
     await ctx.send(f'🏓 砰！延遲是 {round(bot.latency * 1000)}ms')
 
+@bot.command(name='version', aliases=['版本'])
+async def version(ctx):
+    """查看機器人目前的代碼版本"""
+    import subprocess
+    try:
+        commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode('utf-8').strip()
+        await ctx.send(f"🤖 目前 Yokaro 運行的版本是: `{commit}`")
+    except:
+        await ctx.send("🤖 目前無法取得版本資訊（可能不是透過 Git 啟動的）。")
+
 @bot.command(name='reboot', aliases=['重啟'])
 @commands.has_permissions(administrator=True)
 async def reboot(ctx):
