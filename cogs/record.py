@@ -141,45 +141,76 @@ class RecordCog(commands.Cog):
             folder = sink.folder
             if not sink.buffers: return None
 
-            print(f"[Record] 正在混音 {folder}...")
-            mixed_wav = f"{folder}/mixed.wav"
+            print(f"[Record] 正在準備渲染素材 (頭像與音軌)...")
             
-            # 使用第一個使用者的音軌作為主要音軌 (簡化版)
+            # 1. 下載頭像
+            import requests
+            avatar_paths = {}
+            for user in sink.buffers.keys():
+                try:
+                    p = f"{folder}/avatar_{user.id}.png"
+                    res = requests.get(user.display_avatar.url, timeout=10)
+                    with open(p, "wb") as f: f.write(res.content)
+                    avatar_paths[user.id] = p
+                except Exception as e:
+                    print(f"下載頭像失敗 ({user.id}): {e}")
+
+            mixed_wav = f"{folder}/mixed.wav"
+            # 指向第一個有效的 PCM
             first_user_pcm = list(sink.buffers.values())[0].file_path
+            
             subprocess.run([
                 "ffmpeg", "-y", "-f", "s16le", "-ar", "48000", "-ac", "2", 
                 "-i", first_user_pcm, mixed_wav
             ], check=True, capture_output=True)
 
-            # AI 辨識 (Faster-Whisper)
+            # 2. AI 辨識 (Faster-Whisper)
             print("[Record] 正在執行 AI 字幕辨識...")
             srt_path = f"{folder}/subtitles.srt"
             
             try:
                 from faster_whisper import WhisperModel
-                # 使用 base 模型節省記憶體
                 model = WhisperModel("base", device="cpu", compute_type="int8")
                 segments, _ = model.transcribe(mixed_wav, beam_size=5)
                 
                 with open(srt_path, "w", encoding="utf-8") as f:
                     for i, seg in enumerate(segments, 1):
-                        start = self._format_srt_time(seg.start)
-                        end = self._format_srt_time(seg.end)
-                        f.write(f"{i}\n{start} --> {end}\n{seg.text}\n\n")
+                        f.write(f"{i}\n{self._format_srt_time(seg.start)} --> {self._format_srt_time(seg.end)}\n{seg.text}\n\n")
             except Exception as e:
                 print(f"Whisper failed: {e}")
                 with open(srt_path, "w", encoding="utf-8") as f:
-                    f.write("1\n00:00:00,000 --> 00:00:05,000\n(字幕辨識模組載入中或磁碟空間不足)\n")
+                    f.write("1\n00:00:00,000 --> 00:00:05,000\n(字幕辨識加載中或失敗)\n")
 
-            # 最終渲染
-            print("[Record] 正在渲染動態影片...")
+            # 3. 影片渲染 (動態合成)
+            print("[Record] 正在壓製動態彈跳頭像影片...")
             output_mp4 = f"{folder}/output_video.mp4"
             
-            # 建立背景與燒錄字幕 (動態頭貼彈跳邏輯在後續優化中加入)
+            # 基本 FFmpeg 指令架構
+            # 輸入 0: 黑色背景, 輸入 1: 混合音軌, 接下來是頭像
+            inputs = ["-f", "lavfi", "-i", "color=c=black:s=1280x720:r=24", "-i", mixed_wav]
+            filter_parts = ["[0:v]"]
+            
+            # 為每個用戶增加頭像輸入與動態位置
+            for i, (uid, path) in enumerate(avatar_paths.items(), 2):
+                inputs.extend(["-i", path])
+                x_pos = 100 + (i-2)*250
+                # 簡單的彈跳效果：循環彈跳 (後續可優化為對齊說話點)
+                bounce_expr = f"300-20*gt(sin(t*2.5),0.7)"
+                
+                prev_label = filter_parts[-1]
+                new_label = f"v{i-2}"
+                # 縮放並疊加
+                filter_parts.append(f"[{i}:v]scale=200:200[av{i}];[{prev_label}][av{i}]overlay=x={x_pos}:y='{bounce_expr}'[{new_label}]")
+
+            # 最後加上字幕燒製
+            last_label = filter_parts[-1]
+            filter_parts.append(f"[{last_label}]subtitles={srt_path}:force_style='FontSize=24,Alignment=2'[outv]")
+
+            # 執行渲染
             subprocess.run([
-                "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=1280x720:r=24",
-                "-i", mixed_wav,
-                "-vf", f"subtitles={srt_path}:force_style='FontSize=24,Alignment=2'",
+                "ffmpeg", "-y"] + inputs + [
+                "-filter_complex", ";".join(filter_parts[1:]),
+                "-map", "[outv]", "-map", "1:a",
                 "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", 
                 "-shortest", output_mp4
             ], check=True, capture_output=True)
