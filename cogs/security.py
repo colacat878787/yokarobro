@@ -16,20 +16,22 @@ class SecurityView(discord.ui.View):
 
     @discord.ui.button(label="✅ 我已閱讀並同意守則", style=discord.ButtonStyle.green, custom_id="verify_btn")
     async def verify(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # 高延遲環境下，最速回應模式
-        await interaction.response.send_message("💠 洛洛收到驗證請求囉！正在為你安排身分，請稍候...", ephemeral=True)
+        # 1. 立即告知 Discord 我收到了，正在處理中 (思考模式)
+        await interaction.response.defer(ephemeral=True)
         
+        # 2. 執行邏輯
         role = discord.utils.get(interaction.guild.roles, name=self.role_name)
         if role:
             try:
                 await interaction.user.add_roles(role)
-                await interaction.followup.send("✅ 驗證完成！歡迎加入星辰大合唱！嗷嗷嗷～", ephemeral=True)
+                # 3. 處理完成後，修改原本那則「思考中」的內容
+                await interaction.edit_original_response(content="✅ 驗證完成！歡迎加入星辰大合唱！嗷嗷嗷～")
             except discord.Forbidden:
-                await interaction.followup.send("❌ 矮油！洛洛權限不夠，請聯絡管理員檢查身分組順序！", ephemeral=True)
+                await interaction.edit_original_response(content="❌ 矮油！洛洛權限不夠，請聯絡管理員檢查身分組順序！")
             except Exception as e:
-                await interaction.followup.send(f"❌ 發生未知錯誤：{e}", ephemeral=True)
+                await interaction.edit_original_response(content=f"❌ 發生未知錯誤：{e}")
         else:
-            await interaction.followup.send(f"嗷～找不到身分組 `{self.role_name}`，請通知管理員！", ephemeral=True)
+            await interaction.edit_original_response(content=f"嗷～找不到身分組 `{self.role_name}`，請通知管理員！")
 
 class SecurityCog(commands.Cog):
     def __init__(self, bot):

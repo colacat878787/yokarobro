@@ -18,48 +18,43 @@ class ControlPanelView(discord.ui.View):
 
     @discord.ui.button(label="🤖 AI 對話", style=discord.ButtonStyle.success, row=0)
     async def toggle_ai(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🛠️ 正在準備調整 AI 核心狀態...", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
         await self._toggle_module(interaction, button, "cogs.ai", "AI 對話")
 
     @discord.ui.button(label="🎵 音樂系統", style=discord.ButtonStyle.success, row=0)
     async def toggle_music(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🛠️ 正在調度音樂模組齒輪...", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
         await self._toggle_module(interaction, button, "cogs.music", "音樂系統")
 
     @discord.ui.button(label="🎫 一番賞", style=discord.ButtonStyle.success, row=0)
     async def toggle_kuji(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🛠️ 正在檢查一番賞獎池連線...", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
         await self._toggle_module(interaction, button, "cogs.kuji", "一番賞")
 
     @discord.ui.button(label="🛡️ 安全防護", style=discord.ButtonStyle.success, row=0)
     async def toggle_security(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🛠️ 正在更新安全協議矩陣...", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
         await self._toggle_module(interaction, button, "cogs.security", "安全防護")
 
     @discord.ui.button(label="📊 系統數據", style=discord.ButtonStyle.secondary, row=1)
     async def show_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # 使用最速回應
-        await interaction.response.send_message("📊 正在收集系統感應器數據...", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
         try:
-            # ... (其餘邏輯)
             import psutil
             process = psutil.Process(os.getpid())
-            # ...
             mem = process.memory_info().rss / 1024 / 1024
             cpu = psutil.cpu_percent(interval=0.1)
             ping = round(self.bot.latency * 1000)
             
-            embed = discord.Embed(title="📊 Yokaro 即時系統數據", color=0x3498db)
-            embed.add_field(name="記憶體使用", value=f"{mem:.2f} MB", inline=True)
-            embed.add_field(name="CPU 使用率", value=f"{cpu}%", inline=True)
-            embed.add_field(name="連線延遲", value=f"{ping}ms", inline=True)
-            embed.set_footer(text=f"查詢時間: {datetime.now().strftime('%H:%M:%S')}")
-            await interaction.followup.send(embed=embed, ephemeral=True)
-        except ImportError:
-            ping = round(self.bot.latency * 1000)
-            await interaction.followup.send(f"📊 連線延遲: **{ping}ms**\n（psutil 未安裝，無法顯示 CPU/記憶體）", ephemeral=True)
+            embed = discord.Embed(title="📊 Yokaro 實時監測", color=0x3498db)
+            embed.add_field(name="🌡️ CPU 使用率", value=f"{cpu}%", inline=True)
+            embed.add_field(name="🧠 記憶體佔用", value=f"{mem:.1f} MB", inline=True)
+            embed.add_field(name="🛰️ 延遲 (Latency)", value=f"{ping}ms", inline=True)
+            embed.add_field(name="📂 運作頻道數", value=len(self.bot.guilds), inline=True)
+            
+            await interaction.edit_original_response(embed=embed)
         except Exception as e:
-            await interaction.followup.send(f"❌ 無法取得系統數據: {e}", ephemeral=True)
+            await interaction.edit_original_response(content=f"❌ 無法讀取數據: {e}")
 
     @discord.ui.button(label="🔄 強制重啟", style=discord.ButtonStyle.danger, row=1)
     async def force_restart(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -67,19 +62,15 @@ class ControlPanelView(discord.ui.View):
         await interaction.followup.send("⚙️ 洛洛正在重啟，請稍候...")
         os._exit(0)
 
-    async def _toggle_module(self, interaction: discord.Interaction, button: discord.ui.Button, extension: str, name: str):
-        """通用模組切換邏輯"""
+    async def _toggle_module(self, interaction, button, module_path, name):
         try:
-            if extension in self.bot.extensions:
-                await self.bot.unload_extension(extension)
+            if module_path in self.bot.extensions:
+                await self.bot.unload_extension(module_path)
                 button.style = discord.ButtonStyle.danger
-                msg = f"❌ 已關閉 **{name}** 功能。"
+                msg = f"❌ 已關閉 {name} 模組"
             else:
-                await self.bot.load_extension(extension)
+                await self.bot.load_extension(module_path)
                 button.style = discord.ButtonStyle.success
-                msg = f"✅ 已開啟 **{name}** 功能。"
-            
-            # 更新面板按鈕顏色
             await interaction.edit_original_response(view=self)
             await interaction.followup.send(msg, ephemeral=True)
         except Exception as e:

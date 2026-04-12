@@ -16,17 +16,17 @@ class PasswordModal(discord.ui.Modal, title="🔑 輸入密碼"):
         self.mode = mode  # "register" or "login"
 
     async def on_submit(self, interaction: discord.Interaction):
-        # 立即響應
-        await interaction.response.send_message("🛡️ 洛洛正在驗證你的保險箱密碼...", ephemeral=True)
+        # 1. 立即進入思考模式
+        await interaction.response.defer(ephemeral=True)
+        
         uid = str(interaction.user.id)
         data = self.economy_cog.get_user_data(uid)
         hashed = hashlib.sha256(self.password.value.encode()).hexdigest()
         
-        # ... (其餘邏輯維持不變)
         if self.mode == "register":
             data["password"] = hashed
             self.economy_cog.save_data()
-            await interaction.followup.send("✅ 開戶完成！請重新使用 `!ATM` 並選擇登入。", ephemeral=True)
+            await interaction.edit_original_response(content="✅ 開戶完成！請重新使用 `!ATM` 並選擇登入。")
 
         elif self.mode == "login":
             if data.get("password") == hashed:
@@ -34,9 +34,9 @@ class PasswordModal(discord.ui.Modal, title="🔑 輸入密碼"):
                 embed = discord.Embed(title="🏦 洛洛銀行 — 已登入", description="請選擇服務：", color=0x2ecc71)
                 embed.add_field(name="💛 錢包", value=f"${data['balance']}")
                 embed.add_field(name="🏦 銀行", value=f"${data.get('bank', 0)}")
-                await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                await interaction.edit_original_response(content=None, embed=embed, view=view)
             else:
-                await interaction.followup.send("❌ 密碼錯誤！請重試。", ephemeral=True)
+                await interaction.edit_original_response(content="❌ 密碼錯誤！請重試。")
 
 class AmountModal(discord.ui.Modal):
     amount = discord.ui.TextInput(label="金額", placeholder="請輸入數字", style=discord.TextStyle.short)
@@ -48,14 +48,14 @@ class AmountModal(discord.ui.Modal):
         self.mode = mode
 
     async def on_submit(self, interaction: discord.Interaction):
-        # 立即響應
-        await interaction.response.send_message("🏦 洛洛正在幫你點鈔中，請稍候...", ephemeral=True)
+        # 1. 立即進入思考模式
+        await interaction.response.defer(ephemeral=True)
+        
         try:
             amt = int(self.amount.value)
-            # ...
             if amt <= 0: raise ValueError
         except ValueError:
-            await interaction.followup.send("❌ 請輸入有效的正整數金額！", ephemeral=True)
+            await interaction.edit_original_response(content="❌ 請輸入有效的正整數金額！")
             return
 
         uid = str(self.user.id)
@@ -63,22 +63,22 @@ class AmountModal(discord.ui.Modal):
 
         if self.mode == "deposit":
             if data["balance"] < amt:
-                await interaction.followup.send(f"❌ 錢包不足(${ data['balance']})！", ephemeral=True)
+                await interaction.edit_original_response(content=f"❌ 錢包不足(${ data['balance']})！")
                 return
             data["balance"] -= amt
             data["bank"] = data.get("bank", 0) + amt
             self.economy_cog.save_data()
-            await interaction.followup.send(f"✅ 存入 **${amt}**！銀行餘額：**${data['bank']}**", ephemeral=True)
+            await interaction.edit_original_response(content=f"✅ 存入 **${amt}**！銀行餘額：**${data['bank']}**")
 
         elif self.mode == "withdraw":
             bank = data.get("bank", 0)
             if bank < amt:
-                await interaction.followup.send(f"❌ 銀行存款不足(${bank})！", ephemeral=True)
+                await interaction.edit_original_response(content=f"❌ 銀行存款不足(${bank})！")
                 return
             data["bank"] -= amt
             data["balance"] += amt
             self.economy_cog.save_data()
-            await interaction.followup.send(f"✅ 提領 **${amt}**！錢包餘額：**${data['balance']}**", ephemeral=True)
+            await interaction.edit_original_response(content=f"✅ 提領 **${amt}**！錢包餘額：**${data['balance']}**")
 
 # ──────────────────────────────────────────
 #  ATM Views
@@ -129,16 +129,16 @@ class ATMLoggedInView(discord.ui.View):
 
     @discord.ui.button(label="📄 查餘額", style=discord.ButtonStyle.primary)
     async def check(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # 立即響應
-        await interaction.response.send_message("🔍 正在聯絡洛洛中央銀行查詢餘額中...", ephemeral=True)
+        # 立即進入思考模式
+        await interaction.response.defer(ephemeral=True)
         
         data = self.economy_cog.get_user_data(str(self.user.id))
         embed = discord.Embed(title="📄 帳戶資訊", color=0x3498db)
         embed.add_field(name="👛 錢包", value=f"${data['balance']}", inline=True)
         embed.add_field(name="🏦 銀行", value=f"${data.get('bank', 0)}", inline=True)
         
-        # 使用 followup 送出結果
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        # 處理完成後更新內容
+        await interaction.edit_original_response(content=None, embed=embed)
 
     async def on_error(self, interaction, error, item):
         if not interaction.response.is_done():
@@ -168,15 +168,14 @@ class WorkView(discord.ui.View):
         await self._work(interaction, "寫程式", 150, 450)
 
     async def _work(self, interaction: discord.Interaction, job: str, mn: int, mx: int):
-        # 立即響應模式
-        await interaction.response.send_message(f"💠 收到請求！洛洛已經背上小書包，準備去 **{job}** 囉...", ephemeral=True)
+        # 1. 立即進入思考模式
+        await interaction.response.defer(ephemeral=True)
         
         if interaction.user.id != self.user.id:
-            await interaction.followup.send("❌ 這不是你的工作邀請喔！", ephemeral=True)
+            await interaction.edit_original_response(content="❌ 這不是你的工作邀請喔！")
             return
             
         pay = random.randint(mn, mx)
-        # ...
         self.economy_cog.add_money(str(interaction.user.id), pay)
         bal = self.economy_cog.get_balance(str(interaction.user.id))
         
@@ -184,8 +183,8 @@ class WorkView(discord.ui.View):
         embed.description = f"你剛剛去 **{job}**，賺到了 **${pay}**！嗷嗷嗷～"
         embed.set_footer(text=f"目前餘額: ${bal}")
         
-        # 使用 followup 發送結果 (或者是 edit_original_response 但 followup 更推薦與 defer 搭配)
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        # 2. 處理完成後更新內容
+        await interaction.edit_original_response(content=None, embed=embed, view=None)
         self.stop()
 
     async def on_error(self, interaction, error, item):

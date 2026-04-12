@@ -69,59 +69,75 @@ class WelcomeCog(commands.Cog):
             await ctx.send("✨ 嗷嗷嗷！已將本頻道設定為【迎新大廳】！洛洛準備好畫筆，要用二次元美景迎接新人囉！🎨")
 
     async def create_welcome_card(self, member):
-        """極致奢華繪圖邏輯：二次元風格 + 毛玻璃質感"""
+        """異步執行緒包裝：防止繪圖卡死主執行緒"""
+        # 1. 準備隨機背景網址
+        bg_url = random.choice(RANDOM_BGS)
+        
+        # 2. 先把圖抓下來 (這是非同步的，OK)
         try:
-            # 1. 準備隨機背景 (寬度稍微加寬，營造氣氛)
-            bg_url = random.choice(RANDOM_BGS)
-            try:
-                bg_image = await load_image_async(bg_url)
-                background = Editor(bg_image).resize((1100, 500))
-            except:
-                background = Editor(Canvas((1100, 500), color="#2c3e50"))
-
-            # 2. 製作毛玻璃矩陣 (中心透明黑色遮罩)
-            overlay = Canvas((1100, 500), color=(0, 0, 0, 100)) # 全局微暗
-            background.paste(Editor(overlay), (0, 0))
-            
-            # 中心文字背板 (毛玻璃感)
-            glass_plate = Canvas((800, 300), color=(255, 255, 255, 30))
-            background.paste(Editor(glass_plate), (150, 100))
-
-            # 3. 載入中文字體
-            if os.path.exists(FONT_PATH):
-                font_title = Font(FONT_PATH, size=90)
-                font_name = Font(FONT_PATH, size=70)
-                font_sub = Font(FONT_PATH, size=40)
-            else:
-                font_title = Font.poppins(variant="bold", size=90)
-                font_name = Font.poppins(variant="bold", size=70)
-                font_sub = Font.poppins(variant="light", size=40)
-
-            # 4. 處理頭像 (加厚圓框)
-            avatar_url = member.display_avatar.url
-            avatar_image = await load_image_async(str(avatar_url))
-            
-            profile = Editor(avatar_image).resize((220, 220)).circle_image()
-            # 漸層感外框
-            border = Editor(Canvas((240, 240), color="#ffffff")).circle_image()
-            border.paste(profile, (10, 10))
-
-            # 5. 組合配置 (稍微偏左的頭貼，文字排列在旁)
-            background.paste(border, (200, 130))
-            
-            # 文字細節
-            background.text((470, 140), "NEW MEMBER", font=font_sub, color="#fab1a0")
-            background.text((470, 190), f"{member.name}", font=font_name, color="white")
-            background.text((470, 275), f"你是第 {member.guild.member_count} 顆降落的星辰", font=font_sub, color="#dfe6e9")
-            
-            # 裝飾性線條
-            line = Canvas((400, 5), color="#ff7675")
-            background.paste(Editor(line), (470, 265))
-
-            return discord.File(fp=background.image_bytes, filename="welcome_luxury.png")
+            bg_image = await load_image_async(bg_url)
+            avatar_image = await load_image_async(str(member.display_avatar.url))
         except Exception as e:
-            print(f"奢華繪圖失敗: {e}")
+            print(f"下載圖片失敗: {e}")
             return None
+
+        # 3. 將繪圖邏輯丟到另一個執行緒執行 (備案核心)
+        try:
+            file_bytes = await asyncio.to_thread(
+                self._draw_luxury_card_sync, 
+                member.name, 
+                member.guild.name, 
+                member.guild.member_count, 
+                bg_image, 
+                avatar_image
+            )
+            return discord.File(fp=file_bytes, filename="welcome_luxury.png")
+        except Exception as e:
+            print(f"繪圖執行緒錯誤: {e}")
+            return None
+
+    def _draw_luxury_card_sync(self, name, guild_name, member_count, bg_image, avatar_image):
+        """同步繪圖邏輯：在背景執行緒跑，不卡主執行緒"""
+        # 使用傳入的 bg_image 建立 Editor
+        background = Editor(bg_image).resize((1100, 500))
+
+        # 製作毛玻璃矩陣 (中心透明黑色遮罩)
+        overlay = Canvas((1100, 500), color=(0, 0, 0, 100)) # 全局微暗
+        background.paste(Editor(overlay), (0, 0))
+        
+        # 中心文字背板 (毛玻璃感)
+        glass_plate = Canvas((800, 300), color=(255, 255, 255, 30))
+        background.paste(Editor(glass_plate), (150, 100))
+
+        # 3. 載入中文字體
+        if os.path.exists(FONT_PATH):
+            font_title = Font(FONT_PATH, size=90)
+            font_name = Font(FONT_PATH, size=70)
+            font_sub = Font(FONT_PATH, size=40)
+        else:
+            font_title = Font.poppins(variant="bold", size=90)
+            font_name = Font.poppins(variant="bold", size=70)
+            font_sub = Font.poppins(variant="light", size=40)
+
+        # 4. 處理頭像 (加厚圓框)
+        profile = Editor(avatar_image).resize((220, 220)).circle_image()
+        border = Editor(Canvas((240, 240), color="#ffffff")).circle_image()
+        border.paste(profile, (10, 10))
+
+        # 5. 組合配置
+        background.paste(border, (200, 130))
+        
+        # 文字細節
+        background.text((470, 140), "NEW MEMBER", font=font_sub, color="#fab1a0")
+        background.text((470, 190), f"{name}", font=font_name, color="white")
+        background.text((470, 275), f"歡迎來到 {guild_name}", font=font_sub, color="#dfe6e9")
+        background.text((470, 320), f"第 {member_count} 顆降落的星辰", font=font_sub, color="#fab1a0")
+        
+        # 裝飾性線條
+        line = Canvas((400, 5), color="#ff7675")
+        background.paste(Editor(line), (470, 265))
+
+        return background.image_bytes
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
@@ -136,7 +152,7 @@ class WelcomeCog(commands.Cog):
                 if file:
                     await channel.send(f"🌌 歡迎新星 <@{member.id}> 墜入 **{member.guild.name}**！", file=file)
                 else:
-                    await channel.send(f"🌌 歡迎新星 <@{member.id}> 墜入 **{member.guild.name}**！(洛洛今天畫圖手感不太好，只能文字歡迎你惹...嗷嗚)")
+                    await channel.send(f"🌌 歡迎新星 <@{member.id}> 墜入 **{member.guild.name}**！(洛洛今天畫圖手感不太好...嗷嗚)")
 
 async def setup(bot):
     await bot.add_cog(WelcomeCog(bot))

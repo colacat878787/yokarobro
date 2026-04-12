@@ -11,27 +11,27 @@ class KujiView(discord.ui.View):
 
     @discord.ui.button(label="🎲 立即抽賞 (單抽 $200)", style=discord.ButtonStyle.primary)
     async def draw(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # 立即發送「收到請求」訊息，這會百分之百解決交互失敗的問題
-        await interaction.response.send_message("🌌 洛洛的手已經伸進星空箱囉！正在幫你抓取獎券中...", ephemeral=True)
+        # 1. 立即 defer 進入思考模式
+        await interaction.response.defer(ephemeral=True)
         
         uid = str(interaction.user.id)
         if self.economy_cog.get_balance(uid) < 200:
-            await interaction.followup.send("嗷嗷嗷～你的錢包不夠 $200 的抽賞費用喔！", ephemeral=True)
+            await interaction.edit_original_response(content="嗷嗷嗷～你的錢包不夠 $200 的抽賞費用喔！")
             return
 
         kuji_cog = self.economy_cog.bot.get_cog("KujiCog")
         if not kuji_cog:
-            await interaction.followup.send("❌ 一番賞系統未啟動！", ephemeral=True)
+            await interaction.edit_original_response(content="❌ 一番賞系統未啟動！")
             return
             
         prize = kuji_cog.draw_prize()
         if not prize:
-            await interaction.followup.send("😱 本輪一番賞已抽完！請期待管理員重置獎池。", ephemeral=True)
+            await interaction.edit_original_response(content="😱 本輪一番賞已抽完！請期待管理員重置獎池。")
             return
 
         self.economy_cog.add_money(uid, -200)
         
-        # 懸念感
+        # 2. 公開宣告正在抽獎 (使用 followup)
         msg = await interaction.followup.send(f"🌌 {interaction.user.mention} 正在從星空箱抽取...")
         await asyncio.sleep(1.2)
 
@@ -40,7 +40,10 @@ class KujiView(discord.ui.View):
 
         embed = discord.Embed(title="🎊 抽賞結果揭曉！", description=f"恭喜 {interaction.user.mention} 抽中了：\n\n✨ **【 {prize} 】** ✨", color=color)
         embed.set_footer(text=f"剩餘數量請查看 !一番賞 | 已自動扣除 $200")
+        
+        # 3. 更新結果
         await msg.edit(content=None, embed=embed)
+        await interaction.edit_original_response(content="✅ 抽賞完成！結果已公佈在頻道中囉～")
 
     async def on_error(self, interaction, error, item):
         if not interaction.response.is_done():
