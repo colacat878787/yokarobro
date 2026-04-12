@@ -20,9 +20,9 @@ else
     echo "⚠️  GitHub 同步失敗，使用本地現有代碼繼續啟動..."
 fi
 
-# 3. 安裝/更新 Python 套件
+# 3. 安裝/更新 Python 套件 (移除靜音模式以利除錯)
 echo "📦 正在安裝 Python 套件..."
-pip install -r requirements.txt -q
+python -m pip install -r requirements.txt
 
 echo "================================================"
 echo "🤖 正在啟動 Yokaro 機器人..."
