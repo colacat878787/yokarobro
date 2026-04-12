@@ -9,10 +9,15 @@ from concurrent.futures import ProcessPoolExecutor
 
 # 注意：我們需要 discord-ext-voice-recv 插件
 try:
-    from discord.ext import voice_recv
+    import discord.ext.voice_recv as voice_recv
     HAS_VOICE_RECV = True
-except ImportError:
+    print("💠 [錄影機] 語音接收模組載入成功！")
+except ImportError as e:
     HAS_VOICE_RECV = False
+    print(f"⚠️ [錄影機] 語音接收模組載入失敗: {e}")
+except Exception as e:
+    HAS_VOICE_RECV = False
+    print(f"❌ [錄影機] 載入過程發生非預期錯誤: {e}")
 
 class RecordingState:
     def __init__(self):
