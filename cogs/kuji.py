@@ -11,8 +11,8 @@ class KujiView(discord.ui.View):
 
     @discord.ui.button(label="🎲 立即抽賞 (單抽 $200)", style=discord.ButtonStyle.primary)
     async def draw(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # 立即 defer 並顯示思考中 (依據使用者要求使用 ephemeral=True)
-        await interaction.response.defer(ephemeral=True)
+        # 立即發送「收到請求」訊息，這會百分之百解決交互失敗的問題
+        await interaction.response.send_message("🌌 洛洛的手已經伸進星空箱囉！正在幫你抓取獎券中...", ephemeral=True)
         
         uid = str(interaction.user.id)
         if self.economy_cog.get_balance(uid) < 200:

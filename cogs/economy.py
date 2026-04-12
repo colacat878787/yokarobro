@@ -16,11 +16,13 @@ class PasswordModal(discord.ui.Modal, title="🔑 輸入密碼"):
         self.mode = mode  # "register" or "login"
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        # 立即響應
+        await interaction.response.send_message("🛡️ 洛洛正在驗證你的保險箱密碼...", ephemeral=True)
         uid = str(interaction.user.id)
         data = self.economy_cog.get_user_data(uid)
         hashed = hashlib.sha256(self.password.value.encode()).hexdigest()
-
+        
+        # ... (其餘邏輯維持不變)
         if self.mode == "register":
             data["password"] = hashed
             self.economy_cog.save_data()
@@ -46,9 +48,11 @@ class AmountModal(discord.ui.Modal):
         self.mode = mode
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        # 立即響應
+        await interaction.response.send_message("🏦 洛洛正在幫你點鈔中，請稍候...", ephemeral=True)
         try:
             amt = int(self.amount.value)
+            # ...
             if amt <= 0: raise ValueError
         except ValueError:
             await interaction.followup.send("❌ 請輸入有效的正整數金額！", ephemeral=True)
@@ -126,7 +130,7 @@ class ATMLoggedInView(discord.ui.View):
     @discord.ui.button(label="📄 查餘額", style=discord.ButtonStyle.primary)
     async def check(self, interaction: discord.Interaction, button: discord.ui.Button):
         # 立即響應
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.send_message("🔍 正在聯絡洛洛中央銀行查詢餘額中...", ephemeral=True)
         
         data = self.economy_cog.get_user_data(str(self.user.id))
         embed = discord.Embed(title="📄 帳戶資訊", color=0x3498db)
@@ -164,14 +168,15 @@ class WorkView(discord.ui.View):
         await self._work(interaction, "寫程式", 150, 450)
 
     async def _work(self, interaction: discord.Interaction, job: str, mn: int, mx: int):
-        # 立即響應並顯示 "正在思考..." (隱藏訊息)
-        await interaction.response.defer(ephemeral=True)
+        # 立即響應模式
+        await interaction.response.send_message(f"💠 收到請求！洛洛已經背上小書包，準備去 **{job}** 囉...", ephemeral=True)
         
         if interaction.user.id != self.user.id:
             await interaction.followup.send("❌ 這不是你的工作邀請喔！", ephemeral=True)
             return
             
         pay = random.randint(mn, mx)
+        # ...
         self.economy_cog.add_money(str(interaction.user.id), pay)
         bal = self.economy_cog.get_balance(str(interaction.user.id))
         

@@ -5,14 +5,15 @@ import json
 import random
 from easy_pil import Editor, load_image_async, Font, Canvas
 
-# 隨機背景清單 (Unsplash 高畫質風景/星空)
+# 隨機高品質二次元/動漫美景清單 (Anime Scenery)
 RANDOM_BGS = [
-    "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?q=80&w=1024&h=400&fit=crop", # 星空
-    "https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1024&h=400&fit=crop", # 山水
-    "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1024&h=400&fit=crop", # 雪山
-    "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=1024&h=400&fit=crop", # 森林
-    "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=1024&h=400&fit=crop", # 綠意
-    "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1024&h=400&fit=crop"  # 湖泊
+    "https://images.unsplash.com/photo-1578632738980-230ca3a461bb?q=80&w=1200&h=600&fit=crop", # 數位城鎮
+    "https://images.unsplash.com/photo-1541512416146-3cf58d6b27cc?q=80&w=1200&h=600&fit=crop", # 幻想森林
+    "https://images.unsplash.com/photo-1605142127144-8fc19904948a?q=80&w=1200&h=600&fit=crop", # 星空神社
+    "https://images.unsplash.com/photo-1528360983277-13d401cdc186?q=80&w=1200&h=600&fit=crop", # 日本街頭
+    "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?q=80&w=1200&h=600&fit=crop", # 宇宙銀河
+    "https://images.unsplash.com/photo-1493246507139-91e8bef99c17?q=80&w=1200&h=600&fit=crop", # 夢幻山脈
+    "https://images.unsplash.com/photo-1523733566440-2816999a83a5?q=80&w=1200&h=600&fit=crop"  # 城市黎明
 ]
 
 FONT_PATH = "assets/fonts/NotoSansTC-Bold.otf"
@@ -50,7 +51,7 @@ class WelcomeCog(commands.Cog):
         async with ctx.typing():
             file = await self.create_welcome_card(member)
             if file:
-                await ctx.send(f"✨ 這是為 {member.mention} 準備的歡迎預覽！嗷嗷嗷～", file=file)
+                await ctx.send(f"✨ 這是為 {member.mention} 準備的【奢華二次元】歡迎預覽！嗷嗷嗷～", file=file)
             else:
                 await ctx.send("❌ 哎呀，繪製圖片時發生意外了！")
 
@@ -65,50 +66,61 @@ class WelcomeCog(commands.Cog):
         else:
             self.welcome_channels.add(ctx.channel.id)
             self.save_welcome_channels()
-            await ctx.send("✨ 嗷嗷嗷！已將本頻道設定為【迎新大廳】！有新人進來洛洛會在這裡畫圖歡迎他們喔！")
+            await ctx.send("✨ 嗷嗷嗷！已將本頻道設定為【迎新大廳】！洛洛準備好畫筆，要用二次元美景迎接新人囉！🎨")
 
     async def create_welcome_card(self, member):
-        """核心繪圖邏輯：支援中文字體與隨機背景"""
+        """極致奢華繪圖邏輯：二次元風格 + 毛玻璃質感"""
         try:
-            # 1. 準備隨機背景
+            # 1. 準備隨機背景 (寬度稍微加寬，營造氣氛)
             bg_url = random.choice(RANDOM_BGS)
             try:
                 bg_image = await load_image_async(bg_url)
-                background = Editor(bg_image).resize((1024, 400)).blur(amount=1)
+                background = Editor(bg_image).resize((1100, 500))
             except:
-                background = Editor(Canvas((1024, 400), color="#1e1e24"))
+                background = Editor(Canvas((1100, 500), color="#2c3e50"))
 
-            # 2. 載入中文字體 (若字體檔不存在則退回預設)
+            # 2. 製作毛玻璃矩陣 (中心透明黑色遮罩)
+            overlay = Canvas((1100, 500), color=(0, 0, 0, 100)) # 全局微暗
+            background.paste(Editor(overlay), (0, 0))
+            
+            # 中心文字背板 (毛玻璃感)
+            glass_plate = Canvas((800, 300), color=(255, 255, 255, 30))
+            background.paste(Editor(glass_plate), (150, 100))
+
+            # 3. 載入中文字體
             if os.path.exists(FONT_PATH):
-                font_big = Font(FONT_PATH, size=80)
-                font_name = Font(FONT_PATH, size=60)
-                font_small = Font(FONT_PATH, size=35)
+                font_title = Font(FONT_PATH, size=90)
+                font_name = Font(FONT_PATH, size=70)
+                font_sub = Font(FONT_PATH, size=40)
             else:
-                font_big = Font.poppins(variant="bold", size=80)
-                font_name = Font.poppins(variant="bold", size=60)
-                font_small = Font.poppins(variant="light", size=35)
+                font_title = Font.poppins(variant="bold", size=90)
+                font_name = Font.poppins(variant="bold", size=70)
+                font_sub = Font.poppins(variant="light", size=40)
 
-            # 3. 處理頭像
+            # 4. 處理頭像 (加厚圓框)
             avatar_url = member.display_avatar.url
             avatar_image = await load_image_async(str(avatar_url))
             
-            # 製作帶有發光感的外框
-            profile_outer = Editor(Canvas((260, 260), color="#ffffff")).circle_image()
-            profile = Editor(avatar_image).resize((240, 240)).circle_image()
-            profile_outer.paste(profile, (10, 10))
+            profile = Editor(avatar_image).resize((220, 220)).circle_image()
+            # 漸層感外框
+            border = Editor(Canvas((240, 240), color="#ffffff")).circle_image()
+            border.paste(profile, (10, 10))
 
-            # 4. 組合圖片
-            background.paste(profile_outer, (60, 70))
+            # 5. 組合配置 (稍微偏左的頭貼，文字排列在旁)
+            background.paste(border, (200, 130))
             
-            # 繪製文字 (加上陰影效果感)
-            background.text((360, 90), "WELCOME", font=font_big, color="#ff7675")
-            background.text((360, 185), f"{member.name}", font=font_name, color="white")
-            background.text((360, 265), f"歡迎來到 {member.guild.name}", font=font_small, color="#fab1a0")
-            background.text((360, 310), f"你是第 {member.guild.member_count} 位星辰成員喔！嗷嗷嗷～", font=font_small, color="#dfe6e9")
+            # 文字細節
+            background.text((470, 140), "NEW MEMBER", font=font_sub, color="#fab1a0")
+            background.text((470, 190), f"{member.name}", font=font_name, color="white")
+            background.text((470, 275), f"你是第 {member.guild.member_count} 顆降落的星辰", font=font_sub, color="#dfe6e9")
+            
+            # 裝飾性線條
+            line = Canvas((400, 5), color="#ff7675")
+            background.paste(Editor(line), (470, 265))
 
-            return discord.File(fp=background.image_bytes, filename="welcome.png")
+            return discord.File(fp=background.image_bytes, filename="welcome_luxury.png")
         except Exception as e:
-            print(f"繪圖發生錯誤: {e}")
+            print(f"奢華繪圖失敗: {e}")
             return None
 
     @commands.Cog.listener()

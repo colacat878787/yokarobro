@@ -18,31 +18,33 @@ class ControlPanelView(discord.ui.View):
 
     @discord.ui.button(label="🤖 AI 對話", style=discord.ButtonStyle.success, row=0)
     async def toggle_ai(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.send_message("🛠️ 正在準備調整 AI 核心狀態...", ephemeral=True)
         await self._toggle_module(interaction, button, "cogs.ai", "AI 對話")
 
     @discord.ui.button(label="🎵 音樂系統", style=discord.ButtonStyle.success, row=0)
     async def toggle_music(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.send_message("🛠️ 正在調度音樂模組齒輪...", ephemeral=True)
         await self._toggle_module(interaction, button, "cogs.music", "音樂系統")
 
     @discord.ui.button(label="🎫 一番賞", style=discord.ButtonStyle.success, row=0)
     async def toggle_kuji(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.send_message("🛠️ 正在檢查一番賞獎池連線...", ephemeral=True)
         await self._toggle_module(interaction, button, "cogs.kuji", "一番賞")
 
     @discord.ui.button(label="🛡️ 安全防護", style=discord.ButtonStyle.success, row=0)
     async def toggle_security(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.send_message("🛠️ 正在更新安全協議矩陣...", ephemeral=True)
         await self._toggle_module(interaction, button, "cogs.security", "安全防護")
 
     @discord.ui.button(label="📊 系統數據", style=discord.ButtonStyle.secondary, row=1)
     async def show_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # 先立即 defer，保證不 timeout
-        await interaction.response.defer(ephemeral=True)
+        # 使用最速回應
+        await interaction.response.send_message("📊 正在收集系統感應器數據...", ephemeral=True)
         try:
+            # ... (其餘邏輯)
             import psutil
             process = psutil.Process(os.getpid())
+            # ...
             mem = process.memory_info().rss / 1024 / 1024
             cpu = psutil.cpu_percent(interval=0.1)
             ping = round(self.bot.latency * 1000)
