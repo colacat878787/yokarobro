@@ -39,11 +39,14 @@ class AutoUpdaterCog(commands.Cog):
                 print("⏬ [自動更新] 正在執行 git fetch 與 git pull...")
                 
                 # 正式執行拉取
-                await asyncio.to_thread(subprocess.run, ["git", "fetch"], check=True, timeout=15, env=env)
-                pull_res = await asyncio.to_thread(subprocess.run, ["git", "pull", "origin", "main"], check=True, capture_output=True, text=True, timeout=15, env=env)
+                print("⏬ [自動更新] 正在執行 git fetch 與 git reset --hard...")
+                await asyncio.to_thread(subprocess.run, ["git", "fetch", "--all"], check=True, timeout=15, env=env)
                 
-                print(f"📥 [自動更新] 拉取成功！日誌：\n{pull_res.stdout}")
-                print("✅ [自動更新] 代碼合併完畢，準備呼叫翼龍面板自動重新啟動機器人...")
+                # 強制重打，抹除本地可能產生的衝突 (例如自動生成的 json 被 git 誤認或是權限問題)
+                reset_res = await asyncio.to_thread(subprocess.run, ["git", "reset", "--hard", "origin/main"], check=True, capture_output=True, text=True, timeout=15, env=env)
+                
+                print(f"📥 [自動更新] 強制同步成功！日誌：\n{reset_res.stdout}")
+                print("✅ [自動更新] 代碼已完全同步至最新版本，準備重啟...")
                 print("====================================")
                 os._exit(0)
         except Exception as e:
@@ -66,8 +69,9 @@ class AutoUpdaterCog(commands.Cog):
             remote_hash = await asyncio.to_thread(subprocess.check_output, ["git", "rev-parse", "origin/main"], timeout=5)
             
             if local_hash.strip() != remote_hash.strip():
-                await msg.edit(content="🔄 哇塞！發現熱騰騰的新代碼！正在下載安裝，洛洛馬上重啟！嗷嗷嗷～")
-                await asyncio.to_thread(subprocess.run, ["git", "pull", "origin", "main"], check=True, timeout=15, env=env)
+                await msg.edit(content="🔄 哇塞！發現熱騰騰的新代碼！正在強制同步安裝，洛洛馬上重啟！嗷嗷嗷～")
+                await asyncio.to_thread(subprocess.run, ["git", "fetch", "--all"], check=True, timeout=15, env=env)
+                await asyncio.to_thread(subprocess.run, ["git", "reset", "--hard", "origin/main"], check=True, timeout=15, env=env)
                 os._exit(0)
             else:
                 await msg.edit(content="✅ 目前洛洛已經是最新的程式碼囉！不需要更新。")
