@@ -40,8 +40,8 @@ class YTDLSource(discord.PCMVolumeTransformer):
         # --- 構建動態濾鏡 ---
         filters = []
         if theater:
-            # 劇院模式: 杜比環繞模擬
-            filters.append("stereowidener,extrastereo=m=2.5")
+            # 劇院模式: 使用相容性最高的 extrastereo 濾鏡模擬空間感
+            filters.append("extrastereo=m=2.5")
         
         if pitch != 1.0:
             # 升降 Key: 調整取樣率與速度校正
