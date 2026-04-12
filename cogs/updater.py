@@ -64,7 +64,7 @@ class AutoUpdaterCog(commands.Cog):
         except Exception as e:
             print(f"⚠️ [更新通知] 無法發送更新訊息: {e}")
 
-    @tasks.loop(minutes=30)
+    @tasks.loop(seconds=3)
     async def check_update(self):
         try:
             env = dict(os.environ, GIT_TERMINAL_PROMPT="0")

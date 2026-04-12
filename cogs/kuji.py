@@ -6,7 +6,7 @@ KUJI_FILE = "kuji.json"
 
 class KujiView(discord.ui.View):
     def __init__(self, economy_cog):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None) # 持久化
         self.economy_cog = economy_cog
 
     @discord.ui.button(label="🎲 立即抽賞 (單抽 $200)", style=discord.ButtonStyle.primary, custom_id="kuji_draw")

@@ -98,13 +98,15 @@ class ATMMainView(discord.ui.View):
         await interaction.response.send_modal(PasswordModal(self.economy_cog, "login"))
 
     async def on_error(self, interaction, error, item):
+        print(f"ATMMainView Error: {error}")
+        if not interaction.response.is_done():
             await interaction.response.send_message(f"❌ ATM錯誤: {error}", ephemeral=True)
         else:
             await interaction.followup.send(f"❌ ATM錯誤: {error}", ephemeral=True)
 
 class ATMLoggedInView(discord.ui.View):
     def __init__(self, user, economy_cog):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None) # 持久化
         self.user = user
         self.economy_cog = economy_cog
 
