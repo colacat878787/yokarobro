@@ -45,10 +45,13 @@ class YokaroBot(commands.Bot):
         """載入所有 Cog 分離功能"""
         for ext in self.initial_extensions:
             try:
+                print(f"📦 [加載中] 正在喚醒功能: {ext}...")
                 await self.load_extension(ext)
-                print(f"✅ 已載入功能: {ext}")
+                print(f"✅ [成功] {ext} 已經進入工作崗位！")
             except Exception as e:
-                print(f"❌ 載入失敗 {ext}: {e}")
+                print(f"❌ [失敗] {ext} 喚醒過程發生錯誤: {e}")
+                import traceback
+                traceback.print_exc()
         
         # --- [DEBUG] 全域交互錯誤處理監測器 ---
         @self.tree.error

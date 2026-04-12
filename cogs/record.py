@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+print("🚀 [DEBUG] record.py 文件正在被 Python 讀取中...")
 import asyncio
 import os
 import time
