@@ -3,6 +3,7 @@ from discord.ext import commands
 import yt_dlp
 import asyncio
 import os
+import time
 
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
@@ -16,153 +17,226 @@ YTDL_OPTIONS = {
     'source_address': '0.0.0.0'
 }
 
-FFMPEG_OPTIONS = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn'
-}
-
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
 class YTDLSource(discord.PCMVolumeTransformer):
-    def __init__(self, source, *, data, volume=0.5):
+    def __init__(self, source, *, data, volume=0.5, pitch=1.0, theater=False):
         super().__init__(source, volume)
         self.data = data
         self.title = data.get('title')
         self.url = data.get('url')
+        self.pitch = pitch
+        self.theater = theater
+        self.start_time = time.time() # 记录开始时间
 
     @classmethod
-    async def from_url(cls, url, *, loop=None, stream=False):
+    async def from_url(cls, url, *, loop=None, stream=False, volume=0.5, pitch=1.0, theater=False, seek=0):
         loop = loop or asyncio.get_event_loop()
         data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
         
         if 'entries' in data:
             data = data['entries'][0]
 
+        # --- 構建動態濾鏡 ---
+        filters = []
+        if theater:
+            # 劇院模式: 杜比環繞模擬
+            filters.append("stereowidener,extrastereo=m=2.5")
+        
+        if pitch != 1.0:
+            # 升降 Key: 調整取樣率與速度校正
+            filters.append(f"asetrate=48000*{pitch},atempo=1/{pitch}")
+        
+        af_string = f"-af \"{','.join(filters)}\"" if filters else ""
+        
+        ffmpeg_options = {
+            'before_options': f'-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -ss {seek}',
+            'options': f'-vn {af_string}'
+        }
+
         filename = data['url'] if stream else ytdl.prepare_filename(data)
-        return cls(discord.FFmpegPCMAudio(filename, **FFMPEG_OPTIONS), data=data)
+        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data, volume=volume, pitch=pitch, theater=theater)
+
+# ── 持久化音樂控制面板 ──
+class MusicControlView(discord.ui.View):
+    def __init__(self, cog):
+        super().__init__(timeout=None)
+        self.cog = cog
+
+    @discord.ui.button(label="⏬ 降Key", style=discord.ButtonStyle.secondary, custom_id="mus_key_down")
+    async def key_down(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_pitch(interaction, -0.05)
+
+    @discord.ui.button(label="⏫ 升Key", style=discord.ButtonStyle.secondary, custom_id="mus_key_up")
+    async def key_up(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_pitch(interaction, 0.05)
+
+    @discord.ui.button(label="🎧 杜比環繞", style=discord.ButtonStyle.success, custom_id="mus_theater")
+    async def dolby(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        guild_id = interaction.guild_id
+        state = self.cog.get_state(guild_id)
+        state['theater'] = not state['theater']
+        mode = "開啟" if state['theater'] else "關閉"
+        await self.cog.reload_current(interaction.guild)
+        await interaction.edit_original_response(content=f"🎬 劇院杜比模式已 {mode}！")
+
+    @discord.ui.button(label="⏪ 跳過", style=discord.ButtonStyle.primary, custom_id="mus_skip")
+    async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        if interaction.guild.voice_client:
+            interaction.guild.voice_client.stop()
+            await interaction.edit_original_response(content="⏩ 已跳過當前歌曲！")
+
+    @discord.ui.button(label="⏹️ 停止", style=discord.ButtonStyle.danger, custom_id="mus_stop")
+    async def stop(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        if interaction.guild.voice_client:
+            await interaction.guild.voice_client.disconnect()
+            self.cog.queue[interaction.guild_id] = []
+            await interaction.edit_original_response(content="🛑 已停止播放並清空清單。")
+
+    @discord.ui.button(label="🔉 音量-10", style=discord.ButtonStyle.secondary, row=1, custom_id="mus_vol_down")
+    async def vol_down(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_vol(interaction, -0.1)
+
+    @discord.ui.button(label="🔊 音量+10", style=discord.ButtonStyle.secondary, row=1, custom_id="mus_vol_up")
+    async def vol_up(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_vol(interaction, 0.1)
+
+    async def _adjust_pitch(self, interaction, change):
+        await interaction.response.defer(ephemeral=True)
+        state = self.cog.get_state(interaction.guild_id)
+        state['pitch'] = max(0.5, min(2.0, state['pitch'] + change))
+        await self.cog.reload_current(interaction.guild)
+        await interaction.edit_original_response(content=f"🎵 音調已調整至: {state['pitch']:.2f}x")
+
+    async def _adjust_vol(self, interaction, change):
+        await interaction.response.defer(ephemeral=True)
+        vc = interaction.guild.voice_client
+        state = self.cog.get_state(interaction.guild_id)
+        state['volume'] = max(0.0, state['volume'] + change)
+        if vc and vc.source:
+            vc.source.volume = state['volume']
+        await interaction.edit_original_response(content=f"🔊 音量已調整至: {int(state['volume']*100)}%")
+
+    async def on_error(self, interaction, error, item):
+        print(f"MusicControl Error: {error}")
 
 class MusicCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.queue = []
+        self.queue = {} # guild_id: list
+        self.states = {} # guild_id: dict (vol, pitch, theater)
+        # 註冊持久化面板
+        self.bot.add_view(MusicControlView(self))
 
-    @commands.command(name='join', aliases=['加入', '進來'])
-    async def join(self, ctx):
-        if not ctx.message.author.voice:
-            await ctx.send("嗷～你沒在語音頻道耶！")
+    def get_state(self, guild_id):
+        if guild_id not in self.states:
+            self.states[guild_id] = {'volume': 0.5, 'pitch': 1.0, 'theater': False, 'current_url': None, 'elapsed': 0}
+        return self.states[guild_id]
+
+    async def reload_current(self, guild):
+        """重新加載當前歌曲以套用濾鏡"""
+        vc = guild.voice_client
+        if not vc or not vc.source:
             return
-        channel = ctx.message.author.voice.channel
+        
+        state = self.get_state(guild.id)
+        if not state['current_url']:
+            return
+
+        # 計算已播放時間
+        current_elapsed = time.time() - vc.source.start_time + state['elapsed']
+        
+        # 重新構建 source
         try:
-            if ctx.voice_client:
-                if ctx.voice_client.channel.id != channel.id:
-                    await ctx.voice_client.move_to(channel)
-            else:
-                await channel.connect(timeout=60.0, reconnect=True)
-            await ctx.send(f"✅ 洛洛成功降落於語音頻道 `{channel.name}`！")
-        except discord.errors.ConnectionClosed as e:
-            if e.code == 4017:
-                print("⚠️ [警告] 發生 4017 卡房錯誤，正在強制切斷重新連線...")
-                await ctx.guild.change_voice_state(channel=None)
-                await asyncio.sleep(2)
-                await channel.connect(timeout=60.0, reconnect=True)
-                await ctx.send(f"🔄 洛洛已清除幽靈連線並重新降落！")
-            else:
-                await ctx.send(f"嗷～語音伺服器連線意外關閉：{e}")
+            new_source = await YTDLSource.from_url(
+                state['current_url'], 
+                loop=self.bot.loop, 
+                stream=True,
+                volume=state['volume'],
+                pitch=state['pitch'],
+                theater=state['theater'],
+                seek=int(current_elapsed)
+            )
+            new_source.start_time = time.time()
+            state['elapsed'] = current_elapsed
+            
+            # 使用暫時停止 after 的方式替換 source
+            vc.source = new_source
         except Exception as e:
-            await ctx.send(f"嗷～嘗試連線失敗：{e}")
+            print(f"Reload failed: {e}")
+
+    @commands.command(name='musicpanel', aliases=['音樂面板', 'mp'])
+    async def music_panel(self, ctx):
+        """開啟音樂控制面板"""
+        embed = discord.Embed(title="🎵 Yokaro 音樂劇院控制中心", color=0x9b59b6)
+        embed.description = "您可以在下方即時調整音量、升降 Key 或開啟杜比環繞效果。"
+        embed.add_field(name="🎧 劇院模式", value="使用 FFmpeg 分離聲道營造環繞感", inline=False)
+        embed.set_footer(text="洛洛劇院系統 | 支援 3D 環繞與動態調音")
+        view = MusicControlView(self)
+        await ctx.send(embed=embed, view=view)
 
     @commands.command(name='play', aliases=['播放', '播'])
     async def play(self, ctx, *, search):
         async with ctx.typing():
             try:
                 if not ctx.voice_client:
-                    if not ctx.message.author.voice:
-                        await ctx.send("嗷～你沒在語音頻道耶！")
-                        return
-                    channel = ctx.author.voice.channel
-                    try:
-                        voice_client = await channel.connect(timeout=60.0, reconnect=True)
-                    except discord.errors.ConnectionClosed as e:
-                        if e.code == 4017:
-                            print("⚠️ [警告] 發生 4017 卡房錯誤，正在強制切斷重新連線...")
-                            await ctx.guild.change_voice_state(channel=None)
-                            await asyncio.sleep(2)
-                            voice_client = await channel.connect(timeout=60.0, reconnect=True)
-                        else:
-                            await ctx.send(f"嗷～嘗試連線失敗：{e}")
-                            return
-                    except Exception as e:
-                        await ctx.send(f"嗷～嘗試連線失敗：{e}")
-                        return
-                else:
-                    voice_client = ctx.voice_client
-                    
-                player = await YTDLSource.from_url(search, loop=self.bot.loop, stream=True)
+                    if not ctx.author.voice:
+                        return await ctx.send("嗷～你沒在語音頻道耶！")
+                    await ctx.author.voice.channel.connect(timeout=60.0, reconnect=True)
                 
-                if voice_client.is_playing():
-                    self.queue.append(player)
-                    await ctx.send(f"嗷～音樂已加入播放清單：**{player.title}**")
+                state = self.get_state(ctx.guild.id)
+                player = await YTDLSource.from_url(
+                    search, 
+                    loop=self.bot.loop, 
+                    stream=True, 
+                    volume=state['volume'],
+                    pitch=state['pitch'],
+                    theater=state['theater']
+                )
+                
+                gid = ctx.guild.id
+                if gid not in self.queue: self.queue[gid] = []
+
+                if ctx.voice_client.is_playing():
+                    self.queue[gid].append(player)
+                    await ctx.send(f"✅ **{player.title}** 已加入播放清單")
                 else:
-                    voice_client.play(player, after=lambda e: self.play_next(ctx))
-                    await ctx.send(f"嗷～開始播放：**{player.title}**")
+                    self._play_song(ctx, player)
+                    await ctx.send(f"🎶 正在播放: **{player.title}**")
             except Exception as e:
-                await ctx.send(f"嗷嗷嗷～播放失敗：{e}")
+                await ctx.send(f"❌ 播放失敗: {e}")
+
+    def _play_song(self, ctx, player):
+        state = self.get_state(ctx.guild.id)
+        state['current_url'] = player.url
+        state['elapsed'] = 0
+        player.start_time = time.time()
+        ctx.voice_client.play(player, after=lambda e: self.play_next(ctx))
 
     def play_next(self, ctx):
-        if self.queue and ctx.voice_client:
-            player = self.queue.pop(0)
-            ctx.voice_client.play(player, after=lambda e: self.play_next(ctx))
-            asyncio.run_coroutine_threadsafe(ctx.send(f"嗷～下一首：**{player.title}**"), self.bot.loop)
+        gid = ctx.guild.id
+        if gid in self.queue and self.queue[gid] and ctx.voice_client:
+            player = self.queue[gid].pop(0)
+            self._play_song(ctx, player)
+            asyncio.run_coroutine_threadsafe(ctx.send(f"⏭️ 下一首: **{player.title}**"), self.bot.loop)
 
-    @commands.command(name='stop', aliases=['停止', '離開'])
-    async def stop(self, ctx):
+    @commands.command(name='skip', aliases=['跳過'])
+    async def skip(self, ctx):
         if ctx.voice_client:
             ctx.voice_client.stop()
-            await ctx.voice_client.disconnect()
-            self.queue.clear()
-            await ctx.send("洛洛下班啦，大家掰掰！")
+            await ctx.send("⏩ 已跳過當前歌曲！")
 
-    @commands.command(name='skip', aliases=['跳過', '下一首'])
-    async def skip(self, ctx):
-        if ctx.voice_client and ctx.voice_client.is_playing():
-            ctx.voice_client.stop()
-            await ctx.send("嗷～跳過這首歌！")
-
-    @commands.command(name='force_skip', aliases=['強制跳過'])
-    @commands.has_permissions(administrator=True)
-    async def force_skip(self, ctx):
-        if ctx.voice_client and ctx.voice_client.is_playing():
-            ctx.voice_client.stop()
-            await ctx.send("🚨 管理員強制跳過了這首歌！")
-            
-    @commands.command(name='insert_play', aliases=['插歌'])
-    @commands.has_permissions(administrator=True)
-    async def insert_play(self, ctx, *, search):
-        async with ctx.typing():
-            try:
-                if not ctx.voice_client:
-                    if not ctx.message.author.voice:
-                        await ctx.send("嗷～你沒在語音頻道耶！")
-                        return
-                    channel = ctx.author.voice.channel
-                    try:
-                        voice_client = await channel.connect(timeout=60.0, reconnect=True)
-                    except Exception as e:
-                        await ctx.send(f"嗷～嘗試連線失敗：{e}")
-                        return
-                else:
-                    voice_client = ctx.voice_client
-                    
-                player = await YTDLSource.from_url(search, loop=self.bot.loop, stream=True)
-                
-                if voice_client.is_playing():
-                    self.queue.insert(0, player)
-                    await ctx.send(f"🚨 管理員強制插歌！**{player.title}** 將在下一首立刻播放！")
-                else:
-                    voice_client.play(player, after=lambda e: self.play_next(ctx))
-                    await ctx.send(f"🚨 管理員強制插歌！開始播放：**{player.title}**")
-            except Exception as e:
-                await ctx.send(f"嗷嗷嗷～插歌失敗：{e}")
+    @commands.command(name='volume', aliases=['音量'])
+    async def volume(self, ctx, vol: int):
+        """調整音量 (如: !volume 100)"""
+        if ctx.voice_client and ctx.voice_client.source:
+            ctx.voice_client.source.volume = vol / 100
+            state = self.get_state(ctx.guild.id)
+            state['volume'] = vol / 100
+            await ctx.send(f"🔊 音量已設定為: {vol}%")
 
 async def setup(bot):
     await bot.add_cog(MusicCog(bot))
