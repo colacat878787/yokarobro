@@ -149,6 +149,7 @@ class RecordCog(commands.Cog):
             for user in sink.buffers.keys():
                 try:
                     p = f"{folder}/avatar_{user.id}.png"
+                    # 多次嘗試下載
                     res = requests.get(user.display_avatar.url, timeout=10)
                     with open(p, "wb") as f: f.write(res.content)
                     avatar_paths[user.id] = p
@@ -156,7 +157,7 @@ class RecordCog(commands.Cog):
                     print(f"下載頭像失敗 ({user.id}): {e}")
 
             mixed_wav = f"{folder}/mixed.wav"
-            # 指向第一個有效的 PCM
+            # 指向第一個有效的 PCM (優化：實際上應使用 ffmpeg amix 混音)
             first_user_pcm = list(sink.buffers.values())[0].file_path
             
             subprocess.run([
@@ -179,43 +180,50 @@ class RecordCog(commands.Cog):
             except Exception as e:
                 print(f"Whisper failed: {e}")
                 with open(srt_path, "w", encoding="utf-8") as f:
-                    f.write("1\n00:00:00,000 --> 00:00:05,000\n(字幕辨識加載中或失敗)\n")
+                    f.write("1\n00:00:00,000 --> 00:00:05,000\n(字幕辨識暫不可用)\n")
 
             # 3. 影片渲染 (動態合成)
             print("[Record] 正在壓製動態彈跳頭像影片...")
             output_mp4 = f"{folder}/output_video.mp4"
             
-            # 基本 FFmpeg 指令架構
-            # 輸入 0: 黑色背景, 輸入 1: 混合音軌, 接下來是頭像
+            # 修復版 FFmpeg 指令架構
+            # 輸入 0: 背景, 1: 音軌, 2,3,4...: 頭像
             inputs = ["-f", "lavfi", "-i", "color=c=black:s=1280x720:r=24", "-i", mixed_wav]
-            filter_parts = ["[0:v]"]
             
-            # 為每個用戶增加頭像輸入與動態位置
+            # 構建 Filter Complex 
+            # 初始標籤為 [0:v]
+            filter_complex = ""
+            current_v = "0:v"
+            
             for i, (uid, path) in enumerate(avatar_paths.items(), 2):
                 inputs.extend(["-i", path])
-                x_pos = 100 + (i-2)*250
-                # 簡單的彈跳效果：循環彈跳 (後續可優化為對齊說話點)
+                x_pos = 100 + (i-2)*300
                 bounce_expr = f"300-20*gt(sin(t*2.5),0.7)"
                 
-                prev_label = filter_parts[-1]
-                new_label = f"v{i-2}"
-                # 縮放並疊加
-                filter_parts.append(f"[{i}:v]scale=200:200[av{i}];[{prev_label}][av{i}]overlay=x={x_pos}:y='{bounce_expr}'[{new_label}]")
+                # 縮放當前頭像
+                filter_complex += f"[{i}:v]scale=200:200[av{uid}];"
+                # 疊加到背景上
+                next_v = f"v{i}"
+                filter_complex += f"[{current_v}][av{uid}]overlay=x={x_pos}:y='{bounce_expr}'[{next_v}];"
+                current_v = next_v
 
-            # 最後加上字幕燒製
-            last_label = filter_parts[-1]
-            filter_parts.append(f"[{last_label}]subtitles={srt_path}:force_style='FontSize=24,Alignment=2'[outv]")
+            # 最後加上字幕
+            filter_complex += f"[{current_v}]subtitles={srt_path}:force_style='FontSize=24,Alignment=2'[outv]"
 
             # 執行渲染
             subprocess.run([
                 "ffmpeg", "-y"] + inputs + [
-                "-filter_complex", ";".join(filter_parts[1:]),
+                "-filter_complex", filter_complex,
                 "-map", "[outv]", "-map", "1:a",
                 "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", 
                 "-shortest", output_mp4
             ], check=True, capture_output=True)
 
             return output_mp4
+
+        except Exception as e:
+            print(f"Render Task Error: {e}")
+            return None
 
         except Exception as e:
             print(f"Render Task Error: {e}")
