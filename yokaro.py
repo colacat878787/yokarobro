@@ -14,6 +14,7 @@ intents.message_content = True
 intents.members = True # 需要在 Discord Developer Portal 打開
 
 import logging
+from utils import mobile_status # 啟用手機在線模式
 
 # 設定基礎日誌，這樣我們就能看到報錯詳情
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
