@@ -28,18 +28,27 @@ class ControlPanelView(discord.ui.View):
 
     @discord.ui.button(label="📊 系統數據", style=discord.ButtonStyle.secondary, custom_id="stats")
     async def show_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
-        process = psutil.Process(os.getpid())
-        mem = process.memory_info().rss / 1024 / 1024
-        cpu = psutil.cpu_percent()
-        ping = round(self.bot.latency * 1000)
-        
-        embed = discord.Embed(title="📊 Yokaro 即時系統數據", color=0x3498db)
-        embed.add_field(name="記憶體使用", value=f"{mem:.2f} MB", inline=True)
-        embed.add_field(name="CPU 使用率", value=f"{cpu}%", inline=True)
-        embed.add_field(name="連線延遲", value=f"{ping}ms", inline=True)
-        embed.set_footer(text=f"最後更新時間: {datetime.now().strftime('%H:%M:%S')}")
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        try:
+            process = psutil.Process(os.getpid())
+            mem = process.memory_info().rss / 1024 / 1024
+            cpu = psutil.cpu_percent()
+            ping = round(self.bot.latency * 1000)
+            
+            embed = discord.Embed(title="📊 Yokaro 即時系統數據", color=0x3498db)
+            embed.add_field(name="記憶體使用", value=f"{mem:.2f} MB", inline=True)
+            embed.add_field(name="CPU 使用率", value=f"{cpu}%", inline=True)
+            embed.add_field(name="連線延遲", value=f"{ping}ms", inline=True)
+            embed.set_footer(text=f"最後更新時間: {datetime.now().strftime('%H:%M:%S')}")
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ 無法獲取系統數據: {e}", ephemeral=True)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item):
+        if not interaction.response.is_done():
+            await interaction.response.send_message(f"❌ 控制面板發生錯誤: {error}", ephemeral=True)
+        else:
+            await interaction.followup.send(f"❌ 控制面板發生錯誤: {error}", ephemeral=True)
 
     async def toggle_cog(self, interaction, button, extension, name):
         # 0.1s 反應優化
