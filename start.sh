@@ -13,7 +13,7 @@ export GIT_TERMINAL_PROMPT=0
 
 # 2. 強制從 GitHub 拉取最新代碼（完全覆蓋本地）
 echo "📡 正在從 GitHub 同步最新代碼..."
-if git fetch --all --timeout=30 2>&1; then
+if git fetch --all 2>&1; then
     git reset --hard origin/main
     echo "✅ 代碼同步完成！"
 else
