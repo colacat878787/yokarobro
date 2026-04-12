@@ -26,7 +26,8 @@ class YokaroBot(commands.Bot):
             'cogs.twitter',
             'cogs.tts',
             'cogs.updater',
-            'cogs.welcome'
+            'cogs.welcome',
+            'cogs.economy'
         ]
 
     async def setup_hook(self):
@@ -88,6 +89,8 @@ async def help(ctx):
     embed.add_field(name="🔍 資訊查詢", value="`!weather / !天氣 [城市]` 查天氣\n`!wiki / !維基 [關鍵字]` 查維基\n`!stock / !股價 [代號]` 查股價", inline=False)
     embed.add_field(name="🐦 Twitter 通知", value="`!track_x / !追蹤推特 [帳號]` 設定推文通知頻道", inline=False)
     embed.add_field(name="💬 AI 對話 & 實況", value="`!say / !廣播` 設定廣播頻道，或是直接標記聊天", inline=False)
+    
+    embed.add_field(name="💰 經濟與遊戲", value="`!balance / !錢包` 查餘額\n`!work / !工作` 互動式打工賺錢\n`!daily / !簽到` 領每日獎金\n`!rps / !猜拳 [拳] [賭注]` 贏錢\n`!gamble / !賭博 [金額]` 搏一搏單車變摩托", inline=False)
     
     embed.set_footer(text="還有什麼洛洛能幫你的嗎？嗷嗷嗷～")
     await ctx.send(embed=embed)
