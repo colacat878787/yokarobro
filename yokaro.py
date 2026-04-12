@@ -27,7 +27,9 @@ class YokaroBot(commands.Bot):
             'cogs.tts',
             'cogs.updater',
             'cogs.welcome',
-            'cogs.economy'
+            'cogs.economy',
+            'cogs.kuji',
+            'cogs.admin'
         ]
 
     async def setup_hook(self):
@@ -78,22 +80,58 @@ async def reboot(ctx):
     await ctx.send("⚙️ 洛洛正在重啟中，請稍候一下喔！嗷～")
     exit(0) # 搭配 start.sh 循環實現自動重啟
 
+class HelpView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=60)
+
+    @discord.ui.button(label="🛡️ 管理/安全", style=discord.ButtonStyle.primary)
+    async def security(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(title="🛡️ 管理與安全指令", color=0x3498db)
+        embed.add_field(name="!setup_verify / !設定驗證", value="設定入群驗證按鈕", inline=False)
+        embed.add_field(name="!panel / !後台", value="💡 管理員專用控制面板", inline=False)
+        embed.add_field(name="!reboot / !重啟", value="💡 重啟機器人", inline=False)
+        await interaction.response.edit_message(embed=embed)
+
+    @discord.ui.button(label="🎵 音樂/廣播", style=discord.ButtonStyle.primary)
+    async def music(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(title="🎵 音樂與廣播指令", color=0x2ecc71)
+        embed.add_field(name="!play / !播放", value="播放 Youtube 音樂", inline=True)
+        embed.add_field(name="!skip / !跳過", value="下一首", inline=True)
+        embed.add_field(name="!stop / !停止", value="下班離開", inline=True)
+        embed.add_field(name="!say / !廣播", value="TTS 語音廣播", inline=False)
+        await interaction.response.edit_message(embed=embed)
+
+    @discord.ui.button(label="💰 經濟/一番賞", style=discord.ButtonStyle.success)
+    async def economy(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(title="💰 經濟與遊戲系統", color=0xf1c40f)
+        embed.add_field(name="!balance / !錢包", value="查看資產總覽", inline=True)
+        embed.add_field(name="!ATM / !銀行", value="💡 開啟銀行 ATM 介面", inline=True)
+        embed.add_field(name="!kuji / !一番賞", value="💡 抽星空一番賞", inline=False)
+        embed.add_field(name="!work / !工作", value="互動式打工賺錢", inline=True)
+        embed.add_field(name="!gamble / !賭博", value="比大小對賭", inline=True)
+        await interaction.response.edit_message(embed=embed)
+
+    @discord.ui.button(label="🔍 資訊/其它", style=discord.ButtonStyle.secondary)
+    async def info(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(title="🔍 資訊查詢與趣味功能", color=0x95a5a6)
+        embed.add_field(name="!weather / !天氣", value="查全球氣象", inline=True)
+        embed.add_field(name="!stock / !股價", value="查台股/美股", inline=True)
+        embed.add_field(name="!fortune / !運勢", value="每日占卜", inline=True)
+        embed.add_field(name="!profile / !等級", value="個人等級 XP", inline=True)
+        await interaction.response.edit_message(embed=embed)
+
 @bot.command(name='help', aliases=['幫助', '求救'])
 async def help(ctx):
-    """顯示詳細的功能說明"""
-    embed = discord.Embed(title="🌟 祈星‧優卡洛 指令清單", description="洛洛是你的全能小幫手！(所有指令支援中/英通用)", color=0xffc0cb)
+    """顯示按鈕導航的功能說明"""
+    embed = discord.Embed(
+        title="🌟 祈星‧優卡洛 互動指令面板",
+        description="洛洛現在支援全新的按鈕選單囉！\n請點擊下方的按鈕來切換不同的指令分類：",
+        color=0xffc0cb
+    )
+    embed.set_thumbnail(url=bot.user.display_avatar.url)
+    embed.set_footer(text="提示：所有指令皆支援中英雙語通用喔！")
     
-    embed.add_field(name="🛡️ 安全管理", value="`!setup_verify / !設定驗證` 設定入群驗證\n(自動偵測廣告 & 過量連結)", inline=False)
-    embed.add_field(name="🎵 音樂播放", value="`!play / !播放 [歌名]` 播放音樂\n`!insert_play / !插歌` 插歌 (管理員)\n`!skip / !跳過` 跳過 / `!force_skip` (管理員)\n`!stop / !停止` 停止", inline=False)
-    embed.add_field(name="🎮 遊戲與運勢", value="`!fortune / !運勢` 每日抽籤\n`!slot / !拉霸` 拉霸機\n`!giveaway / !抽獎 [秒數] [獎品]` 辦抽獎\n`!profile / !等級` 查詢等級 XP", inline=False)
-    embed.add_field(name="🔍 資訊查詢", value="`!weather / !天氣 [城市]` 查天氣\n`!wiki / !維基 [關鍵字]` 查維基\n`!stock / !股價 [代號]` 查股價", inline=False)
-    embed.add_field(name="🐦 Twitter 通知", value="`!track_x / !追蹤推特 [帳號]` 設定推文通知頻道", inline=False)
-    embed.add_field(name="💬 AI 對話 & 實況", value="`!say / !廣播` 設定廣播頻道，或是直接標記聊天", inline=False)
-    
-    embed.add_field(name="💰 經濟與遊戲", value="`!balance / !錢包` 查餘額\n`!work / !工作` 互動式打工賺錢\n`!daily / !簽到` 領每日獎金\n`!rps / !猜拳 [拳] [賭注]` 贏錢\n`!gamble / !賭博 [金額]` 搏一搏單車變摩托", inline=False)
-    
-    embed.set_footer(text="還有什麼洛洛能幫你的嗎？嗷嗷嗷～")
-    await ctx.send(embed=embed)
+    await ctx.send(embed=embed, view=HelpView())
 
 if __name__ == "__main__":
     import subprocess
