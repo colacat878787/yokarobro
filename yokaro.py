@@ -120,6 +120,12 @@ class HelpView(discord.ui.View):
         embed.add_field(name="!profile / !等級", value="個人等級 XP", inline=True)
         await interaction.response.edit_message(embed=embed)
 
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item):
+        if not interaction.response.is_done():
+            await interaction.response.send_message(f"❌ Help 面板發生錯誤: {error}", ephemeral=True)
+        else:
+            await interaction.followup.send(f"❌ Help 面板發生錯誤: {error}", ephemeral=True)
+
 @bot.command(name='help', aliases=['幫助', '求救'])
 async def help(ctx):
     """顯示按鈕導航的功能說明"""

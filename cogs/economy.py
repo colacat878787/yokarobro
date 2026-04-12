@@ -152,6 +152,12 @@ class ATMView(discord.ui.View):
         embed.add_field(name="👛 錢包現金", value=f"**${user_data['balance']}**", inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item):
+        if not interaction.response.is_done():
+            await interaction.response.send_message(f"❌ ATM 發生錯誤: {error}", ephemeral=True)
+        else:
+            await interaction.followup.send(f"❌ ATM 發生錯誤: {error}", ephemeral=True)
+
 class WorkView(discord.ui.View):
     def __init__(self, ctx, economy_cog):
         super().__init__(timeout=30)
@@ -184,6 +190,12 @@ class WorkView(discord.ui.View):
         
         await interaction.response.edit_message(content=None, embed=embed, view=None)
         self.stop()
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item):
+        if not interaction.response.is_done():
+            await interaction.response.send_message(f"❌ 工作系統發生錯誤: {error}", ephemeral=True)
+        else:
+            await interaction.followup.send(f"❌ 工作系統發生錯誤: {error}", ephemeral=True)
 
 # --- Economy Cog ---
 

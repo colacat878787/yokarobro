@@ -47,6 +47,12 @@ class KujiView(discord.ui.View):
         
         await msg.edit(content=None, embed=embed)
 
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item):
+        if not interaction.response.is_done():
+            await interaction.response.send_message(f"❌ 一番賞系統發生錯誤: {error}", ephemeral=True)
+        else:
+            await interaction.followup.send(f"❌ 一番賞系統發生錯誤: {error}", ephemeral=True)
+
 class KujiCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot

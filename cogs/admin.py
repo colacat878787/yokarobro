@@ -3,6 +3,7 @@ from discord.ext import commands
 import os
 import psutil
 import time
+from datetime import datetime
 
 class ControlPanelView(discord.ui.View):
     def __init__(self, bot):
@@ -41,7 +42,7 @@ class ControlPanelView(discord.ui.View):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def toggle_cog(self, interaction, button, extension, name):
-        # 0.1s 反應優化: 立即處理邏輯並更新按鈕狀態
+        # 0.1s 反應優化
         try:
             if extension in self.bot.extensions:
                 await self.bot.unload_extension(extension)
@@ -52,12 +53,14 @@ class ControlPanelView(discord.ui.View):
                 button.style = discord.ButtonStyle.success
                 msg = f"✅ 已開啟 {name} 功能。"
             
-            # 使用 edit_message 達成極速視覺更新
             await interaction.response.edit_message(view=self)
-            # 額外發送一個短訊提醒 (ephemeral)
             await interaction.followup.send(msg, ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"⚠️ 操作失敗: {e}", ephemeral=True)
+            # 發生錯誤時至少也要回應，避免「此交互失敗」
+            if not interaction.response.is_done():
+                await interaction.response.send_message(f"⚠️ 操作失敗: {e}", ephemeral=True)
+            else:
+                await interaction.followup.send(f"⚠️ 操作失敗: {e}", ephemeral=True)
 
 class AdminCog(commands.Cog):
     def __init__(self, bot):
