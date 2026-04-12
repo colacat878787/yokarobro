@@ -11,8 +11,8 @@ class KujiView(discord.ui.View):
 
     @discord.ui.button(label="🎲 立即抽賞 (單抽 $200)", style=discord.ButtonStyle.primary)
     async def draw(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # 立即 defer 防止 timeout
-        await interaction.response.defer()
+        # 立即 defer 並顯示思考中 (依據使用者要求使用 ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
         
         uid = str(interaction.user.id)
         if self.economy_cog.get_balance(uid) < 200:

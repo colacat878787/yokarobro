@@ -16,12 +16,20 @@ class SecurityView(discord.ui.View):
 
     @discord.ui.button(label="✅ 我已閱讀並同意守則", style=discord.ButtonStyle.green, custom_id="verify_btn")
     async def verify(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # 立即響應並告知正在處理
+        await interaction.response.defer(ephemeral=True)
+        
         role = discord.utils.get(interaction.guild.roles, name=self.role_name)
         if role:
-            await interaction.user.add_roles(role)
-            await interaction.response.send_message("驗證完成！歡迎加入！嗷嗷嗷～", ephemeral=True)
+            try:
+                await interaction.user.add_roles(role)
+                await interaction.followup.send("✅ 驗證完成！歡迎加入星辰大合唱！嗷嗷嗷～", ephemeral=True)
+            except discord.Forbidden:
+                await interaction.followup.send("❌ 矮油！洛洛沒有權限幫你加身分組，請聯絡管理員權限設置！", ephemeral=True)
+            except Exception as e:
+                await interaction.followup.send(f"❌ 發生未知錯誤：{e}", ephemeral=True)
         else:
-            await interaction.response.send_message(f"嗷～找不到身分組 {self.role_name}，請聯絡管理員！", ephemeral=True)
+            await interaction.followup.send(f"嗷～找不到身分組 `{self.role_name}`，請管理員檢查設定！", ephemeral=True)
 
 class SecurityCog(commands.Cog):
     def __init__(self, bot):

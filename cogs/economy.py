@@ -125,11 +125,15 @@ class ATMLoggedInView(discord.ui.View):
 
     @discord.ui.button(label="📄 查餘額", style=discord.ButtonStyle.primary)
     async def check(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # 立即響應
         await interaction.response.defer(ephemeral=True)
+        
         data = self.economy_cog.get_user_data(str(self.user.id))
         embed = discord.Embed(title="📄 帳戶資訊", color=0x3498db)
         embed.add_field(name="👛 錢包", value=f"${data['balance']}", inline=True)
         embed.add_field(name="🏦 銀行", value=f"${data.get('bank', 0)}", inline=True)
+        
+        # 使用 followup 送出結果
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     async def on_error(self, interaction, error, item):
@@ -160,18 +164,23 @@ class WorkView(discord.ui.View):
         await self._work(interaction, "寫程式", 150, 450)
 
     async def _work(self, interaction: discord.Interaction, job: str, mn: int, mx: int):
-        # 立即 defer 保證不 timeout
-        await interaction.response.defer()
+        # 立即響應並顯示 "正在思考..." (隱藏訊息)
+        await interaction.response.defer(ephemeral=True)
+        
         if interaction.user.id != self.user.id:
-            await interaction.followup.send("這不是你的工作邀請喔！", ephemeral=True)
+            await interaction.followup.send("❌ 這不是你的工作邀請喔！", ephemeral=True)
             return
+            
         pay = random.randint(mn, mx)
         self.economy_cog.add_money(str(interaction.user.id), pay)
         bal = self.economy_cog.get_balance(str(interaction.user.id))
+        
         embed = discord.Embed(title="💼 工作成果", color=discord.Color.green())
         embed.description = f"你剛剛去 **{job}**，賺到了 **${pay}**！嗷嗷嗷～"
         embed.set_footer(text=f"目前餘額: ${bal}")
-        await interaction.edit_original_response(content=None, embed=embed, view=None)
+        
+        # 使用 followup 發送結果 (或者是 edit_original_response 但 followup 更推薦與 defer 搭配)
+        await interaction.followup.send(embed=embed, ephemeral=True)
         self.stop()
 
     async def on_error(self, interaction, error, item):
