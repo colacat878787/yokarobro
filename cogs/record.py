@@ -9,6 +9,10 @@ import json
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 
+# 靜音插件的報錯日誌，避免大量損壞包報錯淹沒系統
+import logging # 在最上方加一下
+logging.getLogger('discord.ext.voice_recv').setLevel(logging.CRITICAL)
+
 # 注意：我們需要 discord-ext-voice-recv 插件
 try:
     import discord.ext.voice_recv as voice_recv
@@ -17,20 +21,28 @@ try:
 except ImportError as e:
     HAS_VOICE_RECV = False
     print(f"⚠️ [錄影機] 語音接收模組載入失敗: {e}")
+except Exception as e:
+    HAS_VOICE_RECV = False
+    print(f"❌ [錄影機] 載入過程發生非預期錯誤: {e}")
 
 class AudioBuffer:
     def __init__(self, user, folder):
         self.user = user
         self.folder = folder
         self.file_path = f"{folder}/user_{user.id}.pcm"
-        self.file = open(self.file_path, "wb")
+        try:
+            self.file = open(self.file_path, "wb")
+        except:
+            self.file = None
         self.start_time = time.time()
 
     def write(self, data):
-        self.file.write(data)
+        if self.file:
+            self.file.write(data)
 
     def close(self):
-        self.file.close()
+        if self.file:
+            self.file.close()
 
 class SyncedAudioSink(voice_recv.AudioSink):
     def __init__(self, folder):
@@ -39,11 +51,11 @@ class SyncedAudioSink(voice_recv.AudioSink):
         self.buffers = {}
         self.start_time = time.time()
 
-    def wants_opus(self):
-        return False # 我們要 PCM 資料
+    def wants_opus(self) -> bool:
+        return False # 請求 PCM 資料
 
     def write(self, user, data):
-        # 增加異常保護，過濾掉損壞的包
+        # 增加極極極致保護，靜默過濾損壞的包
         try:
             if not data or not data.pcm: return
             
@@ -51,12 +63,15 @@ class SyncedAudioSink(voice_recv.AudioSink):
                 self.buffers[user] = AudioBuffer(user, self.folder)
             
             self.buffers[user].write(data.pcm)
-        except Exception as e:
-            print(f"Sink Write Error (User {user}): {e}")
+        except Exception:
+            pass # 寧可略過，不許噴錯
 
     def cleanup(self):
         for buffer in self.buffers.values():
-            buffer.close()
+            try:
+                buffer.close()
+            except:
+                pass
 
 class RecordCog(commands.Cog):
     def __init__(self, bot):
@@ -226,10 +241,6 @@ class RecordCog(commands.Cog):
             ], check=True, capture_output=True)
 
             return output_mp4
-
-        except Exception as e:
-            print(f"Render Task Error: {e}")
-            return None
 
         except Exception as e:
             print(f"Render Task Error: {e}")
