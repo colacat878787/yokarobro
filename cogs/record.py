@@ -7,10 +7,10 @@ import time
 import subprocess
 import json
 import shutil
+import logging
 from concurrent.futures import ThreadPoolExecutor
 
 # 靜音插件的報錯日誌，避免大量損壞包報錯淹沒系統
-import logging # 在最上方加一下
 logging.getLogger('discord.ext.voice_recv').setLevel(logging.CRITICAL)
 
 # 注意：我們需要 discord-ext-voice-recv 插件
@@ -32,7 +32,8 @@ class AudioBuffer:
         self.file_path = f"{folder}/user_{user.id}.pcm"
         try:
             self.file = open(self.file_path, "wb")
-        except:
+        except Exception as e:
+            print(f"⚠️ [Buffer] 無法開啟檔案: {e}")
             self.file = None
         self.start_time = time.time()
 
@@ -55,16 +56,13 @@ class SyncedAudioSink(voice_recv.AudioSink):
         return False # 請求 PCM 資料
 
     def write(self, user, data):
-        # 增加極極極致保護，靜默過濾損壞的包
         try:
             if not data or not data.pcm: return
-            
             if user not in self.buffers:
                 self.buffers[user] = AudioBuffer(user, self.folder)
-            
             self.buffers[user].write(data.pcm)
         except Exception:
-            pass # 寧可略過，不許噴錯
+            pass # 靜默處理損壞包
 
     def cleanup(self):
         for buffer in self.buffers.values():
@@ -102,6 +100,9 @@ class RecordCog(commands.Cog):
             except Exception as e:
                 return await ctx.send(f"❌ 語音連線失敗: {e}")
 
+        # 這裡加一個穩定化小延遲
+        await asyncio.sleep(1)
+
         # 建立錄音資料匣
         rec_id = int(time.time())
         folder = f"temp/rec_{rec_id}"
@@ -132,7 +133,6 @@ class RecordCog(commands.Cog):
         sink.cleanup()
         msg = await ctx.send("🎬 正在啟動【影視級 AI 剪輯模組】... 請稍候，洛洛正在努力畫圖中！🐾")
 
-        # 開啟異步處理
         loop = asyncio.get_event_loop()
         future = loop.run_in_executor(self.executor, self._process_render_sync, sink)
         asyncio.create_task(self._wait_and_send(ctx, future, msg))
@@ -143,10 +143,9 @@ class RecordCog(commands.Cog):
             if video_path and os.path.exists(video_path):
                 await status_msg.edit(content="🎉 剪輯完成！正在傳送影片... 嗷嗚！")
                 await ctx.send(file=discord.File(video_path))
-                # 傳送完理一下空間
                 shutil.rmtree(os.path.dirname(video_path), ignore_errors=True)
             else:
-                await status_msg.edit(content="❌ 哎呀，影片合成時發生意外了！請檢查控制台 Log。")
+                await status_msg.edit(content="❌ 哎呀，影片合成時發生意外了！請培檢查後台 Log 幫助洛洛除錯。")
         except Exception as e:
             await status_msg.edit(content=f"❌ 剪輯失敗: {e}")
 
@@ -164,31 +163,38 @@ class RecordCog(commands.Cog):
             for user in sink.buffers.keys():
                 try:
                     p = f"{folder}/avatar_{user.id}.png"
-                    # 多次嘗試下載
                     res = requests.get(user.display_avatar.url, timeout=10)
-                    with open(p, "wb") as f: f.write(res.content)
-                    avatar_paths[user.id] = p
+                    if res.status_code == 200:
+                        with open(p, "wb") as f: f.write(res.content)
+                        avatar_paths[user.id] = p
                 except Exception as e:
-                    print(f"下載頭像失敗 ({user.id}): {e}")
+                    print(f"⚠️ [Record] 下載頭像失敗 ({user.id}): {e}")
 
             mixed_wav = f"{folder}/mixed.wav"
-            print(f"[Record] 正在混音 {len(sink.buffers)} 位說話者的音軌...")
             
-            # 建立多音軌混音指令
+            # 建立多音軌混音
             amix_inputs = []
+            valid_buffers = []
             for buf in sink.buffers.values():
-                amix_inputs.extend(["-f", "s16le", "-ar", "48000", "-ac", "2", "-i", buf.file_path])
+                if os.path.exists(buf.file_path) and os.path.getsize(buf.file_path) > 0:
+                    amix_inputs.extend(["-f", "s16le", "-ar", "48000", "-ac", "2", "-i", buf.file_path])
+                    valid_buffers.append(buf)
             
-            # 使用 amix 濾鏡將所有輸入混音
+            if not amix_inputs:
+                print("❌ [Record] 沒有錄到任何音效數據！")
+                return None
+
+            print(f"[Record] 正在混音 {len(valid_buffers)} 位說話者的音軌...")
             subprocess.run([
                 "ffmpeg", "-y"] + amix_inputs + [
-                "-filter_complex", f"amix=inputs={len(sink.buffers)}:duration=longest",
+                "-filter_complex", f"amix=inputs={len(valid_buffers)}:duration=longest",
                 mixed_wav
             ], check=True, capture_output=True)
 
-            # 2. AI 辨識 (Faster-Whisper)
-            print("[Record] 正在執行 AI 字幕辨識...")
+            # 2. AI 辨識 (Faster-Whisper) - 非強制
+            print("[Record] 正在嘗試執行 AI 字幕辨識...")
             srt_path = f"{folder}/subtitles.srt"
+            use_subtitles = False
             
             try:
                 from faster_whisper import WhisperModel
@@ -198,52 +204,56 @@ class RecordCog(commands.Cog):
                 with open(srt_path, "w", encoding="utf-8") as f:
                     for i, seg in enumerate(segments, 1):
                         f.write(f"{i}\n{self._format_srt_time(seg.start)} --> {self._format_srt_time(seg.end)}\n{seg.text}\n\n")
+                use_subtitles = True
+                print("✅ [Record] 字幕辨識成功！")
             except Exception as e:
-                print(f"Whisper failed: {e}")
-                with open(srt_path, "w", encoding="utf-8") as f:
-                    f.write("1\n00:00:00,000 --> 00:00:05,000\n(字幕辨識暫不可用)\n")
+                print(f"⚠️ [Record] 跳過字幕辨識 (原因: {e})")
 
-            # 3. 影片渲染 (動態合成)
-            print("[Record] 正在壓製動態彈跳頭像影片...")
+            # 3. 影片渲染
+            print("[Record] 最終壓製動態影片...")
             output_mp4 = f"{folder}/output_video.mp4"
             
-            # 修復版 FFmpeg 指令架構
-            # 輸入 0: 背景, 1: 音軌, 2,3,4...: 頭像
             inputs = ["-f", "lavfi", "-i", "color=c=black:s=1280x720:r=24", "-i", mixed_wav]
-            
-            # 構建 Filter Complex 
-            # 初始標籤為 [0:v]
             filter_complex = ""
             current_v = "0:v"
             
-            for i, (uid, path) in enumerate(avatar_paths.items(), 2):
+            input_ptr = 2
+            for uid, path in avatar_paths.items():
+                if not os.path.exists(path): continue
                 inputs.extend(["-i", path])
-                x_pos = 100 + (i-2)*300
+                x_pos = 100 + (input_ptr-2)*300
                 bounce_expr = f"300-20*gt(sin(t*2.5),0.7)"
                 
-                # 縮放當前頭像
-                filter_complex += f"[{i}:v]scale=200:200[av{uid}];"
-                # 疊加到背景上
-                next_v = f"v{i}"
+                filter_complex += f"[{input_ptr}:v]scale=200:200[av{uid}];"
+                next_v = f"v{input_ptr}"
                 filter_complex += f"[{current_v}][av{uid}]overlay=x={x_pos}:y='{bounce_expr}'[{next_v}];"
                 current_v = next_v
+                input_ptr += 1
 
-            # 最後加上字幕
-            filter_complex += f"[{current_v}]subtitles={srt_path}:force_style='FontSize=24,Alignment=2'[outv]"
+            if use_subtitles and os.path.exists(srt_path):
+                safe_srt = srt_path.replace("\\", "/").replace(":", "\\:")
+                filter_complex += f"[{current_v}]subtitles='{safe_srt}':force_style='FontSize=24,Alignment=2'[outv]"
+            else:
+                filter_complex += f"[{current_v}]null[outv]"
 
-            # 執行渲染
-            subprocess.run([
+            res = subprocess.run([
                 "ffmpeg", "-y"] + inputs + [
                 "-filter_complex", filter_complex,
                 "-map", "[outv]", "-map", "1:a",
                 "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", 
                 "-shortest", output_mp4
-            ], check=True, capture_output=True)
+            ], capture_output=True, text=True)
+
+            if res.returncode != 0:
+                print(f"❌ [FFmpeg Error]\n{res.stderr}")
+                return None
 
             return output_mp4
 
         except Exception as e:
-            print(f"Render Task Error: {e}")
+            print(f"❌ [Record] 渲染崩潰: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def _format_srt_time(self, seconds):
