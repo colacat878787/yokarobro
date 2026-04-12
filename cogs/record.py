@@ -157,12 +157,18 @@ class RecordCog(commands.Cog):
                     print(f"下載頭像失敗 ({user.id}): {e}")
 
             mixed_wav = f"{folder}/mixed.wav"
-            # 指向第一個有效的 PCM (優化：實際上應使用 ffmpeg amix 混音)
-            first_user_pcm = list(sink.buffers.values())[0].file_path
+            print(f"[Record] 正在混音 {len(sink.buffers)} 位說話者的音軌...")
             
+            # 建立多音軌混音指令
+            amix_inputs = []
+            for buf in sink.buffers.values():
+                amix_inputs.extend(["-f", "s16le", "-ar", "48000", "-ac", "2", "-i", buf.file_path])
+            
+            # 使用 amix 濾鏡將所有輸入混音
             subprocess.run([
-                "ffmpeg", "-y", "-f", "s16le", "-ar", "48000", "-ac", "2", 
-                "-i", first_user_pcm, mixed_wav
+                "ffmpeg", "-y"] + amix_inputs + [
+                "-filter_complex", f"amix=inputs={len(sink.buffers)}:duration=longest",
+                mixed_wav
             ], check=True, capture_output=True)
 
             # 2. AI 辨識 (Faster-Whisper)
