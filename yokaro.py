@@ -13,9 +13,16 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True # 需要在 Discord Developer Portal 打開
 
+import logging
+
+# 設定基礎日誌，這樣我們就能看到報錯詳情
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
+logger = logging.getLogger("Yokaro")
+
 class YokaroBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix='!', intents=intents, help_command=None)
+        # ... (其餘部分不變)
         self.initial_extensions = [
             'cogs.ai',
             'cogs.security',
@@ -41,7 +48,17 @@ class YokaroBot(commands.Bot):
             except Exception as e:
                 print(f"❌ 載入失敗 {ext}: {e}")
         
-        # 同步 Slash 指令 (部分 Cog 可能有用到)
+        # --- [DEBUG] 全域交互錯誤處理監測器 ---
+        @self.tree.error
+        async def on_tree_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+            logger.error(f"❌ 交互出錯 (來自 {interaction.user}): {error}")
+            if not interaction.response.is_done():
+                try:
+                    await interaction.response.send_message(f"⚠️ 洛洛偵測到交互內部錯誤：{error}", ephemeral=True)
+                except:
+                    pass
+
+        # 同步 Slash 指令
         await self.tree.sync()
         print("📁 Slash Commands 同步完成")
 
