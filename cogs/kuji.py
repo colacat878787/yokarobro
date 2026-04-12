@@ -9,10 +9,11 @@ class KujiView(discord.ui.View):
         super().__init__(timeout=60)
         self.economy_cog = economy_cog
 
-    @discord.ui.button(label="🎲 立即抽賞 (單抽 $200)", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="🎲 立即抽賞 (單抽 $200)", style=discord.ButtonStyle.primary, custom_id="kuji_draw")
     async def draw(self, interaction: discord.Interaction, button: discord.ui.Button):
         # 1. 立即 defer 進入思考模式
         await interaction.response.defer(ephemeral=True)
+        print(f"DEBUG: {interaction.user} 點擊了抽賞按鈕")
         
         uid = str(interaction.user.id)
         if self.economy_cog.get_balance(uid) < 200:
@@ -55,6 +56,9 @@ class KujiCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.pool = self._load()
+        # 註冊持久化視圖
+        self.bot.add_view(KujiView(self.bot.get_cog("EconomyCog")))
+        print("💠 持久化一番賞按鈕註冊完成")
 
     def _load(self):
         if os.path.exists(KUJI_FILE):

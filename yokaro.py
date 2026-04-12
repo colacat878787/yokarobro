@@ -111,20 +111,22 @@ async def reboot(ctx):
 
 class HelpView(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None) # 持久化 View 不設 timeout
 
-    @discord.ui.button(label="🛡️ 管理/安全", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="🛡️ 管理/安全", style=discord.ButtonStyle.primary, custom_id="help_security")
     async def security(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
+        print(f"DEBUG: {interaction.user} 點擊了幫助選單-安全")
         embed = discord.Embed(title="🛡️ 管理與安全指令", color=0x3498db)
         embed.add_field(name="!setup_verify / !設定驗證", value="設定入群驗證按鈕", inline=False)
         embed.add_field(name="!panel / !後台", value="💡 管理員專用控制面板", inline=False)
         embed.add_field(name="!reboot / !重啟", value="💡 重啟機器人", inline=False)
         await interaction.edit_original_response(embed=embed)
 
-    @discord.ui.button(label="🎵 音樂/廣播", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="🎵 音樂/廣播", style=discord.ButtonStyle.primary, custom_id="help_music")
     async def music(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
+        print(f"DEBUG: {interaction.user} 點擊了幫助選單-音樂")
         embed = discord.Embed(title="🎵 音樂與廣播指令", color=0x2ecc71)
         embed.add_field(name="!play / !播放", value="播放 Youtube 音樂", inline=True)
         embed.add_field(name="!skip / !跳過", value="下一首", inline=True)
@@ -132,9 +134,10 @@ class HelpView(discord.ui.View):
         embed.add_field(name="!say / !廣播", value="TTS 語音廣播", inline=False)
         await interaction.edit_original_response(embed=embed)
 
-    @discord.ui.button(label="💰 經濟/一番賞", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="💰 經濟/一番賞", style=discord.ButtonStyle.success, custom_id="help_economy")
     async def economy(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
+        print(f"DEBUG: {interaction.user} 點擊了幫助選單-經濟")
         embed = discord.Embed(title="💰 經濟與遊戲系統", color=0xf1c40f)
         embed.add_field(name="!balance / !錢包", value="查看資產總覽", inline=True)
         embed.add_field(name="!ATM / !銀行", value="💡 開啟銀行 ATM 介面", inline=True)
@@ -143,9 +146,10 @@ class HelpView(discord.ui.View):
         embed.add_field(name="!gamble / !賭博", value="比大小對賭", inline=True)
         await interaction.edit_original_response(embed=embed)
 
-    @discord.ui.button(label="🔍 資訊/其它", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="🔍 資訊/其它", style=discord.ButtonStyle.secondary, custom_id="help_info")
     async def info(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
+        print(f"DEBUG: {interaction.user} 點擊了幫助選單-資訊")
         embed = discord.Embed(title="🔍 資訊查詢與趣味功能", color=0x95a5a6)
         embed.add_field(name="!weather / !天氣", value="查全球氣象", inline=True)
         embed.add_field(name="!stock / !股價", value="查台股/美股", inline=True)
@@ -154,9 +158,9 @@ class HelpView(discord.ui.View):
         await interaction.edit_original_response(embed=embed)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item):
+        logger.error(f"HelpView Error: {error}")
         if not interaction.response.is_done():
-            await interaction.response.defer(ephemeral=True)
-            await interaction.edit_original_response(content=f"❌ Help 面板發生錯誤: {error}")
+            await interaction.response.send_message(f"❌ Help 面板發生錯誤: {error}", ephemeral=True)
         else:
             await interaction.followup.send(f"❌ Help 面板發生錯誤: {error}", ephemeral=True)
 

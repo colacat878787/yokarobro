@@ -36,6 +36,10 @@ class SecurityView(discord.ui.View):
 class SecurityCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.role_name = "星辰大合唱"
+        # 註冊持久化視圖
+        self.bot.add_view(SecurityView(self.role_name))
+        print("💠 持久化身分驗證按鈕註冊完成")
         self.verify_role = os.getenv("VERIFY_ROLE_NAME", "成員")
 
     @commands.Cog.listener()

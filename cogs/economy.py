@@ -84,31 +84,20 @@ class AmountModal(discord.ui.Modal):
 #  ATM Views
 # ──────────────────────────────────────────
 class ATMMainView(discord.ui.View):
-    def __init__(self, user, economy_cog):
-        super().__init__(timeout=60)
+    def __init__(self, user=None, economy_cog=None):
+        super().__init__(timeout=None)
         self.user = user
         self.economy_cog = economy_cog
-        uid = str(user.id)
-        data = economy_cog.get_user_data(uid)
-        has_account = "password" in data
 
-        if not has_account:
-            btn = discord.ui.Button(label="🏦 立即開戶", style=discord.ButtonStyle.success)
-            btn.callback = self.register_cb
-            self.add_item(btn)
-        else:
-            btn = discord.ui.Button(label="🔑 登入銀行", style=discord.ButtonStyle.primary)
-            btn.callback = self.login_cb
-            self.add_item(btn)
-
-    async def register_cb(self, interaction: discord.Interaction):
+    @discord.ui.button(label="🏦 立即開戶", style=discord.ButtonStyle.success, custom_id="econ_atm_reg_init")
+    async def register_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(PasswordModal(self.economy_cog, "register"))
 
-    async def login_cb(self, interaction: discord.Interaction):
+    @discord.ui.button(label="🔑 登入銀行", style=discord.ButtonStyle.primary, custom_id="econ_atm_login_init")
+    async def login_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(PasswordModal(self.economy_cog, "login"))
 
     async def on_error(self, interaction, error, item):
-        if not interaction.response.is_done():
             await interaction.response.send_message(f"❌ ATM錯誤: {error}", ephemeral=True)
         else:
             await interaction.followup.send(f"❌ ATM錯誤: {error}", ephemeral=True)
@@ -119,18 +108,21 @@ class ATMLoggedInView(discord.ui.View):
         self.user = user
         self.economy_cog = economy_cog
 
-    @discord.ui.button(label="💰 存錢", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="💰 存錢", style=discord.ButtonStyle.secondary, custom_id="econ_atm_deposit")
     async def deposit(self, interaction: discord.Interaction, button: discord.ui.Button):
+        print(f"DEBUG: {interaction.user} 點擊了ATM-存錢")
         await interaction.response.send_modal(AmountModal(self.economy_cog, self.user, "deposit"))
 
-    @discord.ui.button(label="💸 提款", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="💸 提款", style=discord.ButtonStyle.danger, custom_id="econ_atm_withdraw")
     async def withdraw(self, interaction: discord.Interaction, button: discord.ui.Button):
+        print(f"DEBUG: {interaction.user} 點擊了ATM-提款")
         await interaction.response.send_modal(AmountModal(self.economy_cog, self.user, "withdraw"))
 
-    @discord.ui.button(label="📄 查餘額", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="📄 查餘額", style=discord.ButtonStyle.primary, custom_id="econ_atm_check")
     async def check(self, interaction: discord.Interaction, button: discord.ui.Button):
         # 立即進入思考模式
         await interaction.response.defer(ephemeral=True)
+        print(f"DEBUG: {interaction.user} 點擊了ATM-查餘額")
         
         data = self.economy_cog.get_user_data(str(self.user.id))
         embed = discord.Embed(title="📄 帳戶資訊", color=0x3498db)
@@ -141,6 +133,7 @@ class ATMLoggedInView(discord.ui.View):
         await interaction.edit_original_response(content=None, embed=embed)
 
     async def on_error(self, interaction, error, item):
+        print(f"ATMView Error: {error}")
         if not interaction.response.is_done():
             await interaction.response.send_message(f"❌ ATM錯誤: {error}", ephemeral=True)
         else:
@@ -155,17 +148,20 @@ class WorkView(discord.ui.View):
         self.user = user
         self.economy_cog = economy_cog
 
-    @discord.ui.button(label="⛏️ 去挖礦", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="⛏️ 去挖礦", style=discord.ButtonStyle.primary, custom_id="econ_work_mine")
     async def mine(self, interaction: discord.Interaction, button: discord.ui.Button):
+        print(f"DEBUG: {interaction.user} 點擊了工作-挖礦")
         await self._work(interaction, "挖礦", 100, 300)
 
-    @discord.ui.button(label="🍔 去打工", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="🍔 去打工", style=discord.ButtonStyle.success, custom_id="econ_work_burger")
     async def burger(self, interaction: discord.Interaction, button: discord.ui.Button):
+        print(f"DEBUG: {interaction.user} 點擊了工作-打工")
         await self._work(interaction, "在漢堡店打工", 50, 200)
 
-    @discord.ui.button(label="💻 去寫程式", style=discord.ButtonStyle.secondary)
-    async def code(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._work(interaction, "寫程式", 150, 450)
+    @discord.ui.button(label="🍔 去跑外送", style=discord.ButtonStyle.secondary, custom_id="econ_work_delivery")
+    async def delivery(self, interaction: discord.Interaction, button: discord.ui.Button):
+        print(f"DEBUG: {interaction.user} 點擊了工作-外送")
+        await self._work(interaction, "跑外送", 150, 450)
 
     async def _work(self, interaction: discord.Interaction, job: str, mn: int, mx: int):
         # 1. 立即進入思考模式

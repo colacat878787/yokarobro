@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 class ControlPanelView(discord.ui.View):
     """高效能後台控制面板 - 所有按鈕均採用 defer 先行響應，確保不會 timeout"""
     def __init__(self, bot):
-        super().__init__(timeout=120)
+        super().__init__(timeout=None)
         self.bot = bot
 
     async def _safe_respond(self, interaction: discord.Interaction, embed: discord.Embed = None, content: str = None):
@@ -16,29 +16,34 @@ class ControlPanelView(discord.ui.View):
             await interaction.response.defer(ephemeral=True)
         await interaction.followup.send(embed=embed, content=content, ephemeral=True)
 
-    @discord.ui.button(label="🤖 AI 對話", style=discord.ButtonStyle.success, row=0)
+    @discord.ui.button(label="🤖 AI 對話", style=discord.ButtonStyle.success, row=0, custom_id="admin_toggle_ai")
     async def toggle_ai(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
+        print(f"DEBUG: {interaction.user} 點擊了後台-AI切換")
         await self._toggle_module(interaction, button, "cogs.ai", "AI 對話")
 
-    @discord.ui.button(label="🎵 音樂系統", style=discord.ButtonStyle.success, row=0)
+    @discord.ui.button(label="🎵 音樂系統", style=discord.ButtonStyle.success, row=0, custom_id="admin_toggle_music")
     async def toggle_music(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
+        print(f"DEBUG: {interaction.user} 點擊了後台-音樂切換")
         await self._toggle_module(interaction, button, "cogs.music", "音樂系統")
 
-    @discord.ui.button(label="🎫 一番賞", style=discord.ButtonStyle.success, row=0)
+    @discord.ui.button(label="🎫 一番賞", style=discord.ButtonStyle.success, row=0, custom_id="admin_toggle_kuji")
     async def toggle_kuji(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
+        print(f"DEBUG: {interaction.user} 點擊了後台-一番賞切換")
         await self._toggle_module(interaction, button, "cogs.kuji", "一番賞")
 
-    @discord.ui.button(label="🛡️ 安全防護", style=discord.ButtonStyle.success, row=0)
+    @discord.ui.button(label="🛡️ 安全防護", style=discord.ButtonStyle.success, row=0, custom_id="admin_toggle_security")
     async def toggle_security(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
+        print(f"DEBUG: {interaction.user} 點擊了後台-安全切換")
         await self._toggle_module(interaction, button, "cogs.security", "安全防護")
 
-    @discord.ui.button(label="📊 系統數據", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="📊 系統數據", style=discord.ButtonStyle.secondary, row=1, custom_id="admin_show_stats")
     async def show_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
+        print(f"DEBUG: {interaction.user} 點擊了後台-查數據")
         try:
             import psutil
             process = psutil.Process(os.getpid())
@@ -56,7 +61,7 @@ class ControlPanelView(discord.ui.View):
         except Exception as e:
             await interaction.edit_original_response(content=f"❌ 無法讀取數據: {e}")
 
-    @discord.ui.button(label="🔄 強制重啟", style=discord.ButtonStyle.danger, row=1)
+    @discord.ui.button(label="🔄 強制重啟", style=discord.ButtonStyle.danger, row=1, custom_id="admin_force_restart")
     async def force_restart(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=False)
         await interaction.followup.send("⚙️ 洛洛正在重啟，請稍候...")
@@ -71,12 +76,17 @@ class ControlPanelView(discord.ui.View):
             else:
                 await self.bot.load_extension(module_path)
                 button.style = discord.ButtonStyle.success
+                msg = f"✅ 已開啟 {name} 模組"
+            
+            # 更新面板訊息
+            await interaction.message.edit(view=self)
             await interaction.edit_original_response(view=self)
             await interaction.followup.send(msg, ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"⚠️ 操作 {name} 失敗: {e}", ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item):
+        print(f"AdminView Error: {error}")
         if not interaction.response.is_done():
             await interaction.response.send_message(f"❌ 面板錯誤: {error}", ephemeral=True)
         else:
@@ -85,6 +95,9 @@ class ControlPanelView(discord.ui.View):
 class AdminCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        # 註冊持久化視圖，確保重啟後按鈕仍然有效
+        self.bot.add_view(ControlPanelView(bot))
+        print("💠 持久化後台控制面板註冊完成")
 
     @commands.command(name='機器人後台控制面板', aliases=['panel', '控制台', '後台'])
     @commands.has_permissions(administrator=True)
