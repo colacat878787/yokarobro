@@ -76,10 +76,17 @@ class WelcomeCog(commands.Cog):
         # 2. 先把圖抓下來 (這是非同步的，OK)
         try:
             bg_image = await load_image_async(bg_url)
+        except Exception as e:
+            print(f"背景圖下載失敗: {e}，使用備用背景")
+            bg_image = await load_image_async(RANDOM_BGS[0])
+
+        try:
             avatar_image = await load_image_async(str(member.display_avatar.url))
         except Exception as e:
-            print(f"下載圖片失敗: {e}")
-            return None
+            print(f"下載頭像失敗: {e}，使用預設頭像是最穩的備案")
+            # 預設頭像: 一張可愛的洛洛/動漫占位圖
+            fallback_avatar = "https://i.imgur.com/83pPCQ8.png"
+            avatar_image = await load_image_async(fallback_avatar)
 
         # 3. 將繪圖邏輯丟到另一個執行緒執行 (備案核心)
         try:

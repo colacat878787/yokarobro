@@ -127,9 +127,30 @@ class MusicCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.queue = {} # guild_id: list
-        self.states = {} # guild_id: dict (vol, pitch, theater)
+        self.settings_file = "music_settings.json"
+        self.states = self.load_settings()
         # 註冊持久化面板
         self.bot.add_view(MusicControlView(self))
+
+    def load_settings(self):
+        if os.path.exists(self.settings_file):
+            try:
+                with open(self.settings_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    # 将 key 转为 int 以匹配 guild_id
+                    return {int(k): v for k, v in data.items()}
+            except Exception as e:
+                print(f"讀取音樂設定失敗: {e}")
+        return {}
+
+    def save_settings(self):
+        try:
+            with open(self.settings_file, 'w', encoding='utf-8') as f:
+                # 将 key 转为 str 才能存储
+                data = {str(k): v for k, v in self.states.items()}
+                json.dump(data, f)
+        except Exception as e:
+            print(f"儲存音樂設定失敗: {e}")
 
     def get_state(self, guild_id):
         if guild_id not in self.states:
@@ -149,12 +170,11 @@ class MusicCog(commands.Cog):
         # 計算已播放時間
         current_elapsed = time.time() - vc.source.start_time + state['elapsed']
         
-        # 重新構建 source
         try:
             new_source = await YTDLSource.from_url(
                 state['current_url'], 
                 loop=self.bot.loop, 
-                stream=True,
+                stream=not state['current_url'].startswith("temp/"), # 如果是本機檔案不使用 stream
                 volume=state['volume'],
                 pitch=state['pitch'],
                 theater=state['theater'],
@@ -162,11 +182,59 @@ class MusicCog(commands.Cog):
             )
             new_source.start_time = time.time()
             state['elapsed'] = current_elapsed
-            
-            # 使用暫時停止 after 的方式替換 source
             vc.source = new_source
+            self.save_settings() # 每次變更都存檔
         except Exception as e:
             print(f"Reload failed: {e}")
+
+    @commands.command(name='movie', aliases=['電影', '影片'])
+    async def movie(self, ctx):
+        """上傳 MP4 影片，洛洛幫你廣播劇院級音軌"""
+        if not ctx.message.attachments:
+            return await ctx.send("❓ 請上傳一個 `.mp4` 影片檔案，我會為大家廣播劇院特效音軌喔！")
+        
+        attachment = ctx.message.attachments[0]
+        if not attachment.filename.lower().endswith(('.mp4', '.mkv', '.avi', '.mov')):
+            return await ctx.send("❌ 洛洛目前只收影片檔案檔案喔 (mp4, mkv, mov 等)！")
+
+        async with ctx.typing():
+            if not ctx.voice_client:
+                if not ctx.author.voice:
+                    return await ctx.send("嗷～你沒在語音頻道耶！")
+                await ctx.author.voice.channel.connect(timeout=60.0, reconnect=True)
+
+            # 確保暫存目錄存在
+            if not os.path.exists("temp"): os.mkdir("temp")
+            file_path = f"temp/{attachment.filename}"
+            await attachment.save(file_path)
+
+            state = self.get_state(ctx.guild.id)
+            state['theater'] = True # 電影預設開啟劇院模式
+            
+            player = await YTDLSource.from_url(
+                file_path, 
+                loop=self.bot.loop, 
+                stream=False, # 本機播放
+                volume=state['volume'],
+                pitch=state['pitch'],
+                theater=state['theater']
+            )
+
+            # 更新狀態
+            state['current_url'] = file_path
+            
+            if ctx.voice_client.is_playing():
+                if ctx.guild.id not in self.queue: self.queue[ctx.guild.id] = []
+                self.queue[ctx.guild.id].append(player)
+                await ctx.send(f"🎬 影片 **{attachment.filename}** 已加入劇院播放清單！")
+            else:
+                self._play_song(ctx, player)
+                embed = discord.Embed(title="🎬 星空電影院模式：ON", color=0xe91e63)
+                embed.description = f"正在播映：**{attachment.filename}**\n🔊 杜比劇院濾鏡已自動同步開啟！"
+                embed.set_footer(text="提示：請大家自行打開影片檔與洛洛的音軌同步喔！")
+                await ctx.send(embed=embed)
+            
+            self.save_settings()
 
     @commands.command(name='musicpanel', aliases=['音樂面板', 'mp'])
     async def music_panel(self, ctx):
