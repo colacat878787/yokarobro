@@ -67,6 +67,7 @@ class YokaroBot(commands.Bot):
         print(f"🤖 祈星‧優卡洛 (Yokaro) 啟動成功！")
         print(f"👤 登入身分: {self.user.name} (ID: {self.user.id})")
         print(f"🧠 AI 核心: OpenAI GPT 模式")
+        print(f"📦 版本狀態: 2026-04-12 深度優化 (延遲修復版)")
         print("====================================")
         
         # 設定簡單的狀態
