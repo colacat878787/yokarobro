@@ -8,6 +8,30 @@ import datetime
 BLACKLIST_FILE = "blacklist.json"
 KNOWN_USERS_FILE = "known_users.json"
 
+class ServerListView(discord.ui.View):
+    def __init__(self, cog):
+        super().__init__(timeout=60)
+        self.cog = cog
+
+    @discord.ui.button(label="🚪 讓洛洛退出伺服器", style=discord.ButtonStyle.danger)
+    async def leave_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        class LeaveModal(discord.ui.Modal, title="🚪 執行撤退指令"):
+            num = discord.ui.TextInput(label="請輸入列表中的編號 (如: 1)", placeholder="編號...", min_length=1, max_length=2)
+            async def on_submit(self, inter: discord.Interaction):
+                try:
+                    idx = int(self.num.value) - 1
+                    guilds = self.cog.last_guild_list
+                    if 0 <= idx < len(guilds):
+                        target = guilds[idx]
+                        await inter.response.send_message(f"🚨 洛洛正在執行撤退... 即將離開 **{target.name}** (`{target.id}`)！", ephemeral=True)
+                        await target.leave()
+                    else:
+                        await inter.response.send_message("❌ 編號超出範圍囉！", ephemeral=True)
+                except Exception as e:
+                    await inter.response.send_message(f"❌ 發生錯誤：{e}", ephemeral=True)
+        
+        await interaction.response.send_modal(LeaveModal(self.cog))
+
 class ManagementCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -63,30 +87,6 @@ class ManagementCog(commands.Cog):
         view = ServerListView(self)
         await ctx.send(embed=embed, view=view)
 
-class ServerListView(discord.ui.View):
-    def __init__(self, cog):
-        super().__init__(timeout=60)
-        self.cog = cog
-
-    @discord.ui.button(label="🚪 讓洛洛退出伺服器", style=discord.ButtonStyle.danger)
-    async def leave_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        class LeaveModal(discord.ui.Modal, title="🚪 執行撤退指令"):
-            num = discord.ui.TextInput(label="請輸入伺ible 列表中的編號 (如: 1)", placeholder="編號...", min_length=1, max_length=2)
-            async def on_submit(self, inter: discord.Interaction):
-                try:
-                    idx = int(self.num.value) - 1
-                    guilds = self.cog.last_guild_list
-                    if 0 <= idx < len(guilds):
-                        target = guilds[idx]
-                        await inter.response.send_message(f"🚨 洛洛正在執行撤退... 即將離開 **{target.name}** (`{target.id}`)！", ephemeral=True)
-                        await target.leave()
-                    else:
-                        await inter.response.send_message("❌ 編號超出範圍囉！", ephemeral=True)
-                except Exception as e:
-                    await inter.response.send_message(f"❌ 發生錯誤：{e}", ephemeral=True)
-        
-        await interaction.response.send_modal(LeaveModal(self.cog))
-
     @manage_root.command(name="userlist", aliases=["用戶清單", "ul"])
     @commands.has_permissions(administrator=True)
     async def user_list(self, ctx):
@@ -96,7 +96,6 @@ class ServerListView(discord.ui.View):
             return await ctx.send("🌚 目前還沒有捕獲到任何活躍用戶資料。")
 
         desc = f"👤 目前已追蹤到的活躍用戶：**{count}** 位\n\n"
-        # 按照最後見面時間排序
         sorted_users = sorted(self.known_users.items(), key=lambda x: x[1].get('last_seen', ''), reverse=True)
         
         for uid, info in sorted_users[:20]:
@@ -116,7 +115,6 @@ class ServerListView(discord.ui.View):
         self.blacklist.append(user_id)
         self._save_data(BLACKLIST_FILE, self.blacklist)
         
-        # 嘗試私訊通知
         notification_status = "✅ 已成功發送私訊通知"
         try:
             user = await self.bot.fetch_user(int(user_id))
