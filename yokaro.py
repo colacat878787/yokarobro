@@ -38,7 +38,9 @@ class YokaroBot(commands.Bot):
             'cogs.record',
             'cogs.economy',
             'cogs.kuji',
-            'cogs.admin'
+            'cogs.admin',
+            'cogs.modmail',
+            'cogs.tickets'
         ]
 
     async def setup_hook(self):
@@ -123,7 +125,8 @@ class HelpView(discord.ui.View):
         embed = discord.Embed(title="🛡️ 管理與系統指令", description="只有管理員權限才能使用的核心功能", color=0x34495e)
         embed.add_field(name="!setup_verify / !設定驗證", value="設定入群驗證按鈕 (防機器人)", inline=False)
         embed.add_field(name="!welcome_test / !測試歡迎", value="模擬新成員加入的歡迎訊息", inline=False)
-        embed.add_field(name="!panel / !後台", value="💡 開啟管理員專用圖形控制面板", inline=False)
+        embed.add_field(name="!panel / !後台", value="💡 開啟管理員專用圖形控制面板 (V2)", inline=False)
+        embed.add_field(name="!ticket / !開單", value="💡 發送票單啟動儀表板", inline=False)
         embed.add_field(name="!更新紀錄 [set]", value="查看 GitHub 同步紀錄或設定通知頻道", inline=False)
         embed.add_field(name="!reboot / !重啟", value="💡 強制重啟並拉取最新的 GitHub 代碼", inline=False)
         await interaction.edit_original_response(embed=embed)
@@ -145,6 +148,7 @@ class HelpView(discord.ui.View):
         embed = discord.Embed(title="🎥 洛洛錄影機 (影視級系統)", description="業界最強！錄製語音並自動生成「帶字幕與頭像動畫」的影片。", color=0xe74c3c)
         embed.add_field(name="!record start / !錄音 開始", value="進入頻道捕捉語音訊號 (需所有成員同意)", inline=False)
         embed.add_field(name="!record stop / !錄音 停止", value="結束錄製並啟動「AI 自動剪輯與字幕燒製」", inline=False)
+        embed.add_field(name="📩 Modmail 客服", value="直接私訊給洛洛即可開啟與管理員的連線", inline=False)
         embed.set_footer(text="錄影完成後，影片會自動傳送到當前文字頻道。嗷嗷嗷～")
         await interaction.edit_original_response(embed=embed)
 

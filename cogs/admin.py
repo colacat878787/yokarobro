@@ -1,132 +1,163 @@
 import discord
 from discord.ext import commands
 import os
-import time
-from datetime import datetime, timezone
+import psutil
+from utils.config import config_manager
+
+# --- Modals ---
+
+class StringConfigModal(discord.ui.Modal):
+    def __init__(self, title, key, current_val):
+        super().__init__(title=title)
+        self.key = key
+        self.input = discord.ui.TextInput(
+            label=f"修改 {key}",
+            placeholder="請輸入新數值...",
+            default=str(current_val) if current_val else "",
+            required=True
+        )
+        self.add_item(self.input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        config_manager.set_guild_setting(interaction.guild.id, self.key, self.input.value)
+        await interaction.response.send_message(f"✅ 已成功將 `{self.key}` 修改為：`{self.input.value}`", ephemeral=True)
+
+# --- Sub-Menus ---
+
+class ModuleSettingsView(discord.ui.View):
+    def __init__(self, bot, parent_view):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.parent_view = parent_view
+        self._update_buttons()
+
+    def _update_buttons(self):
+        # 這裡動態判定模組狀態
+        exts = {
+            "cogs.ai": "AI 對話",
+            "cogs.music": "音樂系統",
+            "cogs.kuji": "一番賞系統",
+            "cogs.security": "安全防護",
+            "cogs.record": "錄影系統",
+            "cogs.economy": "經濟系統"
+        }
+        self.clear_items()
+        for path, name in exts.items():
+            is_on = path in self.bot.extensions
+            style = discord.ButtonStyle.success if is_on else discord.ButtonStyle.danger
+            btn = discord.ui.Button(label=name, style=style, custom_id=f"toggle_{path}")
+            btn.callback = self._create_callback(path, name)
+            self.add_item(btn)
+        
+        # 回到主選單按鈕
+        back_btn = discord.ui.Button(label="⬅️ 返回主選單", style=discord.ButtonStyle.secondary, row=4)
+        back_btn.callback = self._back_to_main
+        self.add_item(back_btn)
+
+    def _create_callback(self, path, name):
+        async def callback(interaction: discord.Interaction):
+            try:
+                if path in self.bot.extensions:
+                    await self.bot.unload_extension(path)
+                    msg = f"❌ 已關閉 {name}"
+                else:
+                    await self.bot.load_extension(path)
+                    msg = f"✅ 已開啟 {name}"
+                self._update_buttons()
+                await interaction.response.edit_message(view=self)
+                await interaction.followup.send(msg, ephemeral=True)
+            except Exception as e:
+                await interaction.response.send_message(f"⚠️ 操作失敗: {e}", ephemeral=True)
+        return callback
+
+    async def _back_to_main(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(content="🔧 請選擇你要修改的設定類別：", view=self.parent_view)
+
+class ConfigSettingsView(discord.ui.View):
+    def __init__(self, bot, parent_view, category):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.parent_view = parent_view
+        self.category = category
+        self._setup_buttons()
+
+    def _setup_buttons(self):
+        # 根據類別顯示不同的設定按鈕
+        self.clear_items()
+        configs = []
+        if self.category == "security":
+            configs = [("驗證身分組名稱", "verify_role"), ("工作人員身分組", "staff_role")]
+        elif self.category == "features":
+            configs = [("XP 獲取倍率", "xp_rate")]
+        
+        for label, key in configs:
+            btn = discord.ui.Button(label=label, style=discord.ButtonStyle.primary)
+            btn.callback = self._create_modal_callback(label, key)
+            self.add_item(btn)
+
+        back_btn = discord.ui.Button(label="⬅️ 返回主選單", style=discord.ButtonStyle.secondary, row=4)
+        back_btn.callback = self._back_to_main
+        self.add_item(back_btn)
+
+    def _create_modal_callback(self, label, key):
+        async def callback(interaction: discord.Interaction):
+            settings = config_manager.get_guild_settings(interaction.guild_id)
+            await interaction.response.send_modal(StringConfigModal(label, key, settings.get(key)))
+        return callback
+
+    async def _back_to_main(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(content="🔧 請選擇你要修改的設定類別：", view=self.parent_view)
+
+# --- Main Admin Panel ---
 
 class ControlPanelView(discord.ui.View):
-    """高效能後台控制面板 - 所有按鈕均採用 defer 先行響應，確保不會 timeout"""
     def __init__(self, bot):
         super().__init__(timeout=None)
         self.bot = bot
 
-    async def _safe_respond(self, interaction: discord.Interaction, embed: discord.Embed = None, content: str = None):
-        """统一响应方法: 先 defer 确保不超时，再 followup"""
-        if not interaction.response.is_done():
-            await interaction.response.defer(ephemeral=True)
-        await interaction.followup.send(embed=embed, content=content, ephemeral=True)
+    @discord.ui.button(label="🔧 模組開關", style=discord.ButtonStyle.primary, row=0)
+    async def modules(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ModuleSettingsView(self.bot, self)
+        await interaction.response.edit_message(content="📂 **[模組設定]** 點擊下方按鈕切換功能開關：", view=view)
 
-    @discord.ui.button(label="🤖 AI 對話", style=discord.ButtonStyle.success, row=0, custom_id="admin_toggle_ai")
-    async def toggle_ai(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="🔰 安全與身分組", style=discord.ButtonStyle.primary, row=0)
+    async def security_cfg(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ConfigSettingsView(self.bot, self, "security")
+        await interaction.response.edit_message(content="🛡️ **[安全設定]** 修改驗證與權限相關參數：", view=view)
+
+    @discord.ui.button(label="📊 系統數據", style=discord.ButtonStyle.secondary, row=1)
+    async def stats(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
-        print(f"DEBUG: {interaction.user} 點擊了後台-AI切換")
-        await self._toggle_module(interaction, button, "cogs.ai", "AI 對話")
+        process = psutil.Process(os.getpid())
+        mem = process.memory_info().rss / 1024 / 1024
+        cpu = psutil.cpu_percent(interval=0.1)
+        
+        embed = discord.Embed(title="📊 Yokaro 實時監測", color=0x3498db)
+        embed.add_field(name="🌡️ CPU", value=f"{cpu}%", inline=True)
+        embed.add_field(name="🧠 RAM", value=f"{mem:.1f} MB", inline=True)
+        embed.add_field(name="🛰️ 延遲", value=f"{round(self.bot.latency * 1000)}ms", inline=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @discord.ui.button(label="🎵 音樂系統", style=discord.ButtonStyle.success, row=0, custom_id="admin_toggle_music")
-    async def toggle_music(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        print(f"DEBUG: {interaction.user} 點擊了後台-音樂切換")
-        await self._toggle_module(interaction, button, "cogs.music", "音樂系統")
-
-    @discord.ui.button(label="🎫 一番賞", style=discord.ButtonStyle.success, row=0, custom_id="admin_toggle_kuji")
-    async def toggle_kuji(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        print(f"DEBUG: {interaction.user} 點擊了後台-一番賞切換")
-        await self._toggle_module(interaction, button, "cogs.kuji", "一番賞")
-
-    @discord.ui.button(label="🛡️ 安全防護", style=discord.ButtonStyle.success, row=0, custom_id="admin_toggle_security")
-    async def toggle_security(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        print(f"DEBUG: {interaction.user} 點擊了後台-安全切換")
-        await self._toggle_module(interaction, button, "cogs.security", "安全防護")
-
-    @discord.ui.button(label="📊 系統數據", style=discord.ButtonStyle.secondary, row=1, custom_id="admin_show_stats")
-    async def show_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        print(f"DEBUG: {interaction.user} 點擊了後台-查數據")
-        try:
-            import psutil
-            process = psutil.Process(os.getpid())
-            mem = process.memory_info().rss / 1024 / 1024
-            cpu = psutil.cpu_percent(interval=0.1)
-            ping = round(self.bot.latency * 1000)
-            
-            embed = discord.Embed(title="📊 Yokaro 實時監測", color=0x3498db)
-            embed.add_field(name="🌡️ CPU 使用率", value=f"{cpu}%", inline=True)
-            embed.add_field(name="🧠 記憶體佔用", value=f"{mem:.1f} MB", inline=True)
-            embed.add_field(name="🛰️ 延遲 (Latency)", value=f"{ping}ms", inline=True)
-            embed.add_field(name="📂 運作頻道數", value=len(self.bot.guilds), inline=True)
-            
-            await interaction.edit_original_response(embed=embed)
-        except Exception as e:
-            await interaction.edit_original_response(content=f"❌ 無法讀取數據: {e}")
-
-    @discord.ui.button(label="🔄 強制重啟", style=discord.ButtonStyle.danger, row=1, custom_id="admin_force_restart")
-    async def force_restart(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=False)
-        await interaction.followup.send("⚙️ 洛洛正在重啟，請稍候...")
+    @discord.ui.button(label="🔄 重啟機器人", style=discord.ButtonStyle.danger, row=1)
+    async def restart(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("⚙️ 正在執行熱重啟...")
         os._exit(0)
-
-    async def _toggle_module(self, interaction, button, module_path, name):
-        try:
-            if module_path in self.bot.extensions:
-                await self.bot.unload_extension(module_path)
-                button.style = discord.ButtonStyle.danger
-                msg = f"❌ 已關閉 {name} 模組"
-            else:
-                await self.bot.load_extension(module_path)
-                button.style = discord.ButtonStyle.success
-                msg = f"✅ 已開啟 {name} 模組"
-            
-            # 更新面板訊息
-            await interaction.message.edit(view=self)
-            await interaction.edit_original_response(view=self)
-            await interaction.followup.send(msg, ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"⚠️ 操作 {name} 失敗: {e}", ephemeral=True)
-
-    async def on_error(self, interaction: discord.Interaction, error: Exception, item):
-        print(f"AdminView Error: {error}")
-        if not interaction.response.is_done():
-            await interaction.response.send_message(f"❌ 面板錯誤: {error}", ephemeral=True)
-        else:
-            await interaction.followup.send(f"❌ 面板錯誤: {error}", ephemeral=True)
 
 class AdminCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        # 註冊持久化視圖，確保重啟後按鈕仍然有效
         self.bot.add_view(ControlPanelView(bot))
-        print("💠 持久化後台控制面板註冊完成")
 
-    @commands.command(name='機器人後台控制面板', aliases=['panel', '控制台', '後台'])
+    @commands.command(name='panel', aliases=['後台', '控制台'])
     @commands.has_permissions(administrator=True)
     async def control_panel(self, ctx):
-        """(管理員) 開啟高級後台控制面板"""
         embed = discord.Embed(
-            title="🛠️ Yokaro 高階管理後台",
-            description="您可以透過下方的按鈕即時控制機器人的各項功能開關。\n\n🟢 綠色：正常運作中\n🔴 紅色：功能已停用",
+            title="🛠️ Yokaro 高階管理後台 V2",
+            description="歡迎來到全功能管理面板！請點擊下方按鈕進行細項設定。",
             color=0x2c3e50
         )
-        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.set_footer(text="洛洛管理系統 | 所有按鈕均採用 defer 保證不超時")
-        
-        view = ControlPanelView(self.bot)
-        
-        # 根據目前實際載入狀態初始化按鈕顏色
-        ext_map = {
-            "toggle_ai": "cogs.ai",
-            "toggle_music": "cogs.music",
-            "toggle_kuji": "cogs.kuji",
-            "toggle_security": "cogs.security"
-        }
-        for item in view.children:
-            if isinstance(item, discord.ui.Button) and hasattr(item, 'custom_id') and item.custom_id:
-                target = ext_map.get(item.custom_id)
-                if target:
-                    item.style = discord.ButtonStyle.success if target in self.bot.extensions else discord.ButtonStyle.danger
-
-        await ctx.send(embed=embed, view=view)
+        embed.set_footer(text="提示：所有修改將即時儲存至 guild_settings.json")
+        await ctx.send(embed=embed, view=ControlPanelView(self.bot))
 
 async def setup(bot):
     await bot.add_cog(AdminCog(bot))
