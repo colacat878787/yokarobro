@@ -167,7 +167,7 @@ class LeafGameView(discord.ui.View):
         
         # 動態生成 5x5 按鈕
         for i in range(25):
-            btn = discord.ui.Button(label=" ", style=discord.ButtonStyle.secondary, custom_id=f"leaf_{i}", row=i // 5)
+            btn = discord.ui.Button(label="\u200b", style=discord.ButtonStyle.secondary, custom_id=f"leaf_{i}", row=i // 5)
             if i == self.leaf_pos:
                 btn.label = "🍃"
                 btn.style = discord.ButtonStyle.success
@@ -192,7 +192,7 @@ class LeafGameView(discord.ui.View):
                 # 更新按鈕外觀
                 for i, item in enumerate(self.children):
                     if i == old_pos:
-                        item.label = " "
+                        item.label = "\u200b"
                         item.style = discord.ButtonStyle.secondary
                     if i == self.leaf_pos:
                         item.label = "🍃"
