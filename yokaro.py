@@ -42,7 +42,8 @@ class YokaroBot(commands.Bot):
             'cogs.admin',
             'cogs.modmail',
             'cogs.tickets',
-            'cogs.music_recommend'
+            'cogs.music_recommend',
+            'cogs.management'
         ]
 
     async def setup_hook(self):
@@ -57,6 +58,20 @@ class YokaroBot(commands.Bot):
                 import traceback
                 traceback.print_exc()
         
+        # --- 全域黑名單與追蹤攔截器 ---
+        @self.tree.interaction_check
+        async def global_interaction_check(interaction: discord.Interaction):
+            mgmt = self.get_cog("ManagementCog")
+            if mgmt:
+                # 1. 攔截黑名單
+                if mgmt.is_blacklisted(str(interaction.user.id)):
+                    await interaction.response.send_message("❌ 您已被禁止使用洛洛的服務。如有疑問請聯絡開發者。", ephemeral=True)
+                    return False
+                
+                # 2. 追蹤用戶 (Log User)
+                mgmt.log_user(interaction.user)
+            return True
+
         # --- [DEBUG] 全域交互錯誤處理監測器 ---
         @self.tree.error
         async def on_tree_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):

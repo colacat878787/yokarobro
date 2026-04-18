@@ -48,14 +48,18 @@ class MusicRecommendCog(commands.Cog):
 
     async def send_recommendation(self, ctx, artist, is_auto=False):
         try:
-            # 搜尋隨機一首歌，擴大結果池到 20 筆
-            search_query = f"{artist} song random official"
+            # 隨機搜尋詞綴，確保每次抓取結果不同
+            vibe = random.choice(["official mv", "live performance", "acoustic", "lyrics", "popular", "best songs"])
+            search_query = f"{artist} {vibe}"
+            
             data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(search_query, download=False))
             
             if 'entries' in data and data['entries']:
-                # 從前 20 筆中隨機挑選，增加多樣性
-                pool = data['entries'][:20]
-                video = random.choice(pool)
+                # 取得前 25 筆並隨機打亂，徹底解決「一直重複」的問題
+                pool = data['entries'][:25]
+                random.shuffle(pool)
+                video = pool[0]
+                
                 title = video.get('title')
                 url = video.get('webpage_url')
                 duration = video.get('duration')
