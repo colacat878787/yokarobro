@@ -40,7 +40,8 @@ class YokaroBot(commands.Bot):
             'cogs.kuji',
             'cogs.admin',
             'cogs.modmail',
-            'cogs.tickets'
+            'cogs.tickets',
+            'cogs.music_recommend'
         ]
 
     async def setup_hook(self):
@@ -139,6 +140,7 @@ class HelpView(discord.ui.View):
         embed.add_field(name="!skip / !跳過", value="跳到下一首", inline=True)
         embed.add_field(name="!stop / !停止", value="清空隊列並離開頻道", inline=True)
         embed.add_field(name="!say / !廣播 [文字]", value="💡 讓洛洛在語音頻道說話 (TTS)", inline=False)
+        embed.add_field(name="!m推 / !推歌", value="💡 隨機推薦一首好聽的歌 (含自動整點推送)", inline=False)
         embed.set_footer(text="提示：洛洛也支援多音軌混音播放喔！")
         await interaction.edit_original_response(embed=embed)
 

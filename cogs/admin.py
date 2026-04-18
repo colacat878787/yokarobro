@@ -89,6 +89,9 @@ class ConfigSettingsView(discord.ui.View):
             configs = [("驗證身分組名稱", "verify_role"), ("工作人員身分組", "staff_role")]
         elif self.category == "features":
             configs = [("XP 獲取倍率", "xp_rate")]
+        elif self.category == "music_recommend":
+            self._add_music_recommend_buttons()
+            return
         
         # 重新設計按鈕加載邏輯以支援切換按鈕
         if self.category == "modmail":
@@ -115,6 +118,42 @@ class ConfigSettingsView(discord.ui.View):
             
         btn_anon.callback = toggle_anon_callback
         self.add_item(btn_anon)
+
+    def _add_music_recommend_buttons(self):
+        # 1. 設置頻道按鈕
+        btn_channel = discord.ui.Button(label="📍 設定此頻道為推薦頻道", style=discord.ButtonStyle.success)
+        async def set_channel_callback(interaction: discord.Interaction):
+            config_manager.set_guild_setting(interaction.guild.id, "recommend_channel", str(interaction.channel.id))
+            await interaction.response.send_message(f"✅ 已成功將 {interaction.channel.mention} 設定為【音樂推薦頻道】！", ephemeral=True)
+        btn_channel.callback = set_channel_callback
+        self.add_item(btn_channel)
+
+        # 2. 開關按鈕
+        settings = config_manager.get_guild_settings(self.bot.get_guild(self.parent_view.bot.guilds[0].id).id)
+        # 修正：View 內部沒 guild_id 建議從 interaction 拿，但這裡初始化按鈕需要狀態。
+        is_on = settings.get("recommend_enabled", True)
+        label_on = "🔔 整點推送：開啟" if is_on else "🔕 整點推送：關閉"
+        btn_toggle = discord.ui.Button(label=label_on, style=discord.ButtonStyle.secondary)
+        async def toggle_callback(interaction: discord.Interaction):
+            curr = config_manager.get_guild_settings(interaction.guild.id).get("recommend_enabled", True)
+            config_manager.set_guild_setting(interaction.guild.id, "recommend_enabled", not curr)
+            await interaction.response.send_message(f"✅ 整點推薦系統已 {'關閉' if curr else '開啟'}！", ephemeral=True)
+        btn_toggle.callback = toggle_callback
+        self.add_item(btn_toggle)
+
+        # 3. 歌手清單
+        btn_artists = discord.ui.Button(label="🎤 編輯歌手清單", style=discord.ButtonStyle.primary)
+        async def artist_callback(interaction: discord.Interaction):
+            current = config_manager.get_guild_settings(interaction.guild.id).get("recommend_artists", [])
+            class ArtistModal(discord.ui.Modal, title="編輯歌手清單"):
+                inp = discord.ui.TextInput(label="請輸入歌手名稱 (以逗號分開)", default=",".join(current))
+                async def on_submit(self, inter: discord.Interaction):
+                    new_list = [a.strip() for a in self.inp.value.split(",") if a.strip()]
+                    config_manager.set_guild_setting(inter.guild.id, "recommend_artists", new_list)
+                    await inter.response.send_message(f"✅ 歌手清單已更新為：`{', '.join(new_list)}`", ephemeral=True)
+            await interaction.response.send_modal(ArtistModal())
+        btn_artists.callback = artist_callback
+        self.add_item(btn_artists)
 
     def _create_modal_callback(self, label, key):
         async def callback(interaction: discord.Interaction):
@@ -147,7 +186,12 @@ class ControlPanelView(discord.ui.View):
         view = ConfigSettingsView(self.bot, self, "modmail")
         await interaction.response.edit_message(content="📩 **[聯絡設定]** 設定 Modmail 的匿名性與運作方式：", view=view)
 
-    @discord.ui.button(label="📊 系統數據", style=discord.ButtonStyle.secondary, row=1, custom_id="admin_v2_stats")
+    @discord.ui.button(label="🎵 音樂推薦設定", style=discord.ButtonStyle.primary, row=1, custom_id="admin_v2_music_rec")
+    async def music_rec_cfg(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ConfigSettingsView(self.bot, self, "music_recommend")
+        await interaction.response.edit_message(content="🎵 **[音樂推薦]** 設定每小時整點推送的歌手與頻道：", view=view)
+
+    @discord.ui.button(label="📊 系統數據", style=discord.ButtonStyle.secondary, row=2, custom_id="admin_v2_stats")
     async def stats(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         process = psutil.Process(os.getpid())

@@ -35,7 +35,10 @@ class ConfigManager:
                 "modmail_category": None,
                 "ticket_category": None,
                 "xp_rate": 1.0,
-                "ai_enabled": True
+                "ai_enabled": True,
+                "recommend_artists": ["Justin Bieber", "Taylor Swift", "周杰倫"],
+                "recommend_channel": None,
+                "recommend_enabled": True
             }
             self._save_all()
         return self.settings[gid]
