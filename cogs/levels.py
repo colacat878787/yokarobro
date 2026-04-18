@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from discord import app_commands
+
 XP_PER_MESSAGE = int(os.getenv("XP_PER_MESSAGE", 10))
 LEVELS_FILE = "levels.json"
 
@@ -44,16 +46,20 @@ class LevelsCog(commands.Cog):
             self.levels[user_id]["xp"] = 0
             new_level = self.levels[user_id]["level"]
             
-            await message.channel.send(f"🎉 **{message.author.display_name}** 升到了 **等級 {new_level}**！嗷嗷嗷～")
+            # 只有在伺服器頻道才發送升級訊息
+            if message.guild:
+                await message.channel.send(f"🎉 **{message.author.display_name}** 升到了 **等級 {new_level}**！嗷嗷嗷～")
             
             # 自動贈送身分組範例 (設定等級 5 為 '高級成員')
-            if new_level == 5:
+            if message.guild and new_level == 5:
                 role = discord.utils.get(message.guild.roles, name="資深成員")
                 if role: await message.author.add_roles(role)
             
         self.save_levels()
 
-    @commands.command(name='profile', aliases=['等級'])
+    @commands.hybrid_command(name='profile', aliases=['等級'])
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def profile(self, ctx, member: discord.Member = None):
         member = member or ctx.author
         user_id = str(member.id)
