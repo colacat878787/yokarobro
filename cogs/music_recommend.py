@@ -82,13 +82,20 @@ class MusicRecommendCog(commands.Cog):
     async def m_recommend(self, ctx, action: str = None):
         """手動推歌或設定頻道：!m推 或 !m推 set"""
         if action == "set":
+            if not ctx.guild:
+                return await ctx.send("❌ 此指令只能在伺服器中使用喔！")
             if not ctx.author.guild_permissions.administrator:
                 return await ctx.send("❌ 只有管理員可以設定推薦頻道喔！")
             config_manager.set_guild_setting(ctx.guild.id, "recommend_channel", str(ctx.channel.id))
             await ctx.send(f"✅ 已成功將 {ctx.channel.mention} 設定為【每 10 分鐘推歌頻道】！")
         else:
-            settings = config_manager.get_guild_settings(ctx.guild.id)
-            artists = settings.get("recommend_artists", ["周杰倫"])
+            # 處理私訊 (DM) 情況，若無伺服器則使用預設清單
+            if ctx.guild:
+                settings = config_manager.get_guild_settings(ctx.guild.id)
+                artists = settings.get("recommend_artists", ["周杰倫", "Justin Bieber", "Taylor Swift"])
+            else:
+                artists = ["周杰倫", "Justin Bieber", "Taylor Swift"]
+            
             artist = random.choice(artists)
             await self.send_recommendation(ctx.channel, artist, is_auto=False)
 
