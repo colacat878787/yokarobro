@@ -89,10 +89,6 @@ class ConfigSettingsView(discord.ui.View):
             configs = [("驗證身分組名稱", "verify_role"), ("工作人員身分組", "staff_role")]
         elif self.category == "features":
             configs = [("XP 獲取倍率", "xp_rate")]
-        elif self.category == "modmail":
-            is_anon = config_manager.get_guild_settings(self.bot.get_guild(self.parent_view.bot.guilds[0].id).id).get("modmail_anonymous", True)
-            # 這裡需要傳遞 guild_id，先簡化處理或改進邏輯
-            pass
         
         # 重新設計按鈕加載邏輯以支援切換按鈕
         if self.category == "modmail":
