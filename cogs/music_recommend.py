@@ -24,16 +24,11 @@ class MusicRecommendCog(commands.Cog):
     def cog_unload(self):
         self.hourly_check.cancel()
 
-    @tasks.loop(minutes=1)
+    @tasks.loop(minutes=10)
     async def hourly_check(self):
-        """每分鐘檢查一次是否為台北時間整點"""
-        # 台北時間 UTC+8
-        now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
-        if now.minute == 0:
-            print(f"⏰ [整點推送] 台北時間 {now.hour}:00，準備發送推薦歌曲...")
-            await self.push_recommendations()
-            # 為了避免同一分鐘重複觸發，推完後稍微等一下
-            await asyncio.sleep(61)
+        """每 10 分鐘檢查一次並推送"""
+        print(f"⏰ [定期推送] 準備發送 10 分鐘一回的推薦歌曲...")
+        await self.push_recommendations()
 
     async def push_recommendations(self):
         for guild in self.bot.guilds:
@@ -43,7 +38,6 @@ class MusicRecommendCog(commands.Cog):
             
             channel_id = settings.get("recommend_channel")
             if not channel_id:
-                # 用戶要求：沒設定就不發
                 continue
             
             channel = guild.get_channel(int(channel_id))
@@ -65,29 +59,35 @@ class MusicRecommendCog(commands.Cog):
                     duration = video.get('duration')
                     
                     embed = discord.Embed(
-                        title=f"🎵 {'整點' if is_auto else '洛洛'}隨機推歌！",
+                        title=f"🎵 {'定時' if is_auto else '洛洛'}隨機推歌！",
                         description=f"今日推薦歌手：**{artist}**\n正在為您點播：**{title}**",
                         color=0xe91e63,
                         url=url
                     )
                     embed.set_thumbnail(url=video.get('thumbnail'))
                     embed.add_field(name="⏱️ 長度", value=f"{duration // 60}:{duration % 60:02d}", inline=True)
-                    embed.set_footer(text="洛洛音樂電台 | 每一小時 的浪漫 嗷嗷嗷～")
+                    embed.set_footer(text="洛洛音樂電台 | 每 10 分鐘一次的驚喜 嗷嗷嗷～")
                     
-                    await channel.send(content=f"🌌 叮咚！{'整點到了，' if is_auto else ''}來聽首 **{artist}** 的歌吧！\n{url}", embed=embed)
+                    await channel.send(content=f"🌌 叮咚！{'來份音樂點心吧，' if is_auto else ''}推薦歌手：**{artist}**！\n{url}", embed=embed)
                 else:
-                    if not is_auto: await channel.send(f"❌ 嗷～找不到 **{artist}** 的歌，可能他最近沒發片？")
+                    if not is_auto: await channel.send(f"❌ 嗷～找不到 **{artist}** 的歌...")
             except Exception as e:
                 print(f"推薦出錯: {e}")
                 if not is_auto: await channel.send(f"❌ 推薦歌曲時發生錯誤：{e}")
 
     @commands.command(name='m推', aliases=['music_recommend', '推歌'])
-    async def m_recommend(self, ctx):
-        """手動觸發一張隨機推薦卡片"""
-        settings = config_manager.get_guild_settings(ctx.guild.id)
-        artists = settings.get("recommend_artists", ["周杰倫"])
-        artist = random.choice(artists)
-        await self.send_recommendation(ctx.channel, artist, is_auto=False)
+    async def m_recommend(self, ctx, action: str = None):
+        """手動推歌或設定頻道：!m推 或 !m推 set"""
+        if action == "set":
+            if not ctx.author.guild_permissions.administrator:
+                return await ctx.send("❌ 只有管理員可以設定推薦頻道喔！")
+            config_manager.set_guild_setting(ctx.guild.id, "recommend_channel", str(ctx.channel.id))
+            await ctx.send(f"✅ 已成功將 {ctx.channel.mention} 設定為【每 10 分鐘推歌頻道】！")
+        else:
+            settings = config_manager.get_guild_settings(ctx.guild.id)
+            artists = settings.get("recommend_artists", ["周杰倫"])
+            artist = random.choice(artists)
+            await self.send_recommendation(ctx.channel, artist, is_auto=False)
 
 async def setup(bot):
     await bot.add_cog(MusicRecommendCog(bot))
