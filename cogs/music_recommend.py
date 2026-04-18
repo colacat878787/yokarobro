@@ -46,7 +46,7 @@ class MusicRecommendCog(commands.Cog):
                 artist = random.choice(settings.get("recommend_artists", ["Jay Chou"]))
                 await self.send_recommendation(channel, artist, is_auto=True)
 
-    async def send_recommendation(self, channel, artist, is_auto=False):
+    async def send_recommendation(self, ctx, artist, is_auto=False):
         try:
             # 搜尋隨機一首歌，擴大結果池到 20 筆
             search_query = f"{artist} song random official"
@@ -71,12 +71,19 @@ class MusicRecommendCog(commands.Cog):
                     embed.add_field(name="⏱️ 長度", value=f"{duration // 60}:{duration % 60:02d}", inline=True)
                 embed.set_footer(text="洛洛音樂電台 | 給您不一樣的驚喜 嗷嗷嗷～")
                 
-                await channel.send(content=f"🌌 叮咚！{'來份音樂點心吧，' if is_auto else ''}推薦歌手：**{artist}**！\n{url}", embed=embed)
+                # 使用 ctx.send (若為整點推送則需特殊處理)
+                if isinstance(ctx, commands.Context):
+                    await ctx.send(content=f"🌌 叮咚！{'來份音樂點心吧，' if is_auto else ''}推薦歌手：**{artist}**！\n{url}", embed=embed)
+                else:
+                    # 這裡是自動推送的情況 (ctx 可能是 TextChannel)
+                    await ctx.send(content=f"🌌 叮咚！整點來份音樂點心吧，推薦歌手：**{artist}**！\n{url}", embed=embed)
             else:
-                if not is_auto: await channel.send(f"❌ 嗷～找不到 **{artist}** 的歌...")
+                if not is_auto: await ctx.send(f"❌ 嗷～找不到 **{artist}** 的歌...")
         except Exception as e:
             print(f"推薦出錯: {e}")
-            if not is_auto: await channel.send(f"❌ 推薦歌曲時發生錯誤 (可能是 YouTube 暫時屏蔽): {e}")
+            if not is_auto:
+                try: await ctx.send(f"❌ 推薦歌曲時發生錯誤：{e}")
+                except: pass
 
     @commands.hybrid_command(name='m推', aliases=['music_recommend', '推歌'])
     @app_commands.allowed_installs(guilds=True, users=True)
@@ -91,7 +98,9 @@ class MusicRecommendCog(commands.Cog):
             config_manager.set_guild_setting(ctx.guild.id, "recommend_channel", str(ctx.channel.id))
             await ctx.send(f"✅ 已成功將 {ctx.channel.mention} 設定為【每 10 分鐘推歌頻道】！")
         else:
-            # 處理私訊 (DM) 情況，若無伺服器則使用預設清單
+            # 進入思考模式，避免 3 秒逾時
+            await ctx.defer()
+            # 處理私訊 (DM) 情況
             if ctx.guild:
                 settings = config_manager.get_guild_settings(ctx.guild.id)
                 artists = settings.get("recommend_artists", ["周杰倫", "Justin Bieber", "Taylor Swift"])
@@ -99,7 +108,7 @@ class MusicRecommendCog(commands.Cog):
                 artists = ["周杰倫", "Justin Bieber", "Taylor Swift"]
             
             artist = random.choice(artists)
-            await self.send_recommendation(ctx.channel, artist, is_auto=False)
+            await self.send_recommendation(ctx, artist, is_auto=False)
 
 async def setup(bot):
     await bot.add_cog(MusicRecommendCog(bot))

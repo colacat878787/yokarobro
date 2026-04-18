@@ -86,10 +86,13 @@ class YokaroBot(commands.Bot):
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CommandNotFound):
             return
-        if isinstance(error, commands.MissingPermissions):
-            await ctx.send("洛洛偵測到你沒有權限執行這個動作喔！嗷～")
-        else:
-            await ctx.send(f"嗷嗷嗷～發生錯誤了：{error}")
+        try:
+            if isinstance(error, commands.MissingPermissions):
+                await ctx.send("洛洛偵測到你沒有權限執行這個動作喔！嗷～")
+            else:
+                await ctx.send(f"嗷嗷嗷～發生錯誤了：{error}")
+        except:
+            print(f"⚠️ [Error Handler Log] 指令錯誤且無法傳回訊息: {error}")
 
 # 機器人實例
 bot = YokaroBot()
