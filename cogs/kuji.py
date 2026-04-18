@@ -1,5 +1,5 @@
-import discord
 from discord.ext import commands
+from discord import app_commands
 import json, os, random, asyncio
 
 KUJI_FILE = "kuji.json"
@@ -89,7 +89,9 @@ class KujiCog(commands.Cog):
         self._save()
         return prize
 
-    @commands.command(name='一番賞', aliases=['kuji'])
+    @commands.hybrid_command(name='一番賞', aliases=['kuji'])
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def kuji_status(self, ctx):
         if not self.pool:
             await ctx.send("😱 本輪一番賞已完售！管理員輸入 `!重置一番賞` 可重置。")

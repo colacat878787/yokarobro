@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import os
 import asyncio
 from dotenv import load_dotenv
@@ -94,12 +95,16 @@ class YokaroBot(commands.Bot):
 bot = YokaroBot()
 
 # --- 基礎全域指令 ---
-@bot.command(name='ping', aliases=['延遲'])
+@bot.hybrid_command(name='ping', aliases=['延遲'])
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def ping(ctx):
     """檢查機器人延遲"""
     await ctx.send(f'🏓 砰！延遲是 {round(bot.latency * 1000)}ms')
 
-@bot.command(name='version', aliases=['版本'])
+@bot.hybrid_command(name='version', aliases=['版本'])
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def version(ctx):
     """查看機器人目前的代碼版本"""
     import subprocess
@@ -184,7 +189,9 @@ class HelpView(discord.ui.View):
         else:
             await interaction.followup.send(f"❌ Help 面板發生錯誤: {error}", ephemeral=True)
 
-@bot.command(name='help', aliases=['幫助', '求救'])
+@bot.hybrid_command(name='help', aliases=['幫助', '求救'])
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def help(ctx):
     """顯示按鈕導航的功能說明"""
     embed = discord.Embed(

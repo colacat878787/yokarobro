@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands, tasks
+from discord import app_commands
 import asyncio
 import datetime
 import random
@@ -75,7 +76,9 @@ class MusicRecommendCog(commands.Cog):
                 print(f"推薦出錯: {e}")
                 if not is_auto: await channel.send(f"❌ 推薦歌曲時發生錯誤：{e}")
 
-    @commands.command(name='m推', aliases=['music_recommend', '推歌'])
+    @commands.hybrid_command(name='m推', aliases=['music_recommend', '推歌'])
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def m_recommend(self, ctx, action: str = None):
         """手動推歌或設定頻道：!m推 或 !m推 set"""
         if action == "set":

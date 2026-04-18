@@ -1,5 +1,5 @@
-import discord
 from discord.ext import commands
+from discord import app_commands
 import json, os, random, time, hashlib
 
 ECONOMY_FILE = "economy.json"
@@ -228,7 +228,9 @@ class EconomyCog(commands.Cog):
             d["balance"] += amt
         self.save_data()
 
-    @commands.command(name='balance', aliases=['錢包', '餘額'])
+    @commands.hybrid_command(name='balance', aliases=['錢包', '餘額'])
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def balance(self, ctx, member: discord.Member = None):
         m = member or ctx.author
         d = self.get_user_data(str(m.id))
@@ -245,7 +247,9 @@ class EconomyCog(commands.Cog):
         embed.set_footer(text="洛洛銀行，關心您的每一分錢 🐾")
         await ctx.send(embed=embed, view=ATMMainView(ctx.author, self))
 
-    @commands.command(name='daily', aliases=['簽到'])
+    @commands.hybrid_command(name='daily', aliases=['簽到'])
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def daily(self, ctx):
         uid = str(ctx.author.id)
         d = self.get_user_data(uid)
@@ -259,7 +263,9 @@ class EconomyCog(commands.Cog):
         self.save_data()
         await ctx.send(f"✨ 簽到成功！獲得 **$500**！目前錢包：**${d['balance']}**。")
 
-    @commands.command(name='work', aliases=['工作'])
+    @commands.hybrid_command(name='work', aliases=['工作'])
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def work(self, ctx):
         uid = str(ctx.author.id)
         now = time.time()

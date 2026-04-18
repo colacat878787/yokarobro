@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import os
 import psutil
 from utils.config import config_manager
@@ -214,7 +215,7 @@ class AdminCog(commands.Cog):
         self.bot = bot
         self.bot.add_view(ControlPanelView(bot))
 
-    @commands.command(name='panel', aliases=['後台', '控制台'])
+    @commands.hybrid_command(name='panel', aliases=['後台', '控制台'])
     @commands.has_permissions(administrator=True)
     async def control_panel(self, ctx):
         embed = discord.Embed(
