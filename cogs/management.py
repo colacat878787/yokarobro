@@ -45,19 +45,47 @@ class ManagementCog(commands.Cog):
     @manage_root.command(name="serverlist", aliases=["伺服器清單", "sl"])
     @commands.has_permissions(administrator=True)
     async def server_list(self, ctx):
-        """列出機器人加入的所有伺服器"""
+        """列出機器人加入的所有伺服器 (附帶退出按鈕)"""
         guilds = sorted(self.bot.guilds, key=lambda g: g.member_count, reverse=True)
+        self.last_guild_list = guilds # 暫存清單供退出使用
         count = len(guilds)
         
         desc = f"📊 目前洛洛所在的伺服器數量：**{count}**\n\n"
-        for g in guilds[:25]: # 限制顯示前 25 個
-            desc += f"• **{g.name}** (`{g.id}`) - 👥 {g.member_count} 人\n"
+        for i, g in enumerate(guilds[:25], 1): # 限制顯示前 25 個
+            desc += f"**[{i}]** **{g.name}** (`{g.id}`) - 👥 {g.member_count} 人\n"
         
         if count > 25:
             desc += f"\n*...以及其他 {count-25} 個伺服器*"
 
         embed = discord.Embed(title="🌐 洛洛伺服器清單", description=desc, color=0x3498db)
-        await ctx.send(embed=embed)
+        embed.set_footer(text="點擊下方按鈕並輸入編號，可讓洛洛退出該伺服器")
+        
+        view = ServerListView(self)
+        await ctx.send(embed=embed, view=view)
+
+class ServerListView(discord.ui.View):
+    def __init__(self, cog):
+        super().__init__(timeout=60)
+        self.cog = cog
+
+    @discord.ui.button(label="🚪 讓洛洛退出伺服器", style=discord.ButtonStyle.danger)
+    async def leave_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        class LeaveModal(discord.ui.Modal, title="🚪 執行撤退指令"):
+            num = discord.ui.TextInput(label="請輸入伺ible 列表中的編號 (如: 1)", placeholder="編號...", min_length=1, max_length=2)
+            async def on_submit(self, inter: discord.Interaction):
+                try:
+                    idx = int(self.num.value) - 1
+                    guilds = self.cog.last_guild_list
+                    if 0 <= idx < len(guilds):
+                        target = guilds[idx]
+                        await inter.response.send_message(f"🚨 洛洛正在執行撤退... 即將離開 **{target.name}** (`{target.id}`)！", ephemeral=True)
+                        await target.leave()
+                    else:
+                        await inter.response.send_message("❌ 編號超出範圍囉！", ephemeral=True)
+                except Exception as e:
+                    await inter.response.send_message(f"❌ 發生錯誤：{e}", ephemeral=True)
+        
+        await interaction.response.send_modal(LeaveModal(self.cog))
 
     @manage_root.command(name="userlist", aliases=["用戶清單", "ul"])
     @commands.has_permissions(administrator=True)
