@@ -1,9 +1,10 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import json, os, random, time, hashlib
+import json, os, random, time, hashlib, asyncio
 
 ECONOMY_FILE = "economy.json"
+# ... (Modals remain unchanged)
 
 # ──────────────────────────────────────────
 #  ATM Modals
@@ -135,6 +136,12 @@ class ATMLoggedInView(discord.ui.View):
         # 處理完成後更新內容
         await interaction.edit_original_response(content=None, embed=embed)
 
+    @discord.ui.button(label="🔴 結束服務/退卡", style=discord.ButtonStyle.secondary, custom_id="econ_atm_logout")
+    async def logout(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """結束銀行對話"""
+        await interaction.response.edit_message(content="🏦 **洛洛銀行 — 已登出，歡迎下次光臨！🐾**", embed=None, view=None)
+        self.stop()
+
     async def on_error(self, interaction, error, item):
         print(f"ATMView Error: {error}")
         if not interaction.response.is_done():
@@ -145,26 +152,115 @@ class ATMLoggedInView(discord.ui.View):
 # ──────────────────────────────────────────
 #  Work View
 # ──────────────────────────────────────────
+# ──────────────────────────────────────────
+#  Work & Mini-game View
+# ──────────────────────────────────────────
+class LeafGameView(discord.ui.View):
+    def __init__(self, user, economy_cog):
+        super().__init__(timeout=75)
+        self.user = user
+        self.economy_cog = economy_cog
+        self.score = 0
+        self.time_left = 60
+        self.leaf_pos = random.randint(0, 24)
+        self.ended = False
+        
+        # 動態生成 5x5 按鈕
+        for i in range(25):
+            btn = discord.ui.Button(label=" ", style=discord.ButtonStyle.secondary, custom_id=f"leaf_{i}", row=i // 5)
+            if i == self.leaf_pos:
+                btn.label = "🍃"
+                btn.style = discord.ButtonStyle.success
+            
+            btn.callback = self.make_callback(i)
+            self.add_item(btn)
+
+    def make_callback(self, idx):
+        async def callback(interaction: discord.Interaction):
+            if interaction.user.id != self.user.id:
+                return await interaction.response.send_message("❌ 這不是妳的葉子喔！", ephemeral=True)
+            
+            if self.ended: return
+
+            if idx == self.leaf_pos:
+                self.score += 1
+                # 換位置
+                old_pos = self.leaf_pos
+                while self.leaf_pos == old_pos:
+                    self.leaf_pos = random.randint(0, 24)
+                
+                # 更新按鈕外觀
+                for i, item in enumerate(self.children):
+                    if i == old_pos:
+                        item.label = " "
+                        item.style = discord.ButtonStyle.secondary
+                    if i == self.leaf_pos:
+                        item.label = "🍃"
+                        item.style = discord.ButtonStyle.success
+                
+                await interaction.response.edit_message(embed=self.make_embed(), view=self)
+            else:
+                await interaction.response.defer() # 點錯不理她
+        return callback
+
+    def make_embed(self):
+        embed = discord.Embed(title="🧹 洛洛清道夫大進擊 (5x5)", color=0x27ae60)
+        embed.description = f"把葉子 🍃 通通掃掉！\n妳還有 **{self.time_left}** 秒可以努力！"
+        embed.add_field(name="✨ 目前分數", value=f"**{self.score}** 片葉子")
+        embed.set_footer(text="點擊有葉子的按鈕來獲得分數！嗷嗷嗷～")
+        return embed
+
+    async def start_timer(self, msg):
+        while self.time_left > 0:
+            await asyncio.sleep(5) # 每 5 秒刷新一次 embed 避免 Rate limit
+            if self.ended: break
+            self.time_left -= 5
+            try:
+                await msg.edit(embed=self.make_embed())
+            except: break
+        
+        # 遊戲結束
+        self.ended = True
+        self.stop()
+        final_pay = self.score * 15 + random.randint(100, 300)
+        self.economy_cog.add_money(str(self.user.id), final_pay)
+        
+        end_embed = discord.Embed(title="🏁 掃葉子時間結束！", color=0xf1c40f)
+        end_embed.description = f"妳總共掃了 **{self.score}** 片葉子！\n辛苦了，這是妳的工資：**${final_pay}**！"
+        end_embed.set_footer(text=f"目前餘額: ${self.economy_cog.get_balance(str(self.user.id))}")
+        
+        try:
+            await msg.edit(content="✅ 工作完成！", embed=end_embed, view=None)
+        except: pass
+
 class WorkView(discord.ui.View):
     def __init__(self, user, economy_cog):
         super().__init__(timeout=30)
         self.user = user
         self.economy_cog = economy_cog
 
+    @discord.ui.button(label="🧹 掃葉子 (小遊戲)", style=discord.ButtonStyle.success, custom_id="econ_work_leaf")
+    async def leaf_game(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("❌ 你沒被邀請去掃葉子喔！", ephemeral=True)
+            
+        game_view = LeafGameView(self.user, self.economy_cog)
+        embed = game_view.make_embed()
+        await interaction.response.edit_message(content=None, embed=embed, view=game_view)
+        
+        # 啟動計時器
+        msg = await interaction.original_response()
+        await game_view.start_timer(msg)
+
     @discord.ui.button(label="⛏️ 去挖礦", style=discord.ButtonStyle.primary, custom_id="econ_work_mine")
     async def mine(self, interaction: discord.Interaction, button: discord.ui.Button):
         print(f"DEBUG: {interaction.user} 點擊了工作-挖礦")
         await self._work(interaction, "挖礦", 100, 300)
 
-    @discord.ui.button(label="🍔 去打工", style=discord.ButtonStyle.success, custom_id="econ_work_burger")
+    @discord.ui.button(label="🍔 去打工", style=discord.ButtonStyle.secondary, custom_id="econ_work_burger")
     async def burger(self, interaction: discord.Interaction, button: discord.ui.Button):
         print(f"DEBUG: {interaction.user} 點擊了工作-打工")
         await self._work(interaction, "在漢堡店打工", 50, 200)
-
-    @discord.ui.button(label="🍔 去跑外送", style=discord.ButtonStyle.secondary, custom_id="econ_work_delivery")
-    async def delivery(self, interaction: discord.Interaction, button: discord.ui.Button):
-        print(f"DEBUG: {interaction.user} 點擊了工作-外送")
-        await self._work(interaction, "跑外送", 150, 450)
 
     async def _work(self, interaction: discord.Interaction, job: str, mn: int, mx: int):
         # 1. 立即進入思考模式

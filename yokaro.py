@@ -100,6 +100,8 @@ class YokaroBot(commands.Bot):
 
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CommandNotFound):
+            try: await ctx.send("嗷嗷嗷 沒有這個指令哦")
+            except: pass
             return
         try:
             if isinstance(error, commands.MissingPermissions):
