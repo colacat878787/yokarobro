@@ -60,8 +60,12 @@ class AICog(commands.Cog):
                 
         is_dm = isinstance(message.channel, discord.DMChannel)
         is_ai_channel = message.channel.id in self.ai_channels
+        
+        # 修正：私訊不再自動觸發 AI，除非被提到 (或是保持完全安靜)
+        if is_dm:
+            return
 
-        if is_mentioned or is_reply_to_bot or is_dm or is_ai_channel:
+        if is_mentioned or is_reply_to_bot or is_ai_channel:
             user_input = message.content.replace(f'<@{self.bot.user.id}>', '').replace(f'<@!{self.bot.user.id}>', '').strip()
             
             if not user_input:

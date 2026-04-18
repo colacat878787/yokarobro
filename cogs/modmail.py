@@ -137,8 +137,16 @@ class ModmailCog(commands.Cog):
             if user_id:
                 user = self.bot.get_user(user_id)
                 if user:
+                    settings = config_manager.get_guild_settings(message.guild.id)
+                    is_anon = settings.get("modmail_anonymous", True) # 預設匿名
+                    
                     embed = discord.Embed(description=message.content, color=0x3498db)
-                    embed.set_author(name=f"管理員 ({message.guild.name})", icon_url=message.guild.icon.url if message.guild.icon else None)
+                    
+                    if is_anon:
+                        embed.set_author(name=f"管理員 ({message.guild.name})", icon_url=message.guild.icon.url if message.guild.icon else None)
+                    else:
+                        embed.set_author(name=f"{message.author.name} (工作人員)", icon_url=message.author.display_avatar.url)
+                        
                     if message.attachments:
                         embed.set_image(url=message.attachments[0].url)
                     try:

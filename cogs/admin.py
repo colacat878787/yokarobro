@@ -89,15 +89,36 @@ class ConfigSettingsView(discord.ui.View):
             configs = [("驗證身分組名稱", "verify_role"), ("工作人員身分組", "staff_role")]
         elif self.category == "features":
             configs = [("XP 獲取倍率", "xp_rate")]
+        elif self.category == "modmail":
+            is_anon = config_manager.get_guild_settings(self.bot.get_guild(self.parent_view.bot.guilds[0].id).id).get("modmail_anonymous", True)
+            # 這裡需要傳遞 guild_id，先簡化處理或改進邏輯
+            pass
         
-        for label, key in configs:
-            btn = discord.ui.Button(label=label, style=discord.ButtonStyle.primary)
-            btn.callback = self._create_modal_callback(label, key)
-            self.add_item(btn)
+        # 重新設計按鈕加載邏輯以支援切換按鈕
+        if self.category == "modmail":
+            self._add_modmail_buttons()
+        else:
+            for label, key in configs:
+                btn = discord.ui.Button(label=label, style=discord.ButtonStyle.primary)
+                btn.callback = self._create_modal_callback(label, key)
+                self.add_item(btn)
 
         back_btn = discord.ui.Button(label="⬅️ 返回主選單", style=discord.ButtonStyle.secondary, row=4)
         back_btn.callback = self._back_to_main
         self.add_item(back_btn)
+
+    def _add_modmail_buttons(self):
+        # 因為 View 需要知道 guild_id，我們稍後在 callback 中獲取
+        btn_anon = discord.ui.Button(label="👤 切換匿名/實名模式", style=discord.ButtonStyle.primary)
+        async def toggle_anon_callback(interaction: discord.Interaction):
+            settings = config_manager.get_guild_settings(interaction.guild.id)
+            current = settings.get("modmail_anonymous", True)
+            config_manager.set_guild_setting(interaction.guild.id, "modmail_anonymous", not current)
+            mode = "匿名" if not current else "實名 (顯示名字)"
+            await interaction.response.send_message(f"✅ Modmail 模式已切換為：**{mode}**", ephemeral=True)
+            
+        btn_anon.callback = toggle_anon_callback
+        self.add_item(btn_anon)
 
     def _create_modal_callback(self, label, key):
         async def callback(interaction: discord.Interaction):
@@ -124,6 +145,11 @@ class ControlPanelView(discord.ui.View):
     async def security_cfg(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ConfigSettingsView(self.bot, self, "security")
         await interaction.response.edit_message(content="🛡️ **[安全設定]** 修改驗證與權限相關參數：", view=view)
+
+    @discord.ui.button(label="📩 聯絡/支援設定", style=discord.ButtonStyle.primary, row=0)
+    async def modmail_cfg(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ConfigSettingsView(self.bot, self, "modmail")
+        await interaction.response.edit_message(content="📩 **[聯絡設定]** 設定 Modmail 的匿名性與運作方式：", view=view)
 
     @discord.ui.button(label="📊 系統數據", style=discord.ButtonStyle.secondary, row=1)
     async def stats(self, interaction: discord.Interaction, button: discord.ui.Button):
