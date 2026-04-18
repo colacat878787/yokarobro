@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import os
 import asyncio
+import difflib
 from dotenv import load_dotenv
 
 # 載入設定
@@ -100,9 +101,38 @@ class YokaroBot(commands.Bot):
 
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CommandNotFound):
-            try: await ctx.send("嗷嗷嗷 沒有這個指令哦")
+            # 取得用戶輸入的指令名稱
+            cmd_name = ctx.invoked_with
+            
+            # 1. 取得所有本地指令清單 (包含別名)
+            all_commands = []
+            for cmd in self.commands:
+                all_commands.append(cmd.name)
+                all_commands.extend(cmd.aliases)
+            
+            # 2. 尋找最接近的本地指令
+            matches = difflib.get_close_matches(cmd_name, all_commands, n=1, cutoff=0.6)
+            
+            if matches:
+                return await ctx.send(f"嗷嗷～洛洛找不到 `!{cmd_name}` 這個指令，你是不是要打 `!{matches[0]}` 呢？")
+            
+            # 3. 推薦其他機器人的功能 (映射表)
+            OTHER_BOTS = {
+                'rank': "MEE6", 'levels': "MEE6", 'leaderboard': "MEE6",
+                'ban': "Dyno 或 MEE6", 'kick': "Dyno", 'mute': "Dyno", 'warn': "Dyno",
+                'p!play': "Pancake", ';;play': "FredBoat",
+                '$wa': "Mudae", '$ha': "Mudae",
+                'beg': "Dank Memer", 'search': "Dank Memer"
+            }
+            
+            if cmd_name in OTHER_BOTS:
+                return await ctx.send(f"嗷～洛洛沒有 `!{cmd_name}` 功能，但這看起來像是 **{OTHER_BOTS[cmd_name]}** 機器人的指令，你可以去呼喚它喔！")
+            
+            # 4. 真的找不到時的賣萌回應
+            try: await ctx.send(f"嗷嗷嗷～洛洛找不到 `!{cmd_name}` 這個指令喔！可以輸入 `!help` 查看洛洛會什麼！")
             except: pass
             return
+        
         try:
             if isinstance(error, commands.MissingPermissions):
                 await ctx.send("洛洛偵測到你沒有權限執行這個動作喔！嗷～")

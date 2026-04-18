@@ -297,6 +297,17 @@ class MusicCog(commands.Cog):
             ctx.voice_client.stop()
             await ctx.send("⏩ 已跳過當前歌曲！")
 
+    @commands.command(name='stop', aliases=['停止', '斷開', '下班'])
+    async def stop(self, ctx):
+        """停止播放、清空隊列並離開語音頻道"""
+        if ctx.voice_client:
+            await ctx.voice_client.disconnect()
+            gid = ctx.guild.id
+            self.queue[gid] = []
+            await ctx.send("🛑 已停止播放並清空清單，洛洛休息去囉！嗷～")
+        else:
+            await ctx.send("❓ 洛洛現在沒有在唱歌喔！")
+
     @commands.command(name='volume', aliases=['音量'])
     async def volume(self, ctx, vol: int):
         """調整音量 (如: !volume 100)"""
