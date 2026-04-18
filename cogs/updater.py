@@ -143,8 +143,23 @@ class AutoUpdaterCog(commands.Cog):
         await ctx.send(f"✅ 已將 **#{ctx.channel.name}** 設為更新通知頻道！\n以後洛洛每次自動更新，都會在這裡發布更新內容喔。嗷嗷嗷～")
 
     @commands.command(name='changelog', aliases=['更新紀錄', '版本紀錄'])
-    async def changelog(self, ctx, count: int = 5):
-        """查看最近的更新紀錄"""
+    async def changelog(self, ctx, arg: str = "5"):
+        """查看最近的更新紀錄，或使用 !更新紀錄 set 設定當前頻道為更新頻道"""
+        # 如果使用者輸入 set 或 頻道 相關字眼，跳轉到設定功能
+        if arg.lower() in ['set', '設定', '頻道', 'channel']:
+            if not ctx.author.guild_permissions.administrator:
+                await ctx.send("洛洛偵測到你沒有權限設定頻道喔！這需要管理員權限。嗷～")
+                return
+            await self.set_changelog(ctx)
+            return
+
+        # 嘗試轉換為數字
+        try:
+            count = int(arg)
+        except ValueError:
+            await ctx.send(f"嗷嗷嗷～洛洛看不懂「{arg}」是什麼意思耶。請輸入數字（如：`!更新紀錄 10`）或是 `!更新紀錄 set` 喔！")
+            return
+
         try:
             log = subprocess.check_output(
                 ["git", "log", f"-{min(count, 15)}", "--pretty=format:%h %s (%ar)"],
@@ -158,7 +173,7 @@ class AutoUpdaterCog(commands.Cog):
                 description=f"```\n{log}\n```",
                 color=0x3498db
             )
-            embed.set_footer(text="使用 !更新紀錄 [數量] 可以查看更多紀錄")
+            embed.set_footer(text="使用 !更新紀錄 [數量] 查看紀錄，或 !更新紀錄 set 設定頻道")
             await ctx.send(embed=embed)
         except Exception as e:
             await ctx.send(f"❌ 無法讀取更新紀錄：{e}")
