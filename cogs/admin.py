@@ -132,22 +132,22 @@ class ControlPanelView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
-    @discord.ui.button(label="🔧 模組開關", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="🔧 模組開關", style=discord.ButtonStyle.primary, row=0, custom_id="admin_v2_modules")
     async def modules(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ModuleSettingsView(self.bot, self)
         await interaction.response.edit_message(content="📂 **[模組設定]** 點擊下方按鈕切換功能開關：", view=view)
 
-    @discord.ui.button(label="🔰 安全與身分組", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="🔰 安全與身分組", style=discord.ButtonStyle.primary, row=0, custom_id="admin_v2_security")
     async def security_cfg(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ConfigSettingsView(self.bot, self, "security")
         await interaction.response.edit_message(content="🛡️ **[安全設定]** 修改驗證與權限相關參數：", view=view)
 
-    @discord.ui.button(label="📩 聯絡/支援設定", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="📩 聯絡/支援設定", style=discord.ButtonStyle.primary, row=0, custom_id="admin_v2_modmail")
     async def modmail_cfg(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ConfigSettingsView(self.bot, self, "modmail")
         await interaction.response.edit_message(content="📩 **[聯絡設定]** 設定 Modmail 的匿名性與運作方式：", view=view)
 
-    @discord.ui.button(label="📊 系統數據", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="📊 系統數據", style=discord.ButtonStyle.secondary, row=1, custom_id="admin_v2_stats")
     async def stats(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         process = psutil.Process(os.getpid())
@@ -160,7 +160,7 @@ class ControlPanelView(discord.ui.View):
         embed.add_field(name="🛰️ 延遲", value=f"{round(self.bot.latency * 1000)}ms", inline=True)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @discord.ui.button(label="🔄 重啟機器人", style=discord.ButtonStyle.danger, row=1)
+    @discord.ui.button(label="🔄 重啟機器人", style=discord.ButtonStyle.danger, row=1, custom_id="admin_v2_restart")
     async def restart(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("⚙️ 正在執行熱重啟...")
         os._exit(0)
