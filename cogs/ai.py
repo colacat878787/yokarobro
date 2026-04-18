@@ -45,6 +45,11 @@ class AICog(commands.Cog):
         if message.author.bot or message.is_system() or message.type != discord.MessageType.default:
             return
         
+        # --- 黑名單攔截 ---
+        mgmt = self.bot.get_cog("ManagementCog")
+        if mgmt and mgmt.is_blacklisted(str(message.author.id)):
+            return
+        
         # 判斷是否提到機器人或是回覆機器人，或是私訊
         is_mentioned = self.bot.user in message.mentions
         is_reply_to_bot = False
