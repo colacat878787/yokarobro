@@ -47,34 +47,36 @@ class MusicRecommendCog(commands.Cog):
                 await self.send_recommendation(channel, artist, is_auto=True)
 
     async def send_recommendation(self, channel, artist, is_auto=False):
-        async with channel.typing():
-            try:
-                # 搜尋隨機一首歌
-                search_query = f"{artist} official music video"
-                data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(search_query, download=False))
+        try:
+            # 搜尋隨機一首歌，擴大結果池到 20 筆
+            search_query = f"{artist} song random official"
+            data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(search_query, download=False))
+            
+            if 'entries' in data and data['entries']:
+                # 從前 20 筆中隨機挑選，增加多樣性
+                pool = data['entries'][:20]
+                video = random.choice(pool)
+                title = video.get('title')
+                url = video.get('webpage_url')
+                duration = video.get('duration')
                 
-                if 'entries' in data and data['entries']:
-                    video = random.choice(data['entries'][:5]) # 從前5個隨機挑
-                    title = video.get('title')
-                    url = video.get('webpage_url')
-                    duration = video.get('duration')
-                    
-                    embed = discord.Embed(
-                        title=f"🎵 {'定時' if is_auto else '洛洛'}隨機推歌！",
-                        description=f"今日推薦歌手：**{artist}**\n正在為您點播：**{title}**",
-                        color=0xe91e63,
-                        url=url
-                    )
-                    embed.set_thumbnail(url=video.get('thumbnail'))
+                embed = discord.Embed(
+                    title=f"🎵 {'定時' if is_auto else '洛洛'}隨機推歌！",
+                    description=f"今日推薦歌手：**{artist}**\n正在為您點播：**{title}**",
+                    color=0xe91e63,
+                    url=url
+                )
+                embed.set_thumbnail(url=video.get('thumbnail'))
+                if duration:
                     embed.add_field(name="⏱️ 長度", value=f"{duration // 60}:{duration % 60:02d}", inline=True)
-                    embed.set_footer(text="洛洛音樂電台 | 每 10 分鐘一次的驚喜 嗷嗷嗷～")
-                    
-                    await channel.send(content=f"🌌 叮咚！{'來份音樂點心吧，' if is_auto else ''}推薦歌手：**{artist}**！\n{url}", embed=embed)
-                else:
-                    if not is_auto: await channel.send(f"❌ 嗷～找不到 **{artist}** 的歌...")
-            except Exception as e:
-                print(f"推薦出錯: {e}")
-                if not is_auto: await channel.send(f"❌ 推薦歌曲時發生錯誤：{e}")
+                embed.set_footer(text="洛洛音樂電台 | 給您不一樣的驚喜 嗷嗷嗷～")
+                
+                await channel.send(content=f"🌌 叮咚！{'來份音樂點心吧，' if is_auto else ''}推薦歌手：**{artist}**！\n{url}", embed=embed)
+            else:
+                if not is_auto: await channel.send(f"❌ 嗷～找不到 **{artist}** 的歌...")
+        except Exception as e:
+            print(f"推薦出錯: {e}")
+            if not is_auto: await channel.send(f"❌ 推薦歌曲時發生錯誤 (可能是 YouTube 暫時屏蔽): {e}")
 
     @commands.hybrid_command(name='m推', aliases=['music_recommend', '推歌'])
     @app_commands.allowed_installs(guilds=True, users=True)
