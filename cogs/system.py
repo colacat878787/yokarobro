@@ -22,11 +22,19 @@ class SystemCog(commands.Cog):
         """啟動時自動掃描與安裝缺失套件"""
         print("🔍 [System] 啟動自動診斷程序...")
         
-        # 檢查 spotify-dlp
-        if not shutil.which("spotify-dlp"):
+        # 檢查 spotify-dlp (改用 python -m 方式偵測)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "spotify_dlp", "--version",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await proc.communicate()
+            if proc.returncode != 0: raise Exception("Not found")
+            print("✅ [System] spotify_dlp 已就緒。")
+        except:
             print("⚠️ [System] 偵測到缺少 spotify-dlp，正在嘗試自動安裝...")
             try:
-                # 執行 pip install
                 proc = await asyncio.create_subprocess_exec(
                     sys.executable, "-m", "pip", "install", "spotify-dlp",
                     stdout=asyncio.subprocess.PIPE,
@@ -36,8 +44,6 @@ class SystemCog(commands.Cog):
                 print("✅ [System] spotify-dlp 自動安裝嘗試完成。")
             except Exception as e:
                 print(f"❌ [System] 自動安裝失敗: {e}")
-        else:
-            print("✅ [System] spotify-dlp 已就緒。")
 
     @commands.group(name='sys', aliases=['系統'], invoke_without_command=True)
     @commands.has_permissions(administrator=True)

@@ -252,9 +252,10 @@ class MusicCog(commands.Cog):
             # 優先嘗試：使用 spotify-dlp (專業版引擎)
             try:
                 # 呼叫 spotify-dlp 指令抓取 metadata
-                # 我們使用 --dump-meta 或類似方式，或者直接拿它的標題清單
+                # 改用 python -m spotify_dlp 避免路徑問題
+                import sys
                 proc = await asyncio.create_subprocess_exec(
-                    'spotify-dlp', '--get-title', url,
+                    sys.executable, '-m', 'spotify_dlp', '--get-title', url,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
