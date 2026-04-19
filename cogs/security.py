@@ -47,7 +47,10 @@ class SecurityCog(commands.Cog):
         self.verify_role = os.getenv("VERIFY_ROLE_NAME", "成員")
         
         # 惡意網域與惡意群組 ID 清單
-        self.malicious_domains = {"youareanidiot.cc", "youareanidiot.org", "youareanidiot.xyz"}
+        self.malicious_domains = {
+            "youareanidiot.cc", "youareanidiot.org", "youareanidiot.xyz",
+            "linekr.com", "line-china.com", "line-tw.com", "www.linekr.com", "www.line-china.com"
+        }
         self.malicious_guilds = set()
         
         # 邀請連結快取 (防止頻繁請求 API)
