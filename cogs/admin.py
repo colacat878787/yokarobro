@@ -33,10 +33,11 @@ class ModuleSettingsView(discord.ui.View):
         self._update_buttons()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != 1113353915010920452:
-            await interaction.response.send_message("❌ 這是高階管理面板，非擁有者禁止操作！🐾", ephemeral=True)
-            return False
-        return True
+        mgmt = self.bot.get_cog("ManagementCog")
+        if mgmt and mgmt.is_high_admin(interaction.user.id):
+            return True
+        await interaction.response.send_message("❌ 這是高階管理面板，非受權者禁止操作！🐾", ephemeral=True)
+        return False
 
     def _update_buttons(self):
         # 這裡動態判定模組狀態
@@ -235,9 +236,10 @@ class AdminCog(commands.Cog):
 
     @commands.hybrid_command(name='panel', aliases=['後台', '控制台'])
     async def control_panel(self, ctx):
-        """高階管理後台 (僅限擁有者)"""
-        if ctx.author.id != 1113353915010920452:
-            return await ctx.send("❌ 嘿！只有洛洛的親爸爸（擁有者）才能開啟管理後台喔！")
+        """高階管理後台 (僅限擁有者與受權管理員)"""
+        mgmt = self.bot.get_cog("ManagementCog")
+        if not (mgmt and mgmt.is_high_admin(ctx.author.id)):
+            return await ctx.send("❌ 嘿！妳沒有進入洛洛管理後台的通行證喔！🐾")
         
         embed = discord.Embed(
             title="🛠️ Yokaro 高階管理後台 V2",

@@ -7,6 +7,7 @@ import datetime
 
 BLACKLIST_FILE = "blacklist.json"
 KNOWN_USERS_FILE = "known_users.json"
+ADMINS_FILE = "admins.json"
 
 class ServerListView(discord.ui.View):
     def __init__(self, cog):
@@ -38,8 +39,10 @@ class ManagementCog(commands.Cog):
         raw_bl = self._load_data(BLACKLIST_FILE, [])
         self.blacklist = self._purify_blacklist(raw_bl)
         self.known_users = self._load_data(KNOWN_USERS_FILE, {})
+        self.high_admins = self._load_data(ADMINS_FILE, [])
         # 存檔一次確保數據乾淨
         self._save_data(BLACKLIST_FILE, self.blacklist)
+        self._save_data(ADMINS_FILE, self.high_admins)
 
     def _purify_blacklist(self, raw_list):
         import re
@@ -62,7 +65,15 @@ class ManagementCog(commands.Cog):
             json.dump(data, f, indent=4, ensure_ascii=False)
 
     def is_blacklisted(self, user_id):
-        return user_id in self.blacklist
+        return str(user_id) in self.blacklist
+
+    def is_high_admin(self, user_id):
+        """檢查是否為高階管理員或擁有者"""
+        uid = str(user_id)
+        # 擁有者永遠是最高權限
+        if uid == "1113353915010920452": 
+            return True
+        return uid in self.high_admins
 
     def log_user(self, user):
         uid = str(user.id)
@@ -78,7 +89,38 @@ class ManagementCog(commands.Cog):
         """監管系統主指令 (僅限擁有者)"""
         if ctx.author.id != 1113353915010920452:
             return await ctx.send("❌ 嘿！只有洛洛的親爸爸（擁有者）才能使用這個指令喔！")
-        await ctx.send("❓ 請輸入子指令：`serverlist`, `userlist`, `blacklist`, `whitelist`")
+        await ctx.send("❓ 請輸入子指令：`serverlist`, `userlist`, `blacklist`, `whitelist`, `admin`")
+
+    @manage_root.group(name="admin", invoke_without_command=True)
+    async def admin_group(self, ctx):
+        """高階管理員管理 (僅限擁有者)"""
+        if ctx.author.id != 1113353915010920452: return
+        await ctx.send("❓ 請選擇：`admin set @人` 或 `admin remove @人`")
+
+    @admin_group.command(name="set")
+    async def admin_set(self, ctx, user: discord.User):
+        """任命高階管理員 (公開宣示)"""
+        if ctx.author.id != 1113353915010920452: return
+        uid = str(user.id)
+        if uid in self.high_admins:
+            return await ctx.send(f"⚠️ **{user}** 已經是高階管理員囉！")
+        
+        self.high_admins.append(uid)
+        self._save_data(ADMINS_FILE, self.high_admins)
+        
+        await ctx.send(f"🎊 **【洛洛重要公告】** 🎊\n\n感謝親爸爸的信任！恭喜 {user.mention} 正式受封為 **高階管理員**！\n從現在起，妳也擁有了進入洛洛機密後台的權限喔！嗷嗷嗷～✨")
+
+    @admin_group.command(name="remove")
+    async def admin_remove(self, ctx, user: discord.User):
+        """撤銷高階管理員權限"""
+        if ctx.author.id != 1113353915010920452: return
+        uid = str(user.id)
+        if uid not in self.high_admins:
+            return await ctx.send(f"❓ **{user}** 原本就不是高階管理員。")
+        
+        self.high_admins.remove(uid)
+        self._save_data(ADMINS_FILE, self.high_admins)
+        await ctx.send(f"✅ 已成功卸除 **{user}** 的高階管理員職務。")
 
     @manage_root.command(name="serverlist", aliases=["伺服器清單", "sl"])
     async def server_list(self, ctx):
