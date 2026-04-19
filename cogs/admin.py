@@ -32,6 +32,12 @@ class ModuleSettingsView(discord.ui.View):
         self.parent_view = parent_view
         self._update_buttons()
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != 1113353915010920452:
+            await interaction.response.send_message("❌ 這是高階管理面板，非擁有者禁止操作！🐾", ephemeral=True)
+            return False
+        return True
+
     def _update_buttons(self):
         # 這裡動態判定模組狀態
         exts = {
@@ -81,6 +87,12 @@ class ConfigSettingsView(discord.ui.View):
         self.parent_view = parent_view
         self.category = category
         self._setup_buttons()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != 1113353915010920452:
+            await interaction.response.send_message("❌ 這是高階管理面板，非擁有者禁止操作！🐾", ephemeral=True)
+            return False
+        return True
 
     def _setup_buttons(self):
         # 根據類別顯示不同的設定按鈕
@@ -172,6 +184,12 @@ class ControlPanelView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != 1113353915010920452:
+            await interaction.response.send_message("❌ 這是高階管理面板，非擁有者禁止操作！🐾", ephemeral=True)
+            return False
+        return True
+
     @discord.ui.button(label="🔧 模組開關", style=discord.ButtonStyle.primary, row=0, custom_id="admin_v2_modules")
     async def modules(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ModuleSettingsView(self.bot, self)
@@ -216,8 +234,11 @@ class AdminCog(commands.Cog):
         self.bot.add_view(ControlPanelView(bot))
 
     @commands.hybrid_command(name='panel', aliases=['後台', '控制台'])
-    @commands.has_permissions(administrator=True)
     async def control_panel(self, ctx):
+        """高階管理後台 (僅限擁有者)"""
+        if ctx.author.id != 1113353915010920452:
+            return await ctx.send("❌ 嘿！只有洛洛的親爸爸（擁有者）才能開啟管理後台喔！")
+        
         embed = discord.Embed(
             title="🛠️ Yokaro 高階管理後台 V2",
             description="歡迎來到全功能管理面板！請點擊下方按鈕進行細項設定。",
