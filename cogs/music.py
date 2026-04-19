@@ -244,49 +244,70 @@ class MusicCog(commands.Cog):
             self.save_settings()
         except: pass
 
-    # --- Spotify 跨平台解析器 (修復 DRM 錯誤) ---
+    # --- Spotify 跨平台解析器 (專業版 & 修復 DRM) ---
     async def resolve_spotify(self, ctx, url):
         async with ctx.typing():
+            tracks = []
+            
+            # 優先嘗試：使用 spotify-dlp (專業版引擎)
             try:
-                # 使用 aiohttp 直接抓取網頁 Meta 標籤，避開 DRM
-                async with aiohttp.ClientSession() as session:
-                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-                    async with session.get(url, headers=headers) as resp:
-                        if resp.status != 200:
-                            return await ctx.send("❌ 無法讀取 Spotify 頁面，請檢查連結是否正確。")
-                        html = await resp.text()
+                # 呼叫 spotify-dlp 指令抓取 metadata
+                # 我們使用 --dump-meta 或類似方式，或者直接拿它的標題清單
+                proc = await asyncio.create_subprocess_exec(
+                    'spotify-dlp', '--get-title', url,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await proc.communicate()
                 
-                # 抓取 og:title (通常包含歌名)
-                title_match = re.search(r'<meta property="og:title" content="(.*?)"', html)
-                # 抓取 og:description (通常包含歌手)
-                desc_match = re.search(r'<meta property="og:description" content="(.*?)"', html)
-                
-                if not title_match:
-                    return await ctx.send("❌ 找不到音樂資訊，這可能不是公開的連結喔！")
-                
-                raw_title = title_match.group(1)
-                raw_desc = desc_match.group(1) if desc_match else ""
-                
-                # 處理描述中的多餘資訊 (例如 "Song · Artist · 2024")
-                artist = raw_desc.split('·')[0].strip() if '·' in raw_desc else raw_desc
-                query = f"{raw_title} {artist}"
-                
-                # 去 YouTube 搜尋並播放
-                state = self.get_state(ctx.guild.id)
-                player = await YTDLSource.from_url(query, loop=self.bot.loop, stream=True, 
-                                                 volume=state['volume'], pitch=state['pitch'], 
-                                                 theater=state['theater'], requester=ctx.author)
-                
-                if ctx.voice_client.is_playing():
-                    if ctx.guild.id not in self.queue: self.queue[ctx.guild.id] = []
-                    self.queue[ctx.guild.id].append(player)
-                    await ctx.send(f"✅ **{player.title}** (來自 Spotify) 已排入待播清單")
-                else:
-                    self._play_song(ctx, player)
-                
+                if proc.returncode == 0 and stdout:
+                    output = stdout.decode().strip()
+                    tracks = [line.strip() for line in output.splitlines() if line.strip()]
+                    print(f"✅ Spotify-DLP 成功抓取 {len(tracks)} 首歌曲")
             except Exception as e:
-                print(f"Spotify Error: {e}")
-                await ctx.send(f"❌ 解析 Spotify 時發生錯誤：{e}")
+                print(f"⚠️ Spotify-DLP 暫不可用，切換至爬蟲模式: {e}")
+
+            # 次要嘗試：如果上面失敗，使用原本的 aiohttp 爬蟲模式
+            if not tracks:
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+                        async with session.get(url, headers=headers) as resp:
+                            if resp.status == 200:
+                                html = await resp.text()
+                                title_match = re.search(r'<meta property="og:title" content="(.*?)"', html)
+                                desc_match = re.search(r'<meta property="og:description" content="(.*?)"', html)
+                                if title_match:
+                                    raw_title = title_match.group(1)
+                                    raw_desc = desc_match.group(1) if desc_match else ""
+                                    artist = raw_desc.split('·')[0].strip() if '·' in raw_desc else raw_desc
+                                    tracks = [f"{raw_title} {artist}"]
+                except: pass
+
+            if not tracks:
+                return await ctx.send("❌ 洛洛盡力了，但暫時解析不了這個音樂連結喔！")
+
+            # 開始處理搜尋與播放
+            added_count = 0
+            for query in tracks:
+                try:
+                    state = self.get_state(ctx.guild.id)
+                    player = await YTDLSource.from_url(query, loop=self.bot.loop, stream=True, 
+                                                     volume=state['volume'], pitch=state['pitch'], 
+                                                     theater=state['theater'], requester=ctx.author)
+                    if ctx.voice_client.is_playing():
+                        if ctx.guild.id not in self.queue: self.queue[ctx.guild.id] = []
+                        self.queue[ctx.guild.id].append(player)
+                    else:
+                        self._play_song(ctx, player)
+                    added_count += 1
+                except: continue
+            
+            if added_count > 1:
+                await ctx.send(f"✅ 已透過核心引擎解析 Spotify，成功加入了 **{added_count}** 首歌！🐾")
+            elif added_count == 1 and "open.spotify.com" in ctx.message.content:
+                # 單曲不需要重複發送訊息，_play_song 已經發過面板了
+                pass
 
     @commands.command(name='play', aliases=['播放', '播'])
     async def play(self, ctx, *, search):
