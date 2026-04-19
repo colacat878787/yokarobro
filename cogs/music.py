@@ -173,7 +173,7 @@ class MusicCog(commands.Cog):
         else: bar[0] = "🔘"
         return f"[{''.join(bar)}]"
 
-    @tasks.loop(seconds=5)
+    @tasks.loop(seconds=1)
     async def update_panel_task(self):
         for guild_id, message in list(self.panels.items()):
             guild = self.bot.get_guild(guild_id)
