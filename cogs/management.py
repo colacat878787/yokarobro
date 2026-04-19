@@ -35,8 +35,21 @@ class ServerListView(discord.ui.View):
 class ManagementCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.blacklist = self._load_data(BLACKLIST_FILE, [])
+        raw_bl = self._load_data(BLACKLIST_FILE, [])
+        self.blacklist = self._purify_blacklist(raw_bl)
         self.known_users = self._load_data(KNOWN_USERS_FILE, {})
+        # 存檔一次確保數據乾淨
+        self._save_data(BLACKLIST_FILE, self.blacklist)
+
+    def _purify_blacklist(self, raw_list):
+        import re
+        purified = []
+        for item in raw_list:
+            # 提取純數字 ID (防止文字或標記殘留)
+            match = re.search(r'\d+', str(item))
+            if match:
+                purified.append(match.group())
+        return list(set(purified)) # 去重
 
     def _load_data(self, path, default):
         if os.path.exists(path):
