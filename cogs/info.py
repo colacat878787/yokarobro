@@ -12,9 +12,9 @@ class InfoCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.hybrid_command(name='weather', aliases=['天氣'])
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-    @commands.hybrid_command(name='weather', aliases=['天氣'])
     async def weather(self, ctx, *, city: str):
         """查詢天氣資訊 (使用 wttr.in)"""
         async with aiohttp.ClientSession() as session:
@@ -26,9 +26,9 @@ class InfoCog(commands.Cog):
                 else:
                     await ctx.send("嗷～氣象衛星斷線了，查不到那裡的天氣。")
 
+    @commands.hybrid_command(name='wiki', aliases=['維基', '查'])
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-    @commands.hybrid_command(name='wiki', aliases=['維基', '查'])
     async def wiki(self, ctx, *, query: str):
         """搜尋維基百科並抓取大頭圖"""
         await ctx.defer()

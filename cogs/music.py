@@ -4,6 +4,7 @@ import yt_dlp
 import asyncio
 import os
 import time
+import json
 
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
@@ -63,15 +64,23 @@ class MusicControlView(discord.ui.View):
         super().__init__(timeout=None)
         self.cog = cog
 
-    @discord.ui.button(label="⏬ 降Key", style=discord.ButtonStyle.secondary, custom_id="mus_key_down")
+    @discord.ui.button(label="⏬ 降Key", style=discord.ButtonStyle.secondary, custom_id="mus_key_down", row=0)
     async def key_down(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._adjust_pitch(interaction, -0.05)
 
-    @discord.ui.button(label="⏫ 升Key", style=discord.ButtonStyle.secondary, custom_id="mus_key_up")
+    @discord.ui.button(label="🔄 重置", style=discord.ButtonStyle.secondary, custom_id="mus_reset", row=0)
+    async def reset_pitch(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        state = self.cog.get_state(interaction.guild_id)
+        state['pitch'] = 1.0
+        await self.cog.reload_current(interaction.guild)
+        await interaction.edit_original_response(content="🎵 音調已重置為 1.0x (正常音速)！")
+
+    @discord.ui.button(label="⏫ 升Key", style=discord.ButtonStyle.secondary, custom_id="mus_key_up", row=0)
     async def key_up(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._adjust_pitch(interaction, 0.05)
 
-    @discord.ui.button(label="🎧 杜比環繞", style=discord.ButtonStyle.success, custom_id="mus_theater")
+    @discord.ui.button(label="🎧 杜比環繞", style=discord.ButtonStyle.success, custom_id="mus_theater", row=0)
     async def dolby(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         guild_id = interaction.guild_id
@@ -81,14 +90,28 @@ class MusicControlView(discord.ui.View):
         await self.cog.reload_current(interaction.guild)
         await interaction.edit_original_response(content=f"🎬 劇院杜比模式已 {mode}！")
 
-    @discord.ui.button(label="⏪ 跳過", style=discord.ButtonStyle.primary, custom_id="mus_skip")
+    @discord.ui.button(label="⏩ 跳過", style=discord.ButtonStyle.primary, custom_id="mus_skip", row=0)
     async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         if interaction.guild.voice_client:
             interaction.guild.voice_client.stop()
             await interaction.edit_original_response(content="⏩ 已跳過當前歌曲！")
 
-    @discord.ui.button(label="⏹️ 停止", style=discord.ButtonStyle.danger, custom_id="mus_stop")
+    @discord.ui.button(label="⏸️ 暫停/繼續", style=discord.ButtonStyle.primary, custom_id="mus_pause", row=1)
+    async def pause_resume(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        vc = interaction.guild.voice_client
+        if not vc:
+            return await interaction.edit_original_response(content="❌ 洛洛目前沒有在唱歌喔！")
+            
+        if vc.is_paused():
+            vc.resume()
+            await interaction.edit_original_response(content="▶️ 指令收到！繼續播放～嗷嗚！")
+        else:
+            vc.pause()
+            await interaction.edit_original_response(content="⏸️ 洛洛先休息喝口水，暫停播放囉。")
+
+    @discord.ui.button(label="⏹️ 停止", style=discord.ButtonStyle.danger, custom_id="mus_stop", row=1)
     async def stop(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         if interaction.guild.voice_client:

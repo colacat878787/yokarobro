@@ -60,9 +60,12 @@ class LevelsCog(commands.Cog):
     @commands.hybrid_command(name='profile', aliases=['等級'])
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-    async def profile(self, ctx, member: discord.Member = None):
-        member = member or ctx.author
-        user_id = str(member.id)
+    async def profile(self, ctx, user: discord.User = None):
+        user = user or ctx.author
+        user_id = str(user.id)
+        
+        # 獲取名稱
+        display_name = getattr(user, "display_name", user.name)
         if user_id in self.levels:
             lv = self.levels[user_id]["level"]
             xp = self.levels[user_id]["xp"]
