@@ -45,6 +45,10 @@ class YTDLSource(discord.PCMVolumeTransformer):
         if 'entries' in data:
             data = data['entries'][0]
 
+        # 提取 yt-dlp 建議的 HTTP Headers (解決 B站 403 問題)
+        headers = data.get('http_headers', {})
+        header_str = "".join([f"{k}: {v}\r\n" for k, v in headers.items()])
+
         filters = []
         if theater: filters.append("extrastereo=m=2.5")
         if pitch != 1.0: filters.append(f"asetrate=48000*{pitch},atempo=1/{pitch}")
@@ -54,6 +58,10 @@ class YTDLSource(discord.PCMVolumeTransformer):
             'before_options': f'-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -ss {seek}',
             'options': f'-vn {af_string}'
         }
+        
+        # 如果有 headers，加入到 FFmpeg
+        if header_str:
+            ffmpeg_options['before_options'] += f' -headers "{header_str}"'
 
         filename = data['url'] if stream else ytdl.prepare_filename(data)
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data, volume=volume, pitch=pitch, theater=theater, requester=requester)
@@ -251,8 +259,6 @@ class MusicCog(commands.Cog):
             
             # 優先嘗試：使用 spotify-dlp (專業版引擎)
             try:
-                # 呼叫 spotify-dlp 指令抓取 metadata
-                # 改用 python -m spotify_dlp 避免路徑問題
                 import sys
                 proc = await asyncio.create_subprocess_exec(
                     sys.executable, '-m', 'spotify_dlp', '--get-title', url,
@@ -306,9 +312,6 @@ class MusicCog(commands.Cog):
             
             if added_count > 1:
                 await ctx.send(f"✅ 已透過核心引擎解析 Spotify，成功加入了 **{added_count}** 首歌！🐾")
-            elif added_count == 1 and "open.spotify.com" in ctx.message.content:
-                # 單曲不需要重複發送訊息，_play_song 已經發過面板了
-                pass
 
     @commands.command(name='play', aliases=['播放', '播'])
     async def play(self, ctx, *, search):
@@ -341,7 +344,18 @@ class MusicCog(commands.Cog):
         state['elapsed'] = 0
         state['last_elapsed'] = 0
         player.start_time = time.time()
-        ctx.voice_client.play(player, after=lambda e: self.play_next(ctx))
+        
+        # 定義播放結束後的處理 (包含錯誤捕捉)
+        def after_playing(error):
+            if error:
+                print(f"播放過程出錯: {error}")
+                asyncio.run_coroutine_threadsafe(
+                    ctx.send(f"⚠️ **播放出錯啦！**\n洛洛剛才嘗試唱歌時發生了點意外：`{error}`\n這通常是音訊來源 (如 B站) 拒絕連線導致的喔！🐾"), 
+                    self.bot.loop
+                )
+            self.play_next(ctx)
+
+        ctx.voice_client.play(player, after=after_playing)
         
         # 發送面板
         asyncio.run_coroutine_threadsafe(self.send_panel(ctx, player), self.bot.loop)
@@ -350,7 +364,6 @@ class MusicCog(commands.Cog):
         embed = self.create_music_embed(ctx.guild.id, player, 0)
         view = MusicControlView(self)
         msg = await ctx.send(embed=embed, view=view)
-        # 如果舊的有面板，可以嘗試刪除 (可選)
         self.panels[ctx.guild.id] = msg
 
     def play_next(self, ctx):
