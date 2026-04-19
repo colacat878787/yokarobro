@@ -118,7 +118,9 @@ class SecurityCog(commands.Cog):
             await message.delete()
             
             if has_malicious:
-                warning = f"⚠️ **危險連結攔截** ⚠️\n> {message.author.mention} 剛剛發送了疑似惡意或整人的連結 (`{blocked_domain}`)，洛洛已經幫大家把它吃掉啦！請大家保護好自己的帳號喔！🐾"
+                # 網址去連結化 (Defang): 把 . 換成 [.] 防止點擊
+                defanged_domain = blocked_domain.replace(".", "[.]")
+                warning = f"⚠️ **危險連結攔截** ⚠️\n> {message.author.mention} 剛剛發送了疑似惡意或整人的連結 (**{defanged_domain}**)，洛洛已經幫大家把它吃掉啦！請大家保護好自己的帳號喔！🐾"
                 await message.channel.send(warning)
                 try:
                     await message.author.send(f"❌ 洛洛偵測到你發送了被列為危險的連結：`{blocked_domain}`，為了保護伺服器安全，該訊息已被刪除。")
