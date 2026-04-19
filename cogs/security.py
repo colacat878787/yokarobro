@@ -1,13 +1,21 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import re
 import os
+import aiohttp
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 load_dotenv()
 
 SPAM_KEYWORDS = ["免費代打", "購買加賴", "送外幣", "加 LINE", "抽獎連結"]
 URL_REGEX = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+
+# 惡意連結資料源
+BLACKLIST_URLS = [
+    "https://raw.githubusercontent.com/nikolais-links/nikolais-links/main/links.json",
+    "https://raw.githubusercontent.com/buildtheearth/domain-blacklist/master/domains.txt"
+]
 
 class SecurityView(discord.ui.View):
     def __init__(self, role_name):
@@ -16,15 +24,11 @@ class SecurityView(discord.ui.View):
 
     @discord.ui.button(label="✅ 我已閱讀並同意守則", style=discord.ButtonStyle.green, custom_id="verify_btn")
     async def verify(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # 1. 立即告知 Discord 我收到了，正在處理中 (思考模式)
         await interaction.response.defer(ephemeral=True)
-        
-        # 2. 執行邏輯
         role = discord.utils.get(interaction.guild.roles, name=self.role_name)
         if role:
             try:
                 await interaction.user.add_roles(role)
-                # 3. 處理完成後，修改原本那則「思考中」的內容
                 await interaction.edit_original_response(content="✅ 驗證完成！歡迎加入星辰大合唱！嗷嗷嗷～")
             except discord.Forbidden:
                 await interaction.edit_original_response(content="❌ 矮油！洛洛權限不夠，請聯絡管理員檢查身分組順序！")
@@ -37,32 +41,87 @@ class SecurityCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.role_name = "星辰大合唱"
+        self.verify_role = os.getenv("VERIFY_ROLE_NAME", "成員")
+        
+        # 惡意網域清單 (預設包含 youareanidiot.cc)
+        self.malicious_domains = {"youareanidiot.cc", "youareanidiot.org", "youareanidiot.xyz"}
+        
+        # 啟動自動更新任務
+        self.update_blacklist_task.start()
+        
         # 註冊持久化視圖
         self.bot.add_view(SecurityView(self.role_name))
-        print("💠 持久化身分驗證按鈕註冊完成")
-        self.verify_role = os.getenv("VERIFY_ROLE_NAME", "成員")
+        print("💠 洛洛防護盾已啟動，惡意網址資料庫載入中...")
+
+    def cog_unload(self):
+        self.update_blacklist_task.cancel()
+
+    @tasks.loop(hours=6.0)
+    async def update_blacklist_task(self):
+        """定期從開源社群抓取最新惡意網域名稱"""
+        async with aiohttp.ClientSession() as session:
+            for url in BLACKLIST_URLS:
+                try:
+                    async with session.get(url, timeout=10) as resp:
+                        if resp.status == 200:
+                            if url.endswith(".json"):
+                                data = await resp.json()
+                                if isinstance(data, list):
+                                    self.malicious_domains.update(data)
+                                elif isinstance(data, dict):
+                                    # 有些格式是字典包含列表
+                                    for key in data:
+                                        if isinstance(data[key], list):
+                                            self.malicious_domains.update(map(str, data[key]))
+                            else:
+                                text = await resp.text()
+                                # 逐行讀取 txt 格式的網域
+                                domains = [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")]
+                                self.malicious_domains.update(domains)
+                except Exception as e:
+                    print(f"⚠️ 無法從 {url} 更新黑名單: {e}")
+        print(f"🛡️ 惡意網址庫更新完成，目前監控 {len(self.malicious_domains)} 個網域")
 
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot: return
         if message.author.guild_permissions.administrator: return
 
-        # 檢測廣告關鍵字
         content = message.content.lower()
+        
+        # 1. 偵測惡意連結
+        urls = re.findall(URL_REGEX, content)
+        has_malicious = False
+        blocked_domain = ""
+
+        for url in urls:
+            try:
+                domain = urlparse(url).netloc.lower()
+                # 檢查網域是否在黑名單中 (包含子網域檢查)
+                for mal_domain in self.malicious_domains:
+                    if domain == mal_domain or domain.endswith(f".{mal_domain}"):
+                        has_malicious = True
+                        blocked_domain = domain
+                        break
+            except: continue
+            if has_malicious: break
+
+        # 2. 檢測廣告關鍵字
         is_spam = any(k in content for k in SPAM_KEYWORDS)
         
-        # 檢測過多連結 (防洗版)
-        urls = re.findall(URL_REGEX, content)
-        if len(urls) > 3 or is_spam:
+        # 3. 執行攔截動作
+        if has_malicious or is_spam or len(urls) > 5:
             await message.delete()
-            try:
-                await message.author.send("洛洛偵測到你發送廣告或過多連結，訊息已被刪除。請遵守群規喔！")
-            except: pass
             
-            # 若包含廣告關鍵字，則禁言 1 小時 (需伺服器有禁言權限)
-            if is_spam:
-                await message.channel.send(f"⚠️ {message.author.mention} 因發送廣告訊息被自動禁言並刪除！")
-                # 這裡可以使用 timeout 功能 (Discord API v10)
+            if has_malicious:
+                warning = f"⚠️ **危險連結攔截** ⚠️\n> {message.author.mention} 剛剛發送了疑似惡意或整人的連結 (`{blocked_domain}`)，洛洛已經幫大家把它吃掉啦！請大家保護好自己的帳號喔！🐾"
+                await message.channel.send(warning)
+                try:
+                    await message.author.send(f"❌ 洛洛偵測到你發送了被列為危險的連結：`{blocked_domain}`，為了保護伺服器安全，該訊息已被刪除。")
+                except: pass
+            
+            elif is_spam:
+                await message.channel.send(f"⚠️ {message.author.mention} 因發送廣告訊息被自動禁言 1 小時並刪除訊息！")
                 try: 
                     await message.author.timeout(discord.utils.utcnow() + discord.utils.datetime.timedelta(hours=1))
                 except: pass
