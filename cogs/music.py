@@ -127,6 +127,21 @@ class MusicControlView(discord.ui.View):
     async def vol_up(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._adjust_vol(interaction, 0.1)
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # 1. 黑名單檢查 (雙重防線)
+        mgmt = self.cog.bot.get_cog("ManagementCog")
+        if mgmt and mgmt.is_blacklisted(str(interaction.user.id)):
+            await interaction.response.send_message("❌ 您已被禁止使用洛洛的服務，無法操控面板。", ephemeral=True)
+            return False
+            
+        # 2. 語音頻道同步檢查
+        if not interaction.user.voice or not interaction.guild.voice_client or \
+           interaction.user.voice.channel.id != interaction.guild.voice_client.channel.id:
+            await interaction.response.send_message("❌ 嘿！妳必須跟我待在同一個語音房裡，才能叫洛洛做事喔！🐾", ephemeral=True)
+            return False
+            
+        return True
+
     async def _adjust_pitch(self, interaction, change):
         await interaction.response.defer(ephemeral=True)
         state = self.cog.get_state(interaction.guild_id)
