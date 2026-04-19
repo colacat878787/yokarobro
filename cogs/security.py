@@ -85,7 +85,6 @@ class SecurityCog(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot: return
-        if message.author.guild_permissions.administrator: return
 
         content = message.content.lower()
         
@@ -94,23 +93,28 @@ class SecurityCog(commands.Cog):
         has_malicious = False
         blocked_domain = ""
 
-        for url in urls:
-            try:
-                domain = urlparse(url).netloc.lower()
-                # 檢查網域是否在黑名單中 (包含子網域檢查)
-                for mal_domain in self.malicious_domains:
-                    if domain == mal_domain or domain.endswith(f".{mal_domain}"):
-                        has_malicious = True
-                        blocked_domain = domain
-                        break
-            except: continue
-            if has_malicious: break
+        if urls:
+            for url in urls:
+                try:
+                    domain = urlparse(url).netloc.lower()
+                    # 檢查網域是否在黑名單中 (包含子網域檢查)
+                    for mal_domain in self.malicious_domains:
+                        if domain == mal_domain or domain.endswith(f".{mal_domain}"):
+                            has_malicious = True
+                            blocked_domain = domain
+                            break
+                except: continue
+                if has_malicious: break
 
-        # 2. 檢測廣告關鍵字
-        is_spam = any(k in content for k in SPAM_KEYWORDS)
+        # 2. 檢測廣告關鍵字 (管理員依然豁免廣告關鍵字 check)
+        is_spam = False
+        if not message.author.guild_permissions.administrator:
+            is_spam = any(k in content for k in SPAM_KEYWORDS)
         
         # 3. 執行攔截動作
-        if has_malicious or is_spam or len(urls) > 5:
+        if has_malicious or is_spam or (not message.author.guild_permissions.administrator and len(urls) > 5):
+            # 如果是惡意連結，管理員也要攔截！
+            print(f"🚨 [Security] 偵測到惡意網域: {blocked_domain} from {message.author}")
             await message.delete()
             
             if has_malicious:
