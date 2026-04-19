@@ -252,29 +252,47 @@ class MusicCog(commands.Cog):
             self.save_settings()
         except: pass
 
-    # --- Spotify 跨平台解析器 (專業版 & 修復 DRM) ---
+    # --- Spotify 跨平台解析器 (暴力解析 B 模式) ---
     async def resolve_spotify(self, ctx, url):
         async with ctx.typing():
-            tracks = []
+            tracks = [] # 儲存待搜尋的歌名清單
             
-            # 優先嘗試：使用 spotify-dlp (專業版引擎)
+            # --- 策略 A: 使用 python -m yt_dlp 抓取 JSON ---
             try:
                 import sys
                 proc = await asyncio.create_subprocess_exec(
-                    sys.executable, '-m', 'spotify_dlp', '--get-title', url,
+                    sys.executable, '-m', 'yt_dlp', '--dump-json', '--flat-playlist', url,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
-                stdout, stderr = await proc.communicate()
-                
+                stdout, _ = await proc.communicate()
                 if proc.returncode == 0 and stdout:
-                    output = stdout.decode().strip()
-                    tracks = [line.strip() for line in output.splitlines() if line.strip()]
-                    print(f"✅ Spotify-DLP 成功抓取 {len(tracks)} 首歌曲")
-            except Exception as e:
-                print(f"⚠️ Spotify-DLP 暫不可用，切換至爬蟲模式: {e}")
+                    for line in stdout.decode().splitlines():
+                        try:
+                            data = json.loads(line)
+                            title = data.get('title')
+                            uploader = data.get('uploader', '')
+                            if title: tracks.append(f"{title} {uploader}")
+                        except: continue
+                if tracks: print(f"✅ 策略 A (yt-dlp) 成功抓取 {len(tracks)} 首歌曲")
+            except: pass
 
-            # 次要嘗試：如果上面失敗，使用原本的 aiohttp 爬蟲模式
+            # --- 策略 B: 使用 Spotify oEmbed API (當 A 失敗或單曲時) ---
+            if not tracks:
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        oembed_url = f"https://open.spotify.com/oembed?url={url}"
+                        async with session.get(oembed_url) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                title = data.get('title')
+                                artist = data.get('provider_name', '') # oEmbed 有時放這
+                                if title:
+                                    tracks = [f"{title} {artist}"]
+                                    print("✅ 策略 B (oEmbed) 成功抓取單曲資訊")
+                except: pass
+
+            # --- 策略 C: 暴力網頁 Meta 爬蟲 (最後防線) ---
             if not tracks:
                 try:
                     async with aiohttp.ClientSession() as session:
@@ -289,12 +307,13 @@ class MusicCog(commands.Cog):
                                     raw_desc = desc_match.group(1) if desc_match else ""
                                     artist = raw_desc.split('·')[0].strip() if '·' in raw_desc else raw_desc
                                     tracks = [f"{raw_title} {artist}"]
+                                    print("✅ 策略 C (Scraper) 成功抓取 Meta")
                 except: pass
 
             if not tracks:
-                return await ctx.send("❌ 洛洛盡力了，但暫時解析不了這個音樂連結喔！")
+                return await ctx.send("❌ 洛洛盡力了，這條連結防護太強，解析不了喔！")
 
-            # 開始處理搜尋與播放
+            # --- 統一搜尋與播放邏輯 ---
             added_count = 0
             for query in tracks:
                 try:
@@ -308,10 +327,14 @@ class MusicCog(commands.Cog):
                     else:
                         self._play_song(ctx, player)
                     added_count += 1
-                except: continue
+                except Exception as e:
+                    print(f"Search error for '{query}': {e}")
+                    continue
             
             if added_count > 1:
-                await ctx.send(f"✅ 已透過核心引擎解析 Spotify，成功加入了 **{added_count}** 首歌！🐾")
+                await ctx.send(f"✅ 已啟動暴力解析，成功將 **{added_count}** 首歌曲從 Spotify 搬到 YouTube 播放！🐾")
+            elif added_count == 0:
+                await ctx.send("❌ 嗚嗚...雖然解析到歌名，但在 YouTube 上找不到能唱的版本。")
 
     @commands.command(name='play', aliases=['播放', '播'])
     async def play(self, ctx, *, search):
