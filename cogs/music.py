@@ -97,33 +97,47 @@ class MusicControlView(discord.ui.View):
             self.cog.queue[interaction.guild_id] = []
         await interaction.response.defer()
 
-    @discord.ui.button(label="🔄 重置 Key", style=discord.ButtonStyle.secondary, custom_id="mus_reset", row=1)
+    @discord.ui.button(label="🔉", style=discord.ButtonStyle.secondary, row=1, custom_id="mus_vol_down")
+    async def vol_down(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_vol(interaction, -0.1)
+
+    @discord.ui.button(label="🔊", style=discord.ButtonStyle.secondary, row=1, custom_id="mus_vol_up")
+    async def vol_up(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_vol(interaction, 0.1)
+
+    @discord.ui.button(label="🎹-", style=discord.ButtonStyle.secondary, row=1, custom_id="mus_pitch_down")
+    async def pitch_down(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_pitch(interaction, -0.05)
+
+    @discord.ui.button(label="🎹+", style=discord.ButtonStyle.secondary, row=1, custom_id="mus_pitch_up")
+    async def pitch_up(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_pitch(interaction, 0.05)
+
+    @discord.ui.button(label="🔄 重置", style=discord.ButtonStyle.secondary, custom_id="mus_reset", row=1)
     async def reset_pitch(self, interaction: discord.Interaction, button: discord.ui.Button):
         state = self.cog.get_state(interaction.guild_id)
         state['pitch'] = 1.0
         await self.cog.reload_current(interaction.guild)
         await interaction.response.defer()
 
-    @discord.ui.button(label="🎬 杜比", style=discord.ButtonStyle.success, custom_id="mus_theater", row=1)
+    @discord.ui.button(label="🎬 杜比劇院模式", style=discord.ButtonStyle.success, custom_id="mus_theater", row=2)
     async def dolby(self, interaction: discord.Interaction, button: discord.ui.Button):
         state = self.cog.get_state(interaction.guild_id)
         state['theater'] = not state['theater']
         await self.cog.reload_current(interaction.guild)
         await interaction.response.defer()
 
-    @discord.ui.button(label="🔊+", style=discord.ButtonStyle.secondary, row=1, custom_id="mus_vol_up")
-    async def vol_up(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._adjust_vol(interaction, 0.1)
-
-    @discord.ui.button(label="🔉-", style=discord.ButtonStyle.secondary, row=1, custom_id="mus_vol_down")
-    async def vol_down(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._adjust_vol(interaction, -0.1)
-
     async def _adjust_vol(self, interaction, change):
         vc = interaction.guild.voice_client
         state = self.cog.get_state(interaction.guild_id)
         state['volume'] = max(0.0, min(1.0, state['volume'] + change))
         if vc and vc.source: vc.source.volume = state['volume']
+        await interaction.response.defer()
+
+    async def _adjust_pitch(self, interaction, change):
+        state = self.cog.get_state(interaction.guild_id)
+        state['pitch'] = max(0.5, min(2.0, state['pitch'] + change))
+        await self.cog.reload_current(interaction.guild)
         await interaction.response.defer()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:

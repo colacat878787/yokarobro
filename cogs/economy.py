@@ -173,27 +173,46 @@ class LeafGameView(discord.ui.View):
 
     async def start_timer(self, msg):
         while self.time_left > 0:
-            await asyncio.sleep(5)
+            await asyncio.sleep(10) # 降低更新頻率
             if self.ended: break
-            self.time_left -= 5
+            self.time_left -= 10
             try:
+                # 檢查訊息是否還在
                 await msg.edit(embed=self.make_embed())
-            except: break
+            except: 
+                break
+        
+        if not self.ended:
+            await self.end_game(msg)
+
+    async def end_game(self, msg):
         self.ended = True
         self.stop()
-        final_pay = self.score * 15 + random.randint(100, 300)
+        
+        # 工資平衡：基礎 200 + 分數 * 20
+        final_pay = self.score * 20 + random.randint(150, 350)
         self.economy_cog.add_money(str(self.user.id), final_pay)
-        end_embed = discord.Embed(title="🏁 掃葉子時間結束！", color=0xf1c40f)
-        end_embed.description = f"妳總共掃了 **{self.score}** 片葉子！\n辛苦了，這是妳的工資：**${final_pay}**！"
+        
+        end_embed = discord.Embed(title="🏁 工作結束！辛苦了！", color=0xf1c40f)
+        end_embed.description = (
+            f"大總裁在 60 秒內掃了 **{self.score}** 片葉子！\n"
+            f"這是您應得的報酬：**${final_pay}**\n"
+            f"目前的錢包餘額已經更新囉！🐾"
+        )
         try:
             await msg.edit(content="✅ 工作完成！", embed=end_embed, view=None)
-        except: pass
+        except:
+            # 如果編輯失敗，試著發新訊息
+            try:
+                await msg.channel.send(f"🏁 {self.user.mention} 工作結束！獲得 **${final_pay}**！")
+            except: pass
 
 class WorkView(discord.ui.View):
     def __init__(self, user, economy_cog):
         super().__init__(timeout=30)
         self.user = user
         self.economy_cog = economy_cog
+
 
     @discord.ui.button(label="🧹 掃葉子 (小遊戲)", style=discord.ButtonStyle.success, custom_id="econ_work_leaf")
     async def leaf_game(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -202,7 +221,8 @@ class WorkView(discord.ui.View):
         game_view = LeafGameView(self.user, self.economy_cog)
         await interaction.response.edit_message(content=None, embed=game_view.make_embed(), view=game_view)
         msg = await interaction.original_response()
-        await game_view.start_timer(msg)
+        # 非同步執行計時器，不阻塞按鈕回調
+        asyncio.create_task(game_view.start_timer(msg))
 
     @discord.ui.button(label="⛏️ 去挖礦", style=discord.ButtonStyle.primary, custom_id="econ_work_mine")
     async def mine(self, interaction: discord.Interaction, button: discord.ui.Button):
