@@ -151,6 +151,45 @@ class MusicControlView(discord.ui.View):
             return False
         return True
 
+# ── 搜尋結果選單 ──
+class MusicSelectView(discord.ui.View):
+    def __init__(self, cog, results, requester):
+        super().__init__(timeout=60)
+        self.cog = cog
+        self.results = results
+        self.requester = requester
+        
+        # 建立選單
+        select = discord.ui.Select(placeholder="🎯 選一首你想聽的歌吧！", min_values=1, max_values=1)
+        for i, res in enumerate(results):
+            title = res.get('title', '未知標題')[:100]
+            duration = str(timedelta(seconds=res.get('duration', 0)))
+            select.add_option(
+                label=title,
+                value=str(i),
+                description=f"時長: {duration} | 頻道: {res.get('uploader', '未知')[:50]}",
+                emoji="🎵"
+            )
+        select.callback = self.on_select
+        self.add_item(select)
+
+    async def on_select(self, interaction: discord.Interaction):
+        if interaction.user.id != self.requester.id:
+            return await interaction.response.send_message("❌ 這不是你的搜尋結果喔！", ephemeral=True)
+            
+        await interaction.response.defer()
+        idx = int(interaction.data['values'][0])
+        res = self.results[idx]
+        url = res.get('webpage_url') or res.get('url')
+        
+        # 模擬點歌行為
+        ctx = await self.cog.bot.get_context(interaction.message)
+        ctx.author = self.requester # 修正點歌者
+        await self.cog.play(ctx, search=url)
+        
+        # 移除選單訊息
+        await interaction.delete_original_response()
+
 class MusicCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -216,7 +255,8 @@ class MusicCog(commands.Cog):
                 embed = self.create_music_embed(guild_id, source, elapsed)
                 await message.edit(embed=embed, view=MusicControlView(self))
             except Exception as e:
-                print(f"Panel Update Error ({guild_id}): {e}")
+                # 靜默處理，避免日誌爆炸
+                pass
 
     def create_music_embed(self, guild_id, source, elapsed):
         state = self.get_state(guild_id)
@@ -232,17 +272,17 @@ class MusicCog(commands.Cog):
         
         embed.description = f"{bar} {time_str}\n\n👤 **點歌者**：{source.requester.mention if source.requester else '未知'}"
         
-        # 待播清單
+        # 待播清單 (精簡版)
         q = self.queue.get(guild_id, [])
         if q:
             q_list = "\n".join([f"**{i+1}.** {s.title}" for i, s in enumerate(q[:3])])
-            if len(q) > 3: q_list += f"\n*...以及其他 {len(q)-3} 首歌曲*"
+            if len(q) > 3: q_list += f"\n*...以及其他 {len(q)-3} 首歌曲 (輸入 !queue 查看全部)*"
             embed.add_field(name="📜 待播清單", value=q_list, inline=False)
         else:
             embed.add_field(name="📜 待播清單", value="目前沒有下一首歌曲，快來點歌吧！", inline=False)
 
         # 狀態
-        status = f"🔊 {int(state['volume']*100)}% | 🎵 {state['pitch']:.2f}x | 🎬 {'杜比 ON' if state['theater'] else '杜比 OFF'}"
+        status = f"🔊 {int(state['volume']*100)}% | 🎹 {state['pitch']:.2f}x | 🎬 {'杜比劇院 ON' if state['theater'] else 'OFF'}"
         embed.set_footer(text=f"Yokaro Music Theater | {status}")
         return embed
 
@@ -359,9 +399,25 @@ class MusicCog(commands.Cog):
         if "open.spotify.com" in search:
             return await self.resolve_spotify(ctx, search)
             
+        # 判斷是否為網址
+        is_url = search.startswith("http")
+        
         async with ctx.typing():
             try:
                 state = self.get_state(ctx.guild.id)
+                
+                # 如果是關鍵字搜尋，彈出選單
+                if not is_url:
+                    # 抓取 5 個搜尋結果
+                    data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch5:{search}", download=False))
+                    if not data or 'entries' not in data:
+                        return await ctx.send("❌ 找不到相關的搜尋結果。")
+                    
+                    results = data['entries']
+                    view = MusicSelectView(self, results, ctx.author)
+                    return await ctx.send(f"🔍 **大總裁，這是關於「{search}」的搜尋結果：**", view=view)
+
+                # 如果是網址，直接播放
                 player = await YTDLSource.from_url(search, loop=self.bot.loop, stream=True, 
                                                  volume=state['volume'], pitch=state['pitch'], 
                                                  theater=state['theater'], requester=ctx.author)
@@ -374,6 +430,41 @@ class MusicCog(commands.Cog):
                 else:
                     self._play_song(ctx, player)
             except Exception as e: await ctx.send(f"❌ 播放失敗: {e}")
+
+    @commands.command(name='queue', aliases=['清單', '列表', 'q'])
+    async def queue_cmd(self, ctx):
+        """查看目前的播放清單"""
+        gid = ctx.guild.id
+        vc = ctx.voice_client
+        
+        if not vc or not vc.is_playing():
+            return await ctx.send("❌ 目前沒有正在播放的音樂。")
+            
+        embed = discord.Embed(title="📜 音樂劇院播放列表", color=0x3498db)
+        
+        # 正在播放
+        source = vc.source
+        embed.add_field(name="▶️ 正在播放", value=f"**{source.title}**\n(點歌者: {source.requester.mention})", inline=False)
+        
+        # 待播清單
+        q = self.queue.get(gid, [])
+        if q:
+            q_str = ""
+            total_duration = 0
+            for i, s in enumerate(q[:15]): # 最多顯示 15 首
+                q_str += f"`{i+1}.` {s.title} | {str(timedelta(seconds=s.duration))} (👤 {s.requester.display_name})\n"
+                total_duration += s.duration
+            
+            if len(q) > 15:
+                q_str += f"\n*...以及其他 {len(q)-15} 首歌曲*"
+            
+            embed.add_field(name=f"⏳ 待播中 ({len(q)} 首)", value=q_str, inline=False)
+            embed.set_footer(text=f"總待播時長: {str(timedelta(seconds=total_duration))}")
+        else:
+            embed.add_field(name="⏳ 待播中", value="清單是空的，快去點歌吧！", inline=False)
+            
+        await ctx.send(embed=embed)
+
 
     def _play_song(self, ctx, player):
         state = self.get_state(ctx.guild.id)
