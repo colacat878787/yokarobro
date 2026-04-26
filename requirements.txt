@@ -16,3 +16,4 @@ faster-whisper
 pydub
 moviepy
 spotify-dlp
+flask

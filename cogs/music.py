@@ -162,10 +162,6 @@ class MusicControlView(discord.ui.View):
 class MusicCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        # 強制重置獎池以確保符合大總裁新規格 (A:Premium, B:5000, C:1000, D:500, E:50)
-        self.pool = self._default_pool()
-        self._save() 
-        self.premium_users = self._load_premium()
         self.queue, self.panels, self.states = {}, {}, {}
         self.precache = {} # gid: next_player
         self.update_task.start()
