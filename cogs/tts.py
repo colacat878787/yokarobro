@@ -44,7 +44,7 @@ class TTSCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.bot or message.is_system() or message.type != discord.MessageType.default:
+        if not message.guild or message.author.bot or message.is_system() or message.type != discord.MessageType.default:
             return
             
         # 確認是否綁定了這個頻道
