@@ -15,7 +15,8 @@ FILTER_PRESETS = {
     'bass': 'bass=g=15,loudnorm',
     'nightcore': 'asetrate=48000*1.25,atempo=1.25,highpass=f=200,loudnorm',
     'vaporwave': 'asetrate=48000*0.8,atempo=0.8,lowpass=f=3000,loudnorm',
-    'exciter': 'firequalizer=gain_entry=\'entry(0,0);entry(200,0);entry(4000,5);entry(20000,10)\',loudnorm'
+    'exciter': 'firequalizer=gain_entry=\'entry(0,0);entry(200,0);entry(4000,5);entry(20000,10)\',loudnorm',
+    'theater': 'extrastereo=m=2.5,loudnorm'
 }
 
 ytdl_format_options = {
@@ -130,12 +131,29 @@ class MusicControlView(discord.ui.View):
     async def vp(self, interaction, button):
         await self.toggle_filter(interaction, 'vaporwave')
 
-    async def toggle_filter(self, interaction, f):
+    @discord.ui.button(label="🎬 杜比: OFF", style=discord.ButtonStyle.secondary, row=3)
+    async def dolby(self, interaction, button):
+        await self.toggle_filter(interaction, 'theater', button)
+
+    @discord.ui.button(label="✨ 修復", style=discord.ButtonStyle.secondary, row=3)
+    async def exciter(self, interaction, button):
+        await self.toggle_filter(interaction, 'exciter', button)
+
+    async def toggle_filter(self, interaction, f, button=None):
         state = self.cog.get_state(interaction.guild_id)
-        if f in state['filters']: state['filters'].remove(f)
-        else: state['filters'].append(f)
+        if f in state['filters']:
+            state['filters'].remove(f)
+            if button:
+                button.style = discord.ButtonStyle.secondary
+                if f == 'theater': button.label = "🎬 杜比: OFF"
+        else:
+            state['filters'].append(f)
+            if button:
+                button.style = discord.ButtonStyle.success
+                if f == 'theater': button.label = "🎬 杜比: ON"
+        
         await self.cog.reload_current(interaction.guild)
-        await interaction.response.defer()
+        await interaction.response.edit_message(view=self)
 
 class MusicCog(commands.Cog):
     def __init__(self, bot):
@@ -189,7 +207,8 @@ class MusicCog(commands.Cog):
         bar = list("▬▬▬▬▬▬▬▬▬▬")
         bar[min(int(percent * 10), 9)] = "🔘"
         filters_str = ", ".join(state['filters']) if state['filters'] else "無"
-        embed.description = f"[{''.join(bar)}] `{timedelta(seconds=elapsed)} / {timedelta(seconds=source.duration)}`\n\n✨ 濾鏡: `{filters_str}` | 📻 續播: `{'✅' if state['autoplay'] else '❌'}`"
+        is_dolby = "✅" if 'theater' in state['filters'] else "❌"
+        embed.description = f"[{''.join(bar)}] `{timedelta(seconds=elapsed)} / {timedelta(seconds=source.duration)}`\n\n🎬 杜比: {is_dolby} | ✨ 濾鏡: `{filters_str.replace('theater', '杜比')}`\n📻 續播: `{'✅' if state['autoplay'] else '❌'}`"
         embed.set_footer(text=f"Yokaro Pro | {vol_icon} {int(state['volume']*100)}% | 點歌者: {source.requester.display_name if source.requester else '未知'}", icon_url=source.requester.display_avatar.url if source.requester else None)
         return embed
 
