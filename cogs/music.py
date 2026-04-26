@@ -124,17 +124,44 @@ class MusicControlView(discord.ui.View):
         await self.cog.reload_current(interaction.guild)
         await interaction.response.defer()
 
-    @discord.ui.button(label="🎬 杜比劇院 (Premium)", style=discord.ButtonStyle.success, custom_id="mus_theater", row=2)
+    @discord.ui.button(label="🎬 杜比 (Prem)", style=discord.ButtonStyle.success, custom_id="mus_theater", row=2)
     async def dolby(self, interaction: discord.Interaction, button: discord.ui.Button):
-        kuji = self.cog.bot.get_cog("KujiCog")
-        if not (kuji and kuji.is_premium(interaction.user.id)):
-            return await interaction.response.send_message("💎 **杜比音效為 Premium 專屬功能！** 請去抽取一番賞解鎖！", ephemeral=True)
+        if not await self._check_prem(interaction): return
         state = self.cog.get_state(interaction.guild_id)
         state['theater'] = not state.get('theater', True)
-        state['exciter'] = state['theater']
-        state['bass'] = state['theater']
         await self.cog.reload_current(interaction.guild)
         await interaction.response.defer()
+
+    @discord.ui.button(label="🎸 Bass", style=discord.ButtonStyle.success, custom_id="mus_bass", row=2)
+    async def toggle_bass(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._check_prem(interaction): return
+        state = self.cog.get_state(interaction.guild_id)
+        state['bass'] = not state.get('bass', True)
+        await self.cog.reload_current(interaction.guild)
+        await interaction.response.defer()
+
+    @discord.ui.button(label="🎻 Exciter", style=discord.ButtonStyle.success, custom_id="mus_exciter", row=2)
+    async def toggle_exciter(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._check_prem(interaction): return
+        state = self.cog.get_state(interaction.guild_id)
+        state['exciter'] = not state.get('exciter', True)
+        await self.cog.reload_current(interaction.guild)
+        await interaction.response.defer()
+
+    @discord.ui.button(label="∞ 續播", style=discord.ButtonStyle.secondary, custom_id="mus_247", row=2)
+    async def toggle_247(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ 只有管理員可以開關續播模式。", ephemeral=True)
+        state = self.cog.get_state(interaction.guild_id)
+        state['247'] = not state.get('247', False)
+        await interaction.response.defer()
+
+    async def _check_prem(self, interaction):
+        kuji = self.cog.bot.get_cog("KujiCog")
+        if not (kuji and kuji.is_premium(interaction.user.id)):
+            await interaction.response.send_message("💎 **此音效為 Premium 專屬！** 請去抽取一番賞 A 賞解鎖！", ephemeral=True)
+            return False
+        return True
 
     async def _adjust_vol(self, interaction, change):
         vc = interaction.guild.voice_client
@@ -309,7 +336,13 @@ class MusicCog(commands.Cog):
         else:
             embed.add_field(name="📜 播放清單", value="隊列是空的喔！快點歌吧！", inline=False)
 
-        status = f"音量 {int(state['volume']*100)}% | 音調 {state['pitch']:.2f}x | 劇院 {'ON' if state.get('theater') else 'OFF'} | 續播 {'ON' if state.get('247') else 'OFF'}"
+        filters = []
+        if state.get('theater'): filters.append("🎬 杜比")
+        if state.get('bass'): filters.append("🎸 Bass")
+        if state.get('exciter'): filters.append("🎻 Exciter")
+        if state.get('247'): filters.append("∞ 續播")
+        
+        status = f"音量 {int(state['volume']*100)}% | 音調 {state['pitch']:.2f}x | {' | '.join(filters) if filters else '純淨模式'}"
         embed.set_footer(text=f"Yokaro Music Theater | {status}")
         return embed
 
@@ -342,9 +375,10 @@ class MusicCog(commands.Cog):
         async with ctx.typing():
             tracks = [] 
             try:
+                # 第一招：嘗試用 yt-dlp 原生解析 (針對單曲或有 plugin 的環境)
                 import sys
                 proc = await asyncio.create_subprocess_exec(
-                    sys.executable, '-m', 'yt_dlp', '--dump-json', '--flat-playlist', url,
+                    sys.executable, '-m', 'yt_dlp', '--dump-json', '--flat-playlist', '--playlist-items', '1-50', url,
                     stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
                 )
                 stdout, _ = await proc.communicate()
@@ -353,26 +387,34 @@ class MusicCog(commands.Cog):
                         try:
                             data = json.loads(line)
                             title = data.get('title')
-                            uploader = data.get('uploader', '')
-                            if title: tracks.append(f"{title} {uploader}")
+                            artist = data.get('uploader', '') # Spotify 在 yt-dlp 中通常將 artist 放在 uploader
+                            if title and "Spotify" not in title: # 排除掉 "Spotify Playlist" 這種標題
+                                tracks.append(f"{title} {artist}")
                         except: continue
             except: pass
 
-            if not tracks:
+            # 第二招：如果第一招只抓到一首且標題很可疑，或是根本沒抓到，啟動 Web Scraping 模式
+            if not tracks or (len(tracks) == 1 and "Algorithm" in tracks[0]):
                 try:
                     async with aiohttp.ClientSession() as session:
-                        oembed_url = f"https://open.spotify.com/oembed?url={url}"
-                        async with session.get(oembed_url) as resp:
+                        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                        async with session.get(url, headers=headers) as resp:
                             if resp.status == 200:
-                                data = await resp.json()
-                                title = data.get('title')
-                                artist = data.get('provider_name', '') 
-                                if title:
-                                    tracks = [f"{title} {artist}"]
+                                html = await resp.text()
+                                # 抓取 meta data 裡面的歌曲資訊 (最穩定)
+                                meta_songs = re.findall(r'<meta property="music:song" content="https://open\.spotify\.com/track/([a-zA-Z0-9]+)"', html)
+                                if meta_songs:
+                                    # 這裡洛洛比較懶，直接用 oembed 一個個解析前 10 首 (保證正確性)
+                                    for tid in meta_songs[:20]:
+                                        t_url = f"https://open.spotify.com/track/{tid}"
+                                        async with session.get(f"https://open.spotify.com/oembed?url={t_url}") as o_resp:
+                                            if o_resp.status == 200:
+                                                o_data = await o_resp.json()
+                                                tracks.append(f"{o_data.get('title')} {o_data.get('provider_name')}")
                 except: pass
 
             if not tracks:
-                return await ctx.send("❌ 抱歉！洛洛無法解析這個 Spotify 連結。")
+                return await ctx.send("❌ 抱歉！洛洛無法精準解析這個 Spotify 連結，可能被加密了。")
 
             added_count = 0
             if tracks:
@@ -403,7 +445,7 @@ class MusicCog(commands.Cog):
                 added_count += 1
             
             if added_count > 1:
-                await ctx.send(f"✅ 成功將 **{added_count}** 首歌從 Spotify 轉換至劇院！(延遲解析啟用)")
+                await ctx.send(f"✅ 成功精準載入 **{added_count}** 首歌！(已排除演算法教學影片 🐾)")
 
     @commands.command(name='play', aliases=['播放', '播', 'p'])
     async def play(self, ctx, *, search):
@@ -571,13 +613,29 @@ class MusicCog(commands.Cog):
         else:
             await ctx.send("隊列是空的喔！")
 
-    @commands.command(name='playnext', aliases=['pn', '插隊'])
-    async def playnext(self, ctx, *, search):
-        await ctx.send("⏭️ 此功能在 Pro 版開發中，敬請期待更穩定的插入演算法！")
+    @commands.command(name='bass', aliases=['重低音'])
+    async def set_bass(self, ctx):
+        kuji = self.bot.get_cog("KujiCog")
+        if not (kuji and kuji.is_premium(ctx.author.id)):
+            return await ctx.send("💎 **此功能為 Premium 專屬！**")
+        state = self.get_state(ctx.guild.id)
+        state['bass'] = not state.get('bass', False)
+        await self.reload_current(ctx.guild)
+        await ctx.send(f"🎸 **重低音增強：{'開啟' if state['bass'] else '關閉'}**")
+
+    @commands.command(name='exciter', aliases=['高音增強'])
+    async def set_exciter(self, ctx):
+        kuji = self.bot.get_cog("KujiCog")
+        if not (kuji and kuji.is_premium(ctx.author.id)):
+            return await ctx.send("💎 **此功能為 Premium 專屬！**")
+        state = self.get_state(ctx.guild.id)
+        state['exciter'] = not state.get('exciter', False)
+        await self.reload_current(ctx.guild)
+        await ctx.send(f"🎻 **高音激勵修復：{'開啟' if state['exciter'] else '關閉'}**")
 
     @commands.command(name='247')
     @commands.has_permissions(administrator=True)
-    async def toggle_247(self, ctx):
+    async def toggle_247_cmd(self, ctx):
         state = self.get_state(ctx.guild.id)
         state['247'] = not state.get('247', False)
         status = "✅ 已開啟 (洛洛將永不離開)" if state['247'] else "❌ 已關閉"
