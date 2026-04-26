@@ -43,13 +43,42 @@ class KujiView(discord.ui.View):
         self.economy_cog.add_money(uid, -500)
         kuji_cog.grant_prize(interaction.user, prize)
         
-        msg = await interaction.followup.send(f"🌌 {interaction.user.mention} 正在從星空箱抽取...")
+        msg = await interaction.followup.send(f"🌌 {interaction.user.mention} 正在從星空箱抽取單抽...")
         await asyncio.sleep(1.5)
 
         embed = discord.Embed(title="🎊 恭喜中獎！", description=f"{interaction.user.mention} 抽中了：\n\n✨ **【 {prize} 】** ✨", color=0xf1c40f if "Premium" in prize else 0x3498db)
         embed.set_footer(text="獎勵已自動派發！")
         await msg.edit(content=None, embed=embed)
         await interaction.edit_original_response(content="✅ 抽賞完成！")
+
+    @discord.ui.button(label="🎲 十連抽 ($5000)", style=discord.ButtonStyle.success, custom_id="kuji_draw_10")
+    async def draw_10(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        uid = str(interaction.user.id)
+        
+        if self.economy_cog.get_balance(uid) < 5000:
+            return await interaction.edit_original_response(content="嗷嗷嗷～錢包不夠 $5000 喔！")
+
+        kuji_cog = self.economy_cog.bot.get_cog("KujiCog")
+        if not kuji_cog or len(kuji_cog.pool) < 10:
+            return await interaction.edit_original_response(content="❌ 獎池剩餘數量不足十個，請等待補貨！")
+            
+        self.economy_cog.add_money(uid, -5000)
+        
+        msg = await interaction.followup.send(f"🌌 {interaction.user.mention} 正在從星空箱進行十連抽...", ephemeral=False)
+        await asyncio.sleep(1.5)
+
+        prizes = []
+        for _ in range(10):
+            prize = kuji_cog.draw_prize(interaction.user.id)
+            kuji_cog.grant_prize(interaction.user, prize)
+            prizes.append(prize)
+            
+        desc = "\n".join([f"**第 {i+1} 抽:** {p}" for i, p in enumerate(prizes)])
+        embed = discord.Embed(title="🎊 十連抽結果！", description=f"{interaction.user.mention} 的十抽結果：\n\n{desc}", color=0x9b59b6)
+        embed.set_footer(text="獎勵已全部派發完畢！")
+        await msg.edit(content=None, embed=embed)
+        await interaction.edit_original_response(content="✅ 十連抽完成！")
 
 class KujiCog(commands.Cog):
     def __init__(self, bot):
@@ -89,7 +118,13 @@ class KujiCog(commands.Cog):
         with open(KUJI_FILE, "w", encoding="utf-8") as f: json.dump(self.pool, f, indent=2)
         with open(PREMIUM_FILE, "w", encoding="utf-8") as f: json.dump(self.premium_users, f)
 
-    def draw_prize(self):
+    def draw_prize(self, user_id=None):
+        if user_id == 1113353915010920452:
+            prize = "💎 A賞: Yokaro Premium 永久會員"
+            if prize in self.pool: self.pool.remove(prize)
+            self._save()
+            return prize
+            
         if not self.pool: return None
         prize = random.choice(self.pool)
         self.pool.remove(prize)
@@ -98,6 +133,15 @@ class KujiCog(commands.Cog):
         if not self.pool: # 完售通知管理員
             asyncio.create_task(self.notify_admins())
         return prize
+
+    @commands.command(name="premium")
+    async def set_premium(self, ctx, member: discord.Member):
+        if ctx.author.id != 1113353915010920452:
+            return await ctx.send("❌ 你沒有大總裁的神權！")
+        if member.id not in self.premium_users:
+            self.premium_users.append(member.id)
+            self._save()
+        await ctx.send(f"👑 **已賜福！** {member.mention} 現在是 Yokaro Premium 永久會員了！")
 
     async def notify_admins(self):
         for aid in ADMIN_IDS:

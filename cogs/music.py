@@ -124,10 +124,15 @@ class MusicControlView(discord.ui.View):
         await self.cog.reload_current(interaction.guild)
         await interaction.response.defer()
 
-    @discord.ui.button(label="🎬 杜比劇院", style=discord.ButtonStyle.success, custom_id="mus_theater", row=2)
+    @discord.ui.button(label="🎬 杜比劇院 (Premium)", style=discord.ButtonStyle.success, custom_id="mus_theater", row=2)
     async def dolby(self, interaction: discord.Interaction, button: discord.ui.Button):
+        kuji = self.cog.bot.get_cog("KujiCog")
+        if not (kuji and kuji.is_premium(interaction.user.id)):
+            return await interaction.response.send_message("💎 **杜比音效為 Premium 專屬功能！** 請去抽取一番賞解鎖！", ephemeral=True)
         state = self.cog.get_state(interaction.guild_id)
-        state['theater'] = not state['theater']
+        state['theater'] = not state.get('theater', True)
+        state['exciter'] = state['theater']
+        state['bass'] = state['theater']
         await self.cog.reload_current(interaction.guild)
         await interaction.response.defer()
 
@@ -298,12 +303,17 @@ class MusicCog(commands.Cog):
         if not state['current_url']: return
 
         current_elapsed = time.time() - vc.source.start_time + state['elapsed']
+        kuji = self.bot.get_cog("KujiCog")
+        is_prem = kuji and vc.source.requester and kuji.is_premium(vc.source.requester.id)
         try:
             new_source = await YTDLSource.from_url(
                 state['current_url'], loop=self.bot.loop, 
                 stream=not state['current_url'].startswith("temp/"),
                 volume=state['volume'], pitch=state['pitch'], 
-                theater=state['theater'], exciter=state.get('exciter', True), bass=state.get('bass', True), seek=int(current_elapsed), requester=vc.source.requester
+                theater=is_prem and state.get('theater', True), 
+                exciter=is_prem and state.get('exciter', True), 
+                bass=is_prem and state.get('bass', True), 
+                seek=int(current_elapsed), requester=vc.source.requester
             )
             new_source.start_time = time.time()
             state['elapsed'] = current_elapsed
@@ -351,9 +361,14 @@ class MusicCog(commands.Cog):
             for query in tracks:
                 try:
                     state = self.get_state(ctx.guild.id)
+                    kuji = self.bot.get_cog("KujiCog")
+                    is_prem = kuji and kuji.is_premium(ctx.author.id)
                     player = await YTDLSource.from_url(query, loop=self.bot.loop, stream=True, 
                                                      volume=state['volume'], pitch=state['pitch'], 
-                                                     theater=state.get('theater', True), exciter=state.get('exciter', True), bass=state.get('bass', True), requester=ctx.author)
+                                                     theater=is_prem and state.get('theater', True), 
+                                                     exciter=is_prem and state.get('exciter', True), 
+                                                     bass=is_prem and state.get('bass', True), 
+                                                     requester=ctx.author)
                     if ctx.voice_client.is_playing():
                         if ctx.guild.id not in self.queue: self.queue[ctx.guild.id] = []
                         self.queue[ctx.guild.id].append(player)
@@ -389,9 +404,14 @@ class MusicCog(commands.Cog):
                     view = MusicSelectView(self, results, ctx.author)
                     return await ctx.send(f"🔍 **為您找到與 `{search}` 相關的結果：**", view=view)
 
+                kuji = self.bot.get_cog("KujiCog")
+                is_prem = kuji and kuji.is_premium(ctx.author.id)
                 player = await YTDLSource.from_url(search, loop=self.bot.loop, stream=True, 
                                                  volume=state['volume'], pitch=state['pitch'], 
-                                                 theater=state.get('theater', True), exciter=state.get('exciter', True), bass=state.get('bass', True), requester=ctx.author)
+                                                 theater=is_prem and state.get('theater', True), 
+                                                 exciter=is_prem and state.get('exciter', True), 
+                                                 bass=is_prem and state.get('bass', True), 
+                                                 requester=ctx.author)
                 
                 if ctx.voice_client.is_playing():
                     gid = ctx.guild.id
@@ -531,6 +551,33 @@ class MusicCog(commands.Cog):
         embed = discord.Embed(title="📊 Yokaro 年度聽歌排行", description=desc, color=0x9b59b6)
         embed.set_footer(text=f"總點播次數: {len(songs)} 首", icon_url=target.display_avatar.url)
         await ctx.send(embed=embed)
+
+    @commands.command(name='radio', aliases=['廣播電台'])
+    async def radio(self, ctx, *, station):
+        if not ctx.voice_client:
+            if not ctx.author.voice: return await ctx.send("❌ 你必須先加入語音頻道！")
+            await ctx.author.voice.channel.connect(timeout=60.0, reconnect=True)
+            
+        await ctx.send(f"📻 **正在為您調頻至 {station}...**")
+        search = f"ytsearch1: 台灣 {station} 廣播 live"
+        
+        try:
+            state = self.get_state(ctx.guild.id)
+            kuji = self.bot.get_cog("KujiCog")
+            is_prem = kuji and kuji.is_premium(ctx.author.id)
+            player = await YTDLSource.from_url(search, loop=self.bot.loop, stream=True, 
+                                             volume=state['volume'], pitch=1.0, 
+                                             theater=is_prem, exciter=is_prem, bass=is_prem, requester=ctx.author)
+            
+            if ctx.voice_client.is_playing():
+                gid = ctx.guild.id
+                if gid not in self.queue: self.queue[gid] = []
+                self.queue[gid].append(player)
+                await ctx.send(f"✅ **{player.title}** 已加入清單！")
+            else:
+                self._play_song(ctx, player)
+        except Exception as e:
+            await ctx.send("❌ 無法連接該電台或找不到訊號源。")
 
 async def setup(bot):
     await bot.add_cog(MusicCog(bot))
