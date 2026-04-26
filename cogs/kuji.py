@@ -19,6 +19,44 @@ class RestockView(discord.ui.View):
         self.cog._save()
         await interaction.response.send_message("✅ 獎池已重新補貨！", ephemeral=True)
 
+class GiftModal(discord.ui.Modal, title="🎁 送禮給群友"):
+    username = discord.ui.TextInput(label="請輸入對方的使用者名稱 (username)", placeholder="例如: colacat8787", required=True)
+
+    def __init__(self, prize, giver, kuji_cog):
+        super().__init__()
+        self.prize = prize
+        self.giver = giver
+        self.kuji_cog = kuji_cog
+
+    async def on_submit(self, interaction: discord.Interaction):
+        target = discord.utils.find(lambda u: u.name == self.username.value or u.global_name == self.username.value, interaction.guild.members)
+        if not target:
+            return await interaction.response.send_message("❌ 找不到該使用者！請確認輸入的名稱是否正確且對方在伺服器內。", ephemeral=True)
+            
+        if target.id == self.giver.id:
+            return await interaction.response.send_message("❌ 不能送給自己喔！", ephemeral=True)
+
+        self.kuji_cog.transfer_prize(self.giver, target, self.prize)
+        
+        pref = self.kuji_cog.tag_prefs.get(str(target.id), False)
+        mention_str = target.mention if pref else f"**{target.display_name}**"
+        await interaction.response.send_message(f"🎁 **{self.giver.display_name}** 覺得自己太多了，把大獎【{self.prize}】大方送給了 {mention_str}！")
+
+class KujiGiftView(discord.ui.View):
+    def __init__(self, prize, user, kuji_cog):
+        super().__init__(timeout=300)
+        self.prize = prize
+        self.user = user
+        self.kuji_cog = kuji_cog
+
+    @discord.ui.button(label="🎁 我太多了 我想送給別人", style=discord.ButtonStyle.secondary, custom_id="kuji_gift_btn")
+    async def gift_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("❌ 這是別人的獎品喔！", ephemeral=True)
+        await interaction.response.send_modal(GiftModal(self.prize, self.user, self.kuji_cog))
+        button.disabled = True
+        await interaction.message.edit(view=self)
+
 class KujiView(discord.ui.View):
     def __init__(self, economy_cog):
         super().__init__(timeout=None)
@@ -47,8 +85,8 @@ class KujiView(discord.ui.View):
         await asyncio.sleep(1.5)
 
         embed = discord.Embed(title="🎊 恭喜中獎！", description=f"{interaction.user.mention} 抽中了：\n\n✨ **【 {prize} 】** ✨", color=0xf1c40f if "Premium" in prize else 0x3498db)
-        embed.set_footer(text="獎勵已自動派發！")
-        await msg.edit(content=None, embed=embed)
+        embed.set_footer(text="獎勵已自動派發！您可以選擇轉送給其他人。")
+        await msg.edit(content=None, embed=embed, view=KujiGiftView(prize, interaction.user, kuji_cog))
         await interaction.edit_original_response(content="✅ 抽賞完成！")
 
     @discord.ui.button(label="🎲 十連抽 ($5000)", style=discord.ButtonStyle.success, custom_id="kuji_draw_10")
@@ -84,10 +122,21 @@ class KujiCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.premium_users = self._load_premium()
-        # 強制重置獎池以確保符合大總裁新規格 (A:Premium, B:5000, C:1000, D:500, E:50)
+        self.tag_file = "tag_prefs.json"
+        self.tag_prefs = self._load_json(self.tag_file, {})
         self.pool = self._default_pool()
         self._save() 
         self.bot.add_view(KujiView(self.bot.get_cog("EconomyCog")))
+
+    def _load_json(self, path, default):
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f: return json.load(f)
+            except: pass
+        return default
+
+    def _save_json(self, path, data):
+        with open(path, "w", encoding="utf-8") as f: json.dump(data, f)
 
     def _load(self):
         if os.path.exists(KUJI_FILE):
@@ -142,6 +191,35 @@ class KujiCog(commands.Cog):
             self.premium_users.append(member.id)
             self._save()
         await ctx.send(f"👑 **已賜福！** {member.mention} 現在是 Yokaro Premium 永久會員了！")
+
+    @commands.command(name="tag")
+    async def toggle_tag(self, ctx, state: str, member: discord.Member = None):
+        target = member if member and ctx.author.id == 1113353915010920452 else ctx.author
+        uid = str(target.id)
+        
+        if state.lower() == "on":
+            self.tag_prefs[uid] = True
+        elif state.lower() == "off":
+            self.tag_prefs[uid] = False
+        else:
+            return await ctx.send("❌ 用法: `!tag on` 或 `!tag off`")
+            
+        self._save_json(self.tag_file, self.tag_prefs)
+        await ctx.send(f"✅ 已將 {target.display_name} 的通知 Tag 設定為: **{'ON' if self.tag_prefs.get(uid) else 'OFF'}**")
+
+    def transfer_prize(self, giver, receiver, prize):
+        eco = self.bot.get_cog("EconomyCog")
+        if "Premium" in prize:
+            if giver.id in self.premium_users: self.premium_users.remove(giver.id)
+            if receiver.id not in self.premium_users: self.premium_users.append(receiver.id)
+            self._save()
+        else:
+            import re
+            m = re.search(r'([\d,]+)\s*卡洛幣', prize)
+            if m:
+                amount = int(m.group(1).replace(',', ''))
+                eco.add_money(str(giver.id), -amount)
+                eco.add_money(str(receiver.id), amount)
 
     async def notify_admins(self):
         for aid in ADMIN_IDS:
