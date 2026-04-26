@@ -28,18 +28,27 @@ HTML_TEMPLATE = """
         :root { --bg: #0f0c29; --glass: rgba(255, 255, 255, 0.05); --border: rgba(255, 255, 255, 0.1); --primary: #ff0080; --secondary: #7928ca; --text: #fff; }
         body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
         .glass-panel { background: var(--glass); backdrop-filter: blur(12px); border: 1px solid var(--border); border-radius: 20px; padding: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); margin-bottom: 20px; }
-        h1, h2 { color: var(--primary); text-shadow: 0 0 10px rgba(255,0,128,0.5); }
+        h1, h2 { color: var(--primary); text-shadow: 0 0 10px rgba(255,0,128,0.5); margin-top: 0; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
         .stat-card { background: rgba(0,0,0,0.4); padding: 15px; border-radius: 12px; text-align: center; }
-        .stat-value { font-size: 28px; color: #00d2ff; font-weight: 600; display: block; margin-top: 5px; }
+        .stat-value { font-size: 24px; color: #00d2ff; font-weight: 600; display: block; margin-top: 5px; }
         .dashboard-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; margin-top: 20px; }
         select, input, button { background: rgba(0,0,0,0.5); border: 1px solid var(--border); color: white; padding: 10px; border-radius: 8px; width: 100%; font-family: 'Outfit', sans-serif; margin-bottom: 10px; box-sizing: border-box; }
         button { background: linear-gradient(45deg, var(--primary), var(--secondary)); cursor: pointer; font-weight: 600; border: none; transition: 0.3s; }
         button:hover { filter: brightness(1.2); box-shadow: 0 0 15px var(--primary); }
-        .chat-box { height: 400px; background: rgba(0,0,0,0.6); border-radius: 10px; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
-        .msg { background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; font-size: 14px; }
-        .msg span { font-size: 12px; color: #aaa; margin-right: 10px; }
-        .msg.bot { border-left: 3px solid var(--primary); background: rgba(255,0,128,0.1); }
+        .chat-container { display: flex; flex-direction: column; height: 500px; background: rgba(0,0,0,0.6); border-radius: 10px; padding: 15px; margin-bottom: 10px; }
+        .chat-box { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 5px; }
+        .msg { background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; font-size: 14px; width: fit-content; max-width: 80%; }
+        .msg.bot { background: rgba(255,0,128,0.2); border-left: 3px solid var(--primary); align-self: flex-end; }
+        .msg span { font-size: 11px; color: #bbb; display: block; margin-bottom: 4px; }
+        
+        .tabs { display: flex; gap: 10px; margin-bottom: 15px; }
+        .tab-btn { flex: 1; background: rgba(255,255,255,0.1); border: none; padding: 10px; border-radius: 8px; cursor: pointer; color: white; font-weight: 600; }
+        .tab-btn.active { background: var(--primary); box-shadow: 0 0 10px var(--primary); }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 10px; }
     </style>
 </head>
 <body>
@@ -50,22 +59,38 @@ HTML_TEMPLATE = """
 
     <div class="dashboard-grid">
         <div class="glass-panel">
-            <h2>🌍 導航列</h2>
-            <label>選擇伺服器</label>
-            <select id="guild-select" onchange="loadChannels()"><option value="">請選擇...</option></select>
+            <div class="tabs">
+                <button class="tab-btn active" id="tab-server" onclick="switchTab('server')">🌍 伺服器通訊</button>
+                <button class="tab-btn" id="tab-dm" onclick="switchTab('dm')">👤 私訊 (DM)</button>
+            </div>
             
-            <label>文字頻道 (通訊用)</label>
-            <select id="text-channel-select" onchange="loadChat()"></select>
+            <div id="panel-server">
+                <label>選擇伺服器</label>
+                <select id="guild-select" onchange="loadChannels()"><option value="">請選擇...</option></select>
+                
+                <label>文字頻道 (通訊用)</label>
+                <select id="text-channel-select" onchange="switchChat()"></select>
 
-            <label>語音頻道 (播音用)</label>
-            <select id="voice-channel-select"></select>
-            <button onclick="joinVoice()">🎤 加入此語音頻道</button>
-            <button onclick="leaveVoice()" style="background: #e74c3c">🛑 退出語音頻道</button>
+                <label>語音頻道 (播音用)</label>
+                <select id="voice-channel-select"></select>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="joinVoice()">🎤 進入</button>
+                    <button onclick="leaveVoice()" style="background: #e74c3c">🛑 離開</button>
+                </div>
+            </div>
+
+            <div id="panel-dm" style="display:none;">
+                <label>請輸入使用者 ID</label>
+                <input type="text" id="dm-user-id" placeholder="例如: 1113353915010920452" onchange="switchChat()">
+                <button onclick="switchChat()">載入私訊紀錄</button>
+            </div>
         </div>
 
         <div class="glass-panel">
-            <h2>💬 遠端通訊介面</h2>
-            <div class="chat-box" id="chat-box">請先選擇文字頻道...</div>
+            <h2 id="chat-title">💬 遠端通訊介面</h2>
+            <div class="chat-container">
+                <div class="chat-box" id="chat-box">請在左側選擇頻道或使用者...</div>
+            </div>
             <div style="display:flex; gap:10px;">
                 <input type="text" id="msg-input" placeholder="以優卡洛的身分發言..." onkeypress="if(event.key === 'Enter') sendMessage()">
                 <button style="width:100px" onclick="sendMessage()">發送</button>
@@ -75,7 +100,11 @@ HTML_TEMPLATE = """
 
     <script>
         const token = new URLSearchParams(window.location.search).get('token');
-        
+        let currentMode = 'server'; // 'server' or 'dm'
+        let currentTarget = '';
+        let chatLoop = null;
+        let lastMsgCount = 0;
+
         async function fetchAPI(endpoint, method='GET', body=null) {
             const opts = { method, headers: { 'Authorization': token } };
             if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
@@ -104,6 +133,21 @@ HTML_TEMPLATE = """
                 opt.value = g.id; opt.textContent = g.name;
                 sel.appendChild(opt);
             });
+            
+            // 啟動 1.5 秒即時輪詢引擎 (Real-time polling)
+            chatLoop = setInterval(pollChat, 1500);
+        }
+
+        function switchTab(mode) {
+            currentMode = mode;
+            document.getElementById('tab-server').classList.toggle('active', mode === 'server');
+            document.getElementById('tab-dm').classList.toggle('active', mode === 'dm');
+            document.getElementById('panel-server').style.display = mode === 'server' ? 'block' : 'none';
+            document.getElementById('panel-dm').style.display = mode === 'dm' ? 'block' : 'none';
+            
+            document.getElementById('chat-title').innerText = mode === 'server' ? '💬 頻道通訊介面' : '👤 私訊 (DM) 介面';
+            document.getElementById('chat-box').innerHTML = '請選擇目標...';
+            currentTarget = '';
         }
 
         async function loadChannels() {
@@ -128,27 +172,64 @@ HTML_TEMPLATE = """
             });
         }
 
-        async function loadChat() {
-            const cid = document.getElementById('text-channel-select').value;
-            if(!cid) return;
-            const box = document.getElementById('chat-box');
-            box.innerHTML = "讀取中...";
-            const msgs = await fetchAPI(`/api/chat/${cid}`);
-            box.innerHTML = "";
-            msgs.reverse().forEach(m => {
-                box.innerHTML += `<div class="msg ${m.is_bot ? 'bot' : ''}"><span>${m.time} | ${m.author}</span><br>${m.content}</div>`;
-            });
-            box.scrollTop = box.scrollHeight;
+        function switchChat() {
+            if (currentMode === 'server') {
+                currentTarget = document.getElementById('text-channel-select').value;
+            } else {
+                currentTarget = document.getElementById('dm-user-id').value.trim();
+            }
+            lastMsgCount = 0;
+            document.getElementById('chat-box').innerHTML = "讀取中...";
+            pollChat(true); // force scroll to bottom on first load
+        }
+
+        async function pollChat(forceScroll = false) {
+            if (!currentTarget) return;
+            
+            let msgs = [];
+            if (currentMode === 'server') {
+                msgs = await fetchAPI(`/api/chat/${currentTarget}`);
+            } else {
+                msgs = await fetchAPI(`/api/dm/${currentTarget}`);
+            }
+            
+            if (msgs.error) {
+                if (lastMsgCount !== -1) {
+                    document.getElementById('chat-box').innerHTML = `<div class="msg">❌ ${msgs.error}</div>`;
+                    lastMsgCount = -1;
+                }
+                return;
+            }
+
+            if (msgs.length !== lastMsgCount || forceScroll) {
+                const box = document.getElementById('chat-box');
+                const isScrolledToBottom = box.scrollHeight - box.clientHeight <= box.scrollTop + 50;
+                
+                box.innerHTML = "";
+                msgs.reverse().forEach(m => {
+                    box.innerHTML += `<div class="msg ${m.is_bot ? 'bot' : ''}"><span>${m.time} | ${m.author}</span>${m.content}</div>`;
+                });
+                lastMsgCount = msgs.length;
+                
+                if (forceScroll || isScrolledToBottom) {
+                    box.scrollTop = box.scrollHeight;
+                }
+            }
         }
 
         async function sendMessage() {
-            const cid = document.getElementById('text-channel-select').value;
             const input = document.getElementById('msg-input');
-            if(!cid || !input.value.trim()) return;
+            const txt = input.value.trim();
+            if(!currentTarget || !txt) return;
             
-            await fetchAPI('/api/send', 'POST', { channel_id: cid, content: input.value });
-            input.value = "";
-            loadChat();
+            input.value = ""; // 清空輸入框
+            
+            if (currentMode === 'server') {
+                await fetchAPI('/api/send', 'POST', { channel_id: currentTarget, content: txt });
+            } else {
+                await fetchAPI('/api/dm/send', 'POST', { user_id: currentTarget, content: txt });
+            }
+            pollChat(true); // 立刻刷新
         }
 
         async function joinVoice() {
@@ -226,12 +307,36 @@ def api_chat(channel_id):
             msgs.append({
                 "author": m.author.display_name,
                 "content": m.clean_content or "[附件/圖片]",
-                "time": m.created_at.strftime("%H:%M"),
-                "is_bot": m.author.bot
+                "time": m.created_at.strftime("%H:%M:%S"),
+                "is_bot": m.author.id == bot_instance.user.id
             })
         return msgs
 
     future = asyncio.run_coroutine_threadsafe(fetch_history(), loop_instance)
+    return jsonify(future.result())
+
+@app.route("/api/dm/<user_id>")
+@auth_required
+def api_dm(user_id):
+    async def fetch_dm():
+        try:
+            user = await bot_instance.fetch_user(int(user_id))
+            if not user.dm_channel:
+                await user.create_dm()
+            
+            msgs = []
+            async for m in user.dm_channel.history(limit=50):
+                msgs.append({
+                    "author": m.author.display_name,
+                    "content": m.clean_content or "[附件/圖片]",
+                    "time": m.created_at.strftime("%H:%M:%S"),
+                    "is_bot": m.author.id == bot_instance.user.id
+                })
+            return msgs
+        except Exception as e:
+            return {"error": f"無法載入私訊紀錄: {str(e)}"}
+
+    future = asyncio.run_coroutine_threadsafe(fetch_dm(), loop_instance)
     return jsonify(future.result())
 
 @app.route("/api/send", methods=['POST'])
@@ -241,6 +346,17 @@ def api_send():
     channel = bot_instance.get_channel(int(data['channel_id']))
     if channel:
         asyncio.run_coroutine_threadsafe(channel.send(data['content']), loop_instance)
+    return jsonify({"status": "ok"})
+
+@app.route("/api/dm/send", methods=['POST'])
+@auth_required
+def api_dm_send():
+    data = request.json
+    async def send_dm():
+        user = await bot_instance.fetch_user(int(data['user_id']))
+        if user:
+            await user.send(data['content'])
+    asyncio.run_coroutine_threadsafe(send_dm(), loop_instance)
     return jsonify({"status": "ok"})
 
 @app.route("/api/voice/join", methods=['POST'])
@@ -303,7 +419,7 @@ class WebPanelCog(commands.Cog):
                     break
                     
             if url:
-                await ctx.author.send(f"🌌 **Yokaro 總部最高許可權儀表板 (進階通訊版)**\n連結: {url}/?token={panel_token}\n\n⚠️ 此連結具備破壞性與完全控制權限，請勿外流。")
+                await ctx.author.send(f"🌌 **Yokaro 總部最高許可權儀表板 (極速通訊版)**\n連結: {url}/?token={panel_token}\n\n⚠️ 此連結具備破壞性與完全控制權限，請勿外流。")
                 await ctx.send("✅ **安全隧道已建立，密鑰已發送至您的私訊！**")
                 
                 def run_flask():
