@@ -88,10 +88,16 @@ class WebPanelCog(commands.Cog):
         
         await ctx.send("📡 **正在加密生成安全隧道連結...**")
         
+        # 確認 cloudflared 是否存在，若無則自動下載
+        if not os.path.exists("./cloudflared"):
+            await ctx.send("📡 **首次啟動隧道，洛洛正在自動下載 Cloudflared 核心套件 (Linux)...**")
+            subprocess.run(["curl", "-L", "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64", "-o", "cloudflared"])
+            subprocess.run(["chmod", "+x", "cloudflared"])
+
         # 啟動隧道
         try:
             self.tunnel_process = subprocess.Popen(
-                ["cloudflared", "tunnel", "--url", "http://localhost:5000"],
+                ["./cloudflared", "tunnel", "--url", "http://localhost:5000"],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
             )
             
