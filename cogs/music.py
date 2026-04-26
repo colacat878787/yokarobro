@@ -176,12 +176,22 @@ class MusicControlView(discord.ui.View):
         await self.cog.queue_cmd(ctx)
         await interaction.response.defer()
 
-    @discord.ui.button(label="🎬 杜比模式", style=discord.ButtonStyle.success, row=3)
+    @discord.ui.button(label="📻 續播: ON", style=discord.ButtonStyle.success, custom_id="mus_autoplay", row=3)
+    async def toggle_autoplay(self, interaction: discord.Interaction, button: discord.ui.Button):
+        state = self.cog.get_state(interaction.guild_id)
+        state['autoplay'] = not state.get('autoplay', True)
+        button.label = f"📻 續播: {'ON' if state['autoplay'] else 'OFF'}"
+        button.style = discord.ButtonStyle.success if state['autoplay'] else discord.ButtonStyle.secondary
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label="🎬 杜比: OFF", style=discord.ButtonStyle.secondary, custom_id="mus_dolby", row=3)
     async def dolby(self, interaction: discord.Interaction, button: discord.ui.Button):
         state = self.cog.get_state(interaction.guild_id)
         state['theater'] = not state['theater']
+        button.label = f"🎬 杜比: {'ON' if state['theater'] else 'OFF'}"
+        button.style = discord.ButtonStyle.success if state['theater'] else discord.ButtonStyle.secondary
         await self.cog.reload_current(interaction.guild)
-        await interaction.response.defer()
+        await interaction.response.edit_message(view=self)
 
     async def _adjust_vol(self, interaction, change):
         vc = interaction.guild.voice_client
@@ -224,7 +234,7 @@ class MusicCog(commands.Cog):
         except: pass
 
     def get_state(self, gid):
-        if gid not in self.states: self.states[gid] = {'volume': 0.5, 'pitch': 1.0, 'theater': False, 'spatial': False, 'loop': None, '247': False, 'antirickroll': True}
+        if gid not in self.states: self.states[gid] = {'volume': 0.5, 'pitch': 1.0, 'theater': False, 'spatial': False, 'loop': None, '247': False, 'antirickroll': True, 'autoplay': True}
         return self.states[gid]
 
     @tasks.loop(seconds=1)
@@ -249,7 +259,9 @@ class MusicCog(commands.Cog):
         percent = elapsed / source.duration if source.duration > 0 else 0
         bar = list("▬▬▬▬▬▬▬▬▬▬")
         bar[min(int(percent * 10), 9)] = "🔘"
-        embed.description = f"[{''.join(bar)}] `{timedelta(seconds=elapsed)} / {timedelta(seconds=source.duration)}`\n\n👤 **點歌者**：{source.requester.mention if source.requester else '未知'}"
+        
+        status_line = f"🎬 杜比: {'✅' if state['theater'] else '❌'} | 📻 續播: {'✅' if state.get('autoplay', True) else '❌'}"
+        embed.description = f"[{''.join(bar)}] `{timedelta(seconds=elapsed)} / {timedelta(seconds=source.duration)}`\n\n{status_line}\n\n👤 **點歌者**：{source.requester.mention if source.requester else '未知'}"
         embed.set_footer(text=f"Yokaro Theater | {vol_icon} {int(vol*100)}% | 🎹 {state['pitch']:.2f}x", icon_url=source.requester.display_avatar.url if source.requester else None)
         return embed
 
@@ -307,7 +319,8 @@ class MusicCog(commands.Cog):
             if state['loop'] == 'queue': self.queue[gid].append(player)
             self._play_song(ctx, player)
         else:
-            asyncio.run_coroutine_threadsafe(self.autoplay(ctx), self.bot.loop)
+            if state.get('autoplay', True):
+                asyncio.run_coroutine_threadsafe(self.autoplay(ctx), self.bot.loop)
 
     async def autoplay(self, ctx):
         state = self.get_state(ctx.guild.id)
@@ -330,9 +343,16 @@ class MusicCog(commands.Cog):
         vc = guild.voice_client
         if not vc or not vc.source: return
         state = self.get_state(guild.id)
-        player = await YTDLSource.from_url(state['current_url'], loop=self.bot.loop, stream=True, requester=vc.source.requester)
-        # 此處不發送新面板，僅替換 source
+        # 計算目前進度，實現無縫接軌
+        elapsed = int(time.time() - vc.source.start_time + state.get('elapsed', 0))
+        state['elapsed'] = elapsed # 儲存進度以供下一次偏移
+        
+        player = await YTDLSource.from_url(state['current_url'], loop=self.bot.loop, stream=True, 
+                                         volume=state['volume'], pitch=state['pitch'], 
+                                         theater=state['theater'], seek=elapsed, # 關鍵：傳入當前秒數
+                                         requester=vc.source.requester)
         vc.source = player
+        player.start_time = time.time() # 重設起始時間
 
     async def resolve_spotify(self, ctx, url):
         async with aiohttp.ClientSession() as session:
