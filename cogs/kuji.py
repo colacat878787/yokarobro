@@ -75,13 +75,12 @@ class KujiCog(commands.Cog):
         return []
 
     def _default_pool(self):
-        # 重新定義高格調獎池
-        items = (["💎 SP賞: Yokaro Premium 永久會員"] * 1 +
-                 ["💰 A賞: 50,000 卡洛幣"] * 2 +
-                 ["💰 B賞: 20,000 卡洛幣"] * 5 +
-                 ["💰 C賞: 10,000 卡洛幣"] * 10 +
-                 ["🧧 D賞: 5,000 卡洛幣"] * 20 +
-                 ["🧧 E賞: 1,000 卡洛幣"] * 42)
+        # 大總裁欽定獎池比例
+        items = (["💎 A賞: Yokaro Premium 永久會員"] * 1 +
+                 ["💰 B賞: 5,000 卡洛幣"] * 3 +
+                 ["💰 C賞: 1,000 卡洛幣"] * 10 +
+                 ["💰 D賞: 500 卡洛幣"] * 26 +
+                 ["🧧 E賞: 50 卡洛幣"] * 40)
         return items
 
     def _save(self):
