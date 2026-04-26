@@ -26,20 +26,21 @@ def load_token():
     return ""
 
 def save_token(token):
+    import json
     with open(TOKEN_FILE, 'w', encoding='utf-8') as f:
         json.dump({"token": token}, f)
 
 panel_token = load_token()
 
-HTML_TEMPLATE = \"\"\"
+HTML_TEMPLATE = """
 <!DOCTYPE html>
-<html lang=\"zh-TW\">
+<html lang="zh-TW">
 <head>
-    <meta charset=\"UTF-8\">
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Yokaro Dash | 系統控制中心</title>
-    <link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap\" rel=\"stylesheet\">
-    <link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css\">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root {
             --sidebar-bg: #202225;
@@ -157,64 +158,64 @@ HTML_TEMPLATE = \"\"\"
     </style>
 </head>
 <body>
-    <div class=\"sidebar\">
-        <div class=\"sidebar-brand\"><i class=\"fas fa-bolt\"></i> Yokaro Dash</div>
-        <div class=\"nav-item active\" id=\"nav-comm\" onclick=\"switchPage('comm')\"><i class=\"fas fa-comments\"></i> 控制中心</div>
-        <div class=\"nav-item\" id=\"nav-stats\" onclick=\"switchPage('stats')\"><i class=\"fas fa-microchip\"></i> 系統日誌</div>
-        <div class=\"nav-item\" style=\"margin-top: auto; color: var(--danger)\" onclick=\"revoke()\"><i class=\"fas fa-key\"></i> 註銷連結</div>
+    <div class="sidebar">
+        <div class="sidebar-brand"><i class="fas fa-bolt"></i> Yokaro Dash</div>
+        <div class="nav-item active" id="nav-comm" onclick="switchPage('comm')"><i class="fas fa-comments"></i> 控制中心</div>
+        <div class="nav-item" id="nav-stats" onclick="switchPage('stats')"><i class="fas fa-microchip"></i> 系統日誌</div>
+        <div class="nav-item" style="margin-top: auto; color: var(--danger)" onclick="revoke()"><i class="fas fa-key"></i> 註銷連結</div>
     </div>
 
-    <div class=\"content\">
+    <div class="content">
         <header>
-            <div id=\"page-title\" style=\"font-weight: 600\">控制中心</div>
-            <div class=\"stats-bar\" id=\"top-stats\">連線中...</div>
+            <div id="page-title" style="font-weight: 600">控制中心</div>
+            <div class="stats-bar" id="top-stats">連線中...</div>
         </header>
 
         <main>
-            <div class=\"grid\" id=\"comm-view\">
-                <div class=\"card\">
-                    <div class=\"card-label\">目標選擇</div>
-                    <div class=\"mode-tabs\">
-                        <button id=\"btn-server\" onclick=\"setMode('server')\">伺服器</button>
-                        <button id=\"btn-dm\" onclick=\"setMode('dm')\" class=\"secondary\">私訊</button>
+            <div class="grid" id="comm-view">
+                <div class="card">
+                    <div class="card-label">目標選擇</div>
+                    <div class="mode-tabs">
+                        <button id="btn-server" onclick="setMode('server')">伺服器</button>
+                        <button id="btn-dm" onclick="setMode('dm')" class="secondary">私訊</button>
                     </div>
 
-                    <div id=\"pane-server\">
-                        <label class=\"card-label\">伺服器</label>
-                        <select id=\"g-sel\" onchange=\"loadChannels()\"></select>
-                        <label class=\"card-label\">頻道</label>
-                        <select id=\"c-sel\" onchange=\"switchChat()\"></select>
+                    <div id="pane-server">
+                        <label class="card-label">伺服器</label>
+                        <select id="g-sel" onchange="loadChannels()"></select>
+                        <label class="card-label">頻道</label>
+                        <select id="c-sel" onchange="switchChat()"></select>
                     </div>
 
-                    <div id=\"pane-dm\" style=\"display:none\">
-                        <label class=\"card-label\">最近對話</label>
-                        <select id=\"d-sel\" onchange=\"switchChat(true)\"></select>
-                        <label class=\"card-label\">手動 ID</label>
-                        <input type=\"text\" id=\"d-id\" onchange=\"switchChat()\">
+                    <div id="pane-dm" style="display:none">
+                        <label class="card-label">最近對話</label>
+                        <select id="d-sel" onchange="switchChat(true)"></select>
+                        <label class="card-label">手動 ID</label>
+                        <input type="text" id="d-id" onchange="switchChat()">
                     </div>
 
-                    <div class=\"card-label\" style=\"margin-top:20px\">語音廣播</div>
-                    <select id=\"v-sel\"></select>
-                    <div style=\"display:flex; gap:8px\">
-                        <button onclick=\"joinVoice()\">進入</button>
-                        <button onclick=\"leaveVoice()\" class=\"danger\">離開</button>
+                    <div class="card-label" style="margin-top:20px">語音廣播</div>
+                    <select id="v-sel"></select>
+                    <div style="display:flex; gap:8px">
+                        <button onclick="joinVoice()">進入</button>
+                        <button onclick="leaveVoice()" class="danger">離開</button>
                     </div>
                 </div>
 
-                <div class=\"card\">
-                    <div class=\"card-label\" id=\"chat-label\">即時訊息串流</div>
-                    <div class=\"chat-box\" id=\"chat-box\">請選擇一個頻道開始通訊...</div>
-                    <div style=\"display:flex; gap:12px\">
-                        <input type=\"text\" id=\"m-in\" placeholder=\"以此身分發送訊息...\" onkeypress=\"if(event.key==='Enter') send()\">
-                        <button style=\"width:100px\" onclick=\"send()\">發送</button>
+                <div class="card">
+                    <div class="card-label" id="chat-label">即時訊息串流</div>
+                    <div class="chat-box" id="chat-box">請選擇一個頻道開始通訊...</div>
+                    <div style="display:flex; gap:12px">
+                        <input type="text" id="m-in" placeholder="以此身分發送訊息..." onkeypress="if(event.key==='Enter') send()">
+                        <button style="width:100px" onclick="send()">發送</button>
                     </div>
                 </div>
             </div>
 
-            <div id=\"stats-view\" style=\"display:none\">
-                <div class=\"card\">
-                    <div class=\"card-label\">效能即時監控</div>
-                    <div id=\"full-stats\" style=\"line-height: 2\">正在獲取數據...</div>
+            <div id="stats-view" style="display:none">
+                <div class="card">
+                    <div class="card-label">效能即時監控</div>
+                    <div id="full-stats" style="line-height: 2">正在獲取數據...</div>
                 </div>
             </div>
         </main>
@@ -233,9 +234,9 @@ HTML_TEMPLATE = \"\"\"
 
         async function updateStats() {
             const d = await api('/api/stats');
-            document.getElementById('top-stats').innerHTML = `<span>CPU: <b>\${d.cpu_temp}°C</b></span><span>RAM: <b>\${d.ram_mb}MB</b></span><span>Ping: <b>\${d.latency}ms</b></span>`;
+            document.getElementById('top-stats').innerHTML = `<span>CPU: <b>${d.cpu_temp}°C</b></span><span>RAM: <b>${d.ram_mb}MB</b></span><span>Ping: <b>${d.latency}ms</b></span>`;
             if(document.getElementById('stats-view').style.display !== 'none') {
-                document.getElementById('full-stats').innerHTML = `<p>CPU 使用率: <b>\${d.cpu_percent}%</b></p><p>CPU 溫度: <b>\${d.cpu_temp}°C</b></p><p>記憶體佔用: <b>\${d.ram_mb} MB</b></p><p>API 延遲: <b>\${d.latency} ms</b></p><p>所在伺服器: <b>\${d.guilds}</b></p>`;
+                document.getElementById('full-stats').innerHTML = `<p>CPU 使用率: <b>${d.cpu_percent}%</b></p><p>CPU 溫度: <b>${d.cpu_temp}°C</b></p><p>記憶體佔用: <b>${d.ram_mb} MB</b></p><p>API 延遲: <b>${d.latency} ms</b></p><p>所在伺服器: <b>${d.guilds}</b></p>`;
             }
         }
 
@@ -258,11 +259,11 @@ HTML_TEMPLATE = \"\"\"
 
         async function loadChannels() {
             const gid = document.getElementById('g-sel').value;
-            const d = await api(\`/api/channels/\${gid}\`);
-            const cs = document.getElementById('c-sel'); cs.innerHTML = '<option value=\"\">選擇頻道...</option>';
-            d.text.forEach(c => cs.innerHTML += \`<option value=\"\${c.id}\">#\${c.name}</option>\`);
-            const vs = document.getElementById('v-sel'); vs.innerHTML = '<option value=\"\">選擇語音...</option>';
-            d.voice.forEach(c => vs.innerHTML += \`<option value=\"\${c.id}\">\${c.name}</option>\`);
+            const d = await api(`/api/channels/${gid}`);
+            const cs = document.getElementById('c-sel'); cs.innerHTML = '<option value="">選擇頻道...</option>';
+            d.text.forEach(c => cs.innerHTML += `<option value="${c.id}">#${c.name}</option>`);
+            const vs = document.getElementById('v-sel'); vs.innerHTML = '<option value="">選擇語音...</option>';
+            d.voice.forEach(c => vs.innerHTML += `<option value="${c.id}">${c.name}</option>`);
         }
 
         function switchChat(isDMSel = false) {
@@ -278,11 +279,11 @@ HTML_TEMPLATE = \"\"\"
 
         async function poll() {
             if(!target) return;
-            const ms = await api(mode === 'server' ? \`/api/chat/\${target}\` : \`/api/dm/\${target}\`);
+            const ms = await api(mode === 'server' ? `/api/chat/${target}` : `/api/dm/${target}`);
             if(ms.length !== lastCount) {
                 const box = document.getElementById('chat-box'); box.innerHTML = '';
                 ms.reverse().forEach(m => {
-                    box.innerHTML += \`<div class=\"msg \${m.is_bot?'bot':''}\"><div class=\"msg-meta\">\${m.time}</div><span class=\"msg-author\">\${m.author}:</span>\${m.content}</div>\`;
+                    box.innerHTML += `<div class="msg ${m.is_bot?'bot':''}"><div class="msg-meta">${m.time}</div><span class="msg-author">${m.author}:</span>${m.content}</div>`;
                 });
                 box.scrollTop = box.scrollHeight; lastCount = ms.length;
             }
@@ -297,21 +298,21 @@ HTML_TEMPLATE = \"\"\"
 
         async function joinVoice() { const cid = document.getElementById('v-sel').value; if(cid) api('/api/voice/join','POST',{channel_id:cid}); }
         async function leaveVoice() { const gid = document.getElementById('g-sel').value; if(gid) api('/api/voice/leave','POST',{guild_id:gid}); }
-        function revoke() { if(confirm('確定註銷？')) window.location.href = \`/api/revoke?token=\${token}\`; }
+        function revoke() { if(confirm('確定註銷？')) window.location.href = `/api/revoke?token=${token}`; }
 
         (async () => {
             updateStats(); setInterval(updateStats, 5000); setInterval(poll, 2000);
             const gs = await api('/api/guilds');
             const gsel = document.getElementById('g-sel'); gsel.innerHTML = '<option>選擇伺服器...</option>';
-            gs.forEach(g => gsel.innerHTML += \`<option value=\"\${g.id}\">\${g.name}</option>\`);
+            gs.forEach(g => gsel.innerHTML += `<option value="${g.id}">${g.name}</option>`);
             const ds = await api('/api/dm_list');
             const dsel = document.getElementById('d-sel'); dsel.innerHTML = '<option>選擇私訊...</option>';
-            ds.forEach(d => dsel.innerHTML += \`<option value=\"\${d.id}\">\${d.name}</option>\`);
+            ds.forEach(d => dsel.innerHTML += `<option value="${d.id}">${d.name}</option>`);
         })();
     </script>
 </body>
 </html>
-\"\"\"
+"""
 
 def auth_required(f):
     def wrapper(*args, **kwargs):
@@ -575,7 +576,7 @@ class WebPanelCog(commands.Cog):
         try:
             if self.tunnel_process: self.tunnel_process.terminate()
             self.tunnel_process = subprocess.Popen(
-                [\"./cloudflared\", \"tunnel\", \"--url\", \"http://localhost:5000\"],
+                ["./cloudflared", "tunnel", "--url", f"http://localhost:{self.port}"],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
             )
             
@@ -588,15 +589,15 @@ class WebPanelCog(commands.Cog):
                     break
                     
             if self.tunnel_url:
-                full_url = f\"{self.tunnel_url}/?token={panel_token}\"
-                revoke_url = f\"{self.tunnel_url}/api/revoke?token={panel_token}\"
-                embed = discord.Embed(title=\"🌌 Yokaro 系統中樞連線資訊\", color=0xff0080)
-                embed.description = f\"您的後台連結為永久有效，除非點擊註銷。\\n\\n🔗 **[點此進入管理面板]({full_url})**\\n\\n🚨 **[危急時點此註銷所有網址]({revoke_url})**\"
+                full_url = f"{self.tunnel_url}/?token={panel_token}"
+                revoke_url = f"{self.tunnel_url}/api/revoke?token={panel_token}"
+                embed = discord.Embed(title="🌌 Yokaro 系統中樞連線資訊", color=0xff0080)
+                embed.description = f"您的後台連結為永久有效，除非點擊註銷。\n\n🔗 **[點此進入管理面板]({full_url})**\n\n🚨 **[危急時點此註銷所有網址]({revoke_url})**"
                 await ctx.author.send(embed=embed)
-                await ctx.send(\"✅ **安全隧道已建立，永久密鑰已發送至您的私訊！**\")
-            else: await ctx.send(\"❌ 無法獲取隧道網址。\")
+                await ctx.send("✅ **安全隧道已建立，永久密鑰已發送至您的私訊！**")
+            else: await ctx.send("❌ 無法獲取隧道網址。")
         except Exception as e:
-            await ctx.send(f\"❌ 隧道啟動失敗: {e}\")
+            await ctx.send(f"❌ 隧道啟動失敗: {e}")
 
 async def setup(bot):
     await bot.add_cog(WebPanelCog(bot))
