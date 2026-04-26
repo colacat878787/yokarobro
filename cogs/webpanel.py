@@ -80,7 +80,9 @@ HTML_TEMPLATE = """
             </div>
 
             <div id="panel-dm" style="display:none;">
-                <label>請輸入使用者 ID</label>
+                <label>選擇最近私訊聯絡人</label>
+                <select id="dm-select" onchange="switchChat(true)"></select>
+                <label>或手動輸入 ID</label>
                 <input type="text" id="dm-user-id" placeholder="例如: 1113353915010920452" onchange="switchChat()">
                 <button onclick="switchChat()">載入私訊紀錄</button>
             </div>
@@ -134,6 +136,15 @@ HTML_TEMPLATE = """
                 sel.appendChild(opt);
             });
             
+            const dms = await fetchAPI('/api/dm_list');
+            const dmSel = document.getElementById('dm-select');
+            dmSel.innerHTML = '<option value="">請選擇...</option>';
+            dms.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u.id; opt.textContent = u.name;
+                dmSel.appendChild(opt);
+            });
+            
             // 啟動 1.5 秒即時輪詢引擎 (Real-time polling)
             chatLoop = setInterval(pollChat, 1500);
         }
@@ -172,11 +183,16 @@ HTML_TEMPLATE = """
             });
         }
 
-        function switchChat() {
+        function switchChat(fromSelect = false) {
             if (currentMode === 'server') {
                 currentTarget = document.getElementById('text-channel-select').value;
             } else {
-                currentTarget = document.getElementById('dm-user-id').value.trim();
+                if (fromSelect) {
+                    currentTarget = document.getElementById('dm-select').value;
+                    document.getElementById('dm-user-id').value = currentTarget;
+                } else {
+                    currentTarget = document.getElementById('dm-user-id').value.trim();
+                }
             }
             lastMsgCount = 0;
             document.getElementById('chat-box').innerHTML = "讀取中...";
@@ -304,9 +320,20 @@ def api_chat(channel_id):
     async def fetch_history():
         msgs = []
         async for m in channel.history(limit=50):
+            content = m.clean_content
+            if not content and m.embeds:
+                if m.embeds[0].description:
+                    content = f"[卡片] {m.embeds[0].description}"
+                elif m.embeds[0].title:
+                    content = f"[卡片] {m.embeds[0].title}"
+                else:
+                    content = "[卡片訊息]"
+            elif not content:
+                content = "[附件/圖片]"
+                
             msgs.append({
                 "author": m.author.display_name,
-                "content": m.clean_content or "[附件/圖片]",
+                "content": content,
                 "time": m.created_at.strftime("%H:%M:%S"),
                 "is_bot": m.author.id == bot_instance.user.id
             })
@@ -314,6 +341,15 @@ def api_chat(channel_id):
 
     future = asyncio.run_coroutine_threadsafe(fetch_history(), loop_instance)
     return jsonify(future.result())
+
+@app.route("/api/dm_list")
+@auth_required
+def api_dm_list():
+    dms = []
+    for user in bot_instance.users:
+        if user.dm_channel:
+            dms.append({"id": str(user.id), "name": user.display_name})
+    return jsonify(dms[:50])
 
 @app.route("/api/dm/<user_id>")
 @auth_required
@@ -326,9 +362,20 @@ def api_dm(user_id):
             
             msgs = []
             async for m in user.dm_channel.history(limit=50):
+                content = m.clean_content
+                if not content and m.embeds:
+                    if m.embeds[0].description:
+                        content = f"[卡片] {m.embeds[0].description}"
+                    elif m.embeds[0].title:
+                        content = f"[卡片] {m.embeds[0].title}"
+                    else:
+                        content = "[卡片訊息]"
+                elif not content:
+                    content = "[附件/圖片]"
+
                 msgs.append({
                     "author": m.author.display_name,
-                    "content": m.clean_content or "[附件/圖片]",
+                    "content": content,
                     "time": m.created_at.strftime("%H:%M:%S"),
                     "is_bot": m.author.id == bot_instance.user.id
                 })

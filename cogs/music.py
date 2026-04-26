@@ -286,7 +286,13 @@ class MusicCog(commands.Cog):
         
         q = self.queue.get(guild_id, [])
         if q:
-            q_list = "\n".join([f"**{i+1}.** {s.title}" for i, s in enumerate(q[:3])])
+            q_list = ""
+            for i, s in enumerate(q[:3]):
+                if isinstance(s, dict) and s.get('type') == 'lazy':
+                    title = s['query'].replace('ytsearch1:', '').replace('audio', '').strip()
+                    q_list += f"**{i+1}.** {title[:40]} (載入中...)\n"
+                else:
+                    q_list += f"**{i+1}.** {s.title[:40]}\n"
             if len(q) > 3: q_list += f"\n*...以及其他 {len(q)-3} 首 (輸入 !queue 查看全部)*"
             embed.add_field(name="📜 播放清單", value=q_list, inline=False)
         else:
@@ -358,28 +364,35 @@ class MusicCog(commands.Cog):
                 return await ctx.send("❌ 抱歉！洛洛無法解析這個 Spotify 連結。")
 
             added_count = 0
+            if tracks:
+                query = tracks.pop(0)
+                state = self.get_state(ctx.guild.id)
+                kuji = self.bot.get_cog("KujiCog")
+                is_prem = kuji and kuji.is_premium(ctx.author.id)
+                player = await YTDLSource.from_url(query, loop=self.bot.loop, stream=True, 
+                                                 volume=state['volume'], pitch=state['pitch'], 
+                                                 theater=is_prem and state.get('theater', True), 
+                                                 exciter=is_prem and state.get('exciter', True), 
+                                                 bass=is_prem and state.get('bass', True), 
+                                                 requester=ctx.author)
+                if ctx.voice_client.is_playing():
+                    if ctx.guild.id not in self.queue: self.queue[ctx.guild.id] = []
+                    self.queue[ctx.guild.id].append(player)
+                else:
+                    self._play_song(ctx, player)
+                added_count += 1
+            
             for query in tracks:
-                try:
-                    state = self.get_state(ctx.guild.id)
-                    kuji = self.bot.get_cog("KujiCog")
-                    is_prem = kuji and kuji.is_premium(ctx.author.id)
-                    player = await YTDLSource.from_url(query, loop=self.bot.loop, stream=True, 
-                                                     volume=state['volume'], pitch=state['pitch'], 
-                                                     theater=is_prem and state.get('theater', True), 
-                                                     exciter=is_prem and state.get('exciter', True), 
-                                                     bass=is_prem and state.get('bass', True), 
-                                                     requester=ctx.author)
-                    if ctx.voice_client.is_playing():
-                        if ctx.guild.id not in self.queue: self.queue[ctx.guild.id] = []
-                        self.queue[ctx.guild.id].append(player)
-                    else:
-                        self._play_song(ctx, player)
-                    added_count += 1
-                except Exception as e:
-                    continue
+                if ctx.guild.id not in self.queue: self.queue[ctx.guild.id] = []
+                self.queue[ctx.guild.id].append({
+                    "type": "lazy",
+                    "query": query,
+                    "requester": ctx.author
+                })
+                added_count += 1
             
             if added_count > 1:
-                await ctx.send(f"✅ 成功將 **{added_count}** 首歌從 Spotify 轉換至劇院！")
+                await ctx.send(f"✅ 成功將 **{added_count}** 首歌從 Spotify 轉換至劇院！(延遲解析啟用)")
 
     @commands.command(name='play', aliases=['播放', '播', 'p'])
     async def play(self, ctx, *, search):
@@ -439,8 +452,12 @@ class MusicCog(commands.Cog):
             q_str = ""
             total_duration = 0
             for i, s in enumerate(q[:15]): 
-                q_str += f"`{i+1}.` {s.title} | {str(timedelta(seconds=s.duration))} (點歌者: {s.requester.display_name})\n"
-                total_duration += s.duration
+                if isinstance(s, dict) and s.get('type') == 'lazy':
+                    title = s['query'].replace('ytsearch1:', '').replace('audio', '').strip()
+                    q_str += f"`{i+1}.` {title[:30]} | 延遲解析 (點歌者: {s['requester'].display_name})\n"
+                else:
+                    q_str += f"`{i+1}.` {s.title[:30]} | {str(timedelta(seconds=s.duration))} (點歌者: {s.requester.display_name})\n"
+                    total_duration += s.duration
             
             if len(q) > 15: q_str += f"\n*...以及其他 {len(q)-15} 首歌*"
             embed.add_field(name=f"📜 待播清單 ({len(q)} 首)", value=q_str, inline=False)
@@ -463,8 +480,24 @@ class MusicCog(commands.Cog):
             self.history[uid].append(player.title)
             self._save_history()
 
+        try:
+            if hasattr(ctx.voice_client.channel, 'edit'):
+                asyncio.run_coroutine_threadsafe(
+                    ctx.voice_client.channel.edit(status=f"🎶 正在播放：{player.title[:30]}"), 
+                    self.bot.loop
+                )
+        except:
+            pass
+
         def after_playing(error):
             if error: print(f"播放錯誤: {error}")
+            try:
+                if hasattr(ctx.voice_client.channel, 'edit'):
+                    asyncio.run_coroutine_threadsafe(
+                        ctx.voice_client.channel.edit(status=""), 
+                        self.bot.loop
+                    )
+            except: pass
             self.play_next(ctx)
 
         ctx.voice_client.play(player, after=after_playing)
@@ -480,6 +513,26 @@ class MusicCog(commands.Cog):
         gid = ctx.guild.id
         if gid in self.queue and self.queue[gid] and ctx.voice_client:
             player = self.queue[gid].pop(0)
+            
+            if isinstance(player, dict) and player.get('type') == 'lazy':
+                async def _resolve_and_play():
+                    try:
+                        state = self.get_state(gid)
+                        kuji = self.bot.get_cog("KujiCog")
+                        is_prem = kuji and kuji.is_premium(player['requester'].id)
+                        real_player = await YTDLSource.from_url(player['query'], loop=self.bot.loop, stream=True, 
+                                                                volume=state['volume'], pitch=state['pitch'], 
+                                                                theater=is_prem and state.get('theater', True), 
+                                                                exciter=is_prem and state.get('exciter', True), 
+                                                                bass=is_prem and state.get('bass', True), 
+                                                                requester=player['requester'])
+                        self._play_song(ctx, real_player)
+                    except Exception as e:
+                        print(f"Lazy Load Error: {e}")
+                        self.play_next(ctx)
+                asyncio.run_coroutine_threadsafe(_resolve_and_play(), self.bot.loop)
+                return
+
             self._play_song(ctx, player)
         else:
             if gid in self.panels:
