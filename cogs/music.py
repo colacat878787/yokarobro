@@ -267,6 +267,36 @@ class MusicCog(commands.Cog):
                 player = await YTDLSource.from_url(search, loop=self.bot.loop, stream=True, volume=state['volume'], filters=state['filters'], requester=ctx.author)
                 self._play_song(ctx, player)
 
+    @commands.command(name='skip', aliases=['跳過', 's'])
+    async def skip(self, ctx):
+        if ctx.voice_client and ctx.voice_client.is_playing():
+            ctx.voice_client.stop()
+            await ctx.send("⏭️ **已跳過當前歌曲！**")
+        else:
+            await ctx.send("現在沒有在播歌喔！")
+
+    @commands.command(name='stop', aliases=['停止', '斷開', '下班'])
+    async def stop(self, ctx):
+        if ctx.voice_client:
+            await ctx.voice_client.disconnect()
+            self.queue[ctx.guild.id] = []
+            if ctx.guild.id in self.precache: self.precache.pop(ctx.guild.id)
+            await ctx.send("🛑 **劇院已關閉，播放清單已清空！洛洛下班啦～**")
+
+    @commands.command(name='queue', aliases=['q', '列表', '清單'])
+    async def queue_cmd(self, ctx):
+        q = self.queue.get(ctx.guild.id, [])
+        if not q:
+            return await ctx.send("📜 **播放清單是空的！** 快用 `!play` 點首歌吧！")
+        
+        desc = ""
+        for i, url in enumerate(q[:10]):
+            desc += f"**{i+1}.** `{url[:50]}...`\n"
+        if len(q) > 10: desc += f"\n*...以及其他 {len(q)-10} 首歌*"
+        
+        embed = discord.Embed(title="📜 Yokaro 劇院播放清單", description=desc, color=0x3498db)
+        await ctx.send(embed=embed)
+
     def _play_song(self, ctx, player):
         gid = ctx.guild.id
         state = self.get_state(gid)
