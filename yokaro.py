@@ -30,6 +30,8 @@ class YokaroBot(commands.Bot):
             'cogs.ai',
             'cogs.security',
             'cogs.music',
+            'cogs.webpanel',
+            'cogs.voice_ai',
             'cogs.levels',
             'cogs.info',
             'cogs.fun',

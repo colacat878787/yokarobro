@@ -253,7 +253,7 @@ class MusicCog(commands.Cog):
         embed.set_footer(text=f"Yokaro Theater | {vol_icon} {int(vol*100)}% | 🎹 {state['pitch']:.2f}x", icon_url=source.requester.display_avatar.url if source.requester else None)
         return embed
 
-    @commands.command(name='play', aliases=['p'])
+    @commands.command(name='play', aliases=['播放', '播', 'p'])
     async def play(self, ctx, *, search):
         if not ctx.voice_client:
             if not ctx.author.voice: return await ctx.send("妳要先加入頻道！")
@@ -341,13 +341,13 @@ class MusicCog(commands.Cog):
                     data = await r.json()
                     await self.play(ctx, search=f"{data['title']} {data['provider_name']}")
 
-    @commands.command(name='queue', aliases=['q'])
+    @commands.command(name='queue', aliases=['q', '列表', '清單'])
     async def queue_cmd(self, ctx):
         q = self.queue.get(ctx.guild.id, [])
         embed = discord.Embed(title="📜 播放清單", description="\n".join([f"**{i+1}.** {p.title}" for i, p in enumerate(q[:10])]) or "隊列是空的！")
         await ctx.send(embed=embed)
 
-    @commands.command(name='recap')
+    @commands.command(name='recap', aliases=['回顧', '紀錄'])
     async def recap(self, ctx, member: discord.Member = None):
         target = member or ctx.author
         if not os.path.exists(self.history_file): return await ctx.send("📊 無數據。")
