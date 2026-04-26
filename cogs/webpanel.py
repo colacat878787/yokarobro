@@ -12,9 +12,23 @@ import psutil
 ADMIN_IDS = [1113353915010920452, 501251225715474433]
 
 app = Flask(__name__)
-panel_token = ""
 bot_instance = None
 loop_instance = None
+TOKEN_FILE = "webpanel_token.json"
+
+def load_token():
+    if os.path.exists(TOKEN_FILE):
+        try:
+            with open(TOKEN_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f).get("token", "")
+        except: pass
+    return ""
+
+def save_token(token):
+    with open(TOKEN_FILE, 'w', encoding='utf-8') as f:
+        json.dump({"token": token}, f)
+
+panel_token = load_token()
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -297,6 +311,17 @@ def api_stats():
     })
 
 @app.route("/api/guilds")
+@app.route("/api/revoke")
+def api_revoke():
+    global panel_token
+    auth = request.args.get("token")
+    if auth != panel_token: return "Unauthorized", 403
+    
+    panel_token = secrets.token_urlsafe(24)
+    save_token(panel_token)
+    return "✅ 連結已註銷！舊網址已失效，請回到 Discord 使用 !webpanel 獲取新連結。"
+
+@app.route("/api/guilds")
 @auth_required
 def api_guilds():
     return jsonify([{"id": str(g.id), "name": g.name} for g in bot_instance.guilds])
@@ -442,7 +467,9 @@ class WebPanelCog(commands.Cog):
         if ctx.author.id not in ADMIN_IDS: return await ctx.send("❌ 此為大總裁專屬儀表板。")
         
         global panel_token
-        panel_token = secrets.token_urlsafe(24)
+        if not panel_token:
+            panel_token = secrets.token_urlsafe(24)
+            save_token(panel_token)
         
         if not os.path.exists("./cloudflared"):
             await ctx.send("📡 **首次啟動隧道，洛洛正在自動下載 Cloudflared 核心套件 (Linux)...**")
@@ -466,8 +493,12 @@ class WebPanelCog(commands.Cog):
                     break
                     
             if url:
-                await ctx.author.send(f"🌌 **Yokaro 總部最高許可權儀表板 (極速通訊版)**\n連結: {url}/?token={panel_token}\n\n⚠️ 此連結具備破壞性與完全控制權限，請勿外流。")
-                await ctx.send("✅ **安全隧道已建立，密鑰已發送至您的私訊！**")
+                full_url = f"{url}/?token={panel_token}"
+                revoke_url = f"{url}/api/revoke?token={panel_token}"
+                embed = discord.Embed(title="🌌 Yokaro 系統中樞連線資訊", color=0xff0080)
+                embed.description = f"您的管理連結已持久化，重啟機器人後依然有效。\n\n🔗 **[點此進入管理面板]({full_url})**\n\n🚨 **[如果您覺得網址外洩，點此立即註銷舊網址]({revoke_url})**"
+                await ctx.author.send(embed=embed)
+                await ctx.send("✅ **安全隧道已建立，永久連線資訊已發送至您的私訊！**")
                 
                 def run_flask():
                     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
