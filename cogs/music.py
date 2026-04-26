@@ -60,7 +60,11 @@ class YTDLSource(discord.PCMVolumeTransformer):
     @classmethod
     async def from_url(cls, url, *, loop=None, stream=False, volume=0.5, pitch=1.0, theater=False, spatial=False, agc=True, seek=0, requester=None):
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+        try:
+            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+        except Exception as e:
+            raise Exception(f"無法獲取影片資訊: {e}")
+            
         if 'entries' in data: data = data['entries'][0]
 
         headers = data.get('http_headers', {})
@@ -89,7 +93,7 @@ class MusicSelectView(discord.ui.View):
         self.cog, self.results, self.requester = cog, results, requester
         select = discord.ui.Select(placeholder="🎯 選一首你想聽的歌吧！")
         for i, res in enumerate(results[:5]):
-            select.add_option(label=res.get('title')[:100], value=str(i), description=f"時長: {timedelta(seconds=res.get('duration',0))}", emoji="🎵")
+            select.add_option(label=res.get('title', '未知')[:100], value=str(i), description=f"時長: {timedelta(seconds=res.get('duration',0))}", emoji="🎵")
         select.callback = self.on_select
         self.add_item(select)
 
@@ -108,7 +112,7 @@ class MusicControlView(discord.ui.View):
         super().__init__(timeout=None)
         self.cog = cog
 
-    @discord.ui.button(label="🔁", style=discord.ButtonStyle.secondary, custom_id="mus_loop")
+    @discord.ui.button(label="🔁", style=discord.ButtonStyle.secondary, custom_id="mus_loop", row=0)
     async def loop(self, interaction: discord.Interaction, button: discord.ui.Button):
         state = self.cog.get_state(interaction.guild_id)
         modes = [None, 'single', 'queue']
@@ -116,7 +120,7 @@ class MusicControlView(discord.ui.View):
         button.label = {None: "🔁", 'single': "🔂", 'queue': "🔁 [Q]"}[state['loop']]
         await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="⏸️", style=discord.ButtonStyle.primary, custom_id="mus_pause")
+    @discord.ui.button(label="⏸️", style=discord.ButtonStyle.primary, custom_id="mus_pause", row=0)
     async def pause_resume(self, interaction: discord.Interaction, button: discord.ui.Button):
         vc = interaction.guild.voice_client
         if not vc: return
@@ -124,7 +128,7 @@ class MusicControlView(discord.ui.View):
         else: vc.pause(); button.label = "▶️"
         await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="⏭️", style=discord.ButtonStyle.primary, custom_id="mus_skip")
+    @discord.ui.button(label="⏭️", style=discord.ButtonStyle.primary, custom_id="mus_skip", row=0)
     async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild.voice_client: interaction.guild.voice_client.stop()
         await interaction.response.defer()
@@ -203,17 +207,18 @@ class MusicCog(commands.Cog):
         self.history_file = "music_history.json"
         self.update_panel_task.start()
 
+    def cog_unload(self):
+        self.update_panel_task.cancel()
+
     def log_history(self, user_id, title):
         try:
             history = {}
             if os.path.exists(self.history_file):
                 with open(self.history_file, 'r', encoding='utf-8') as f:
                     history = json.load(f)
-            
             uid = str(user_id)
             if uid not in history: history[uid] = {}
             history[uid][title] = history[uid].get(title, 0) + 1
-            
             with open(self.history_file, 'w', encoding='utf-8') as f:
                 json.dump(history, f, ensure_ascii=False, indent=4)
         except: pass
@@ -225,17 +230,14 @@ class MusicCog(commands.Cog):
     @tasks.loop(seconds=1)
     async def update_panel_task(self):
         for gid, msg in list(self.panels.items()):
-            guild = self.bot.get_guild(gid)
-            if not guild or not guild.voice_client or not guild.voice_client.source: continue
             try:
+                guild = self.bot.get_guild(gid)
+                if not guild or not guild.voice_client or not guild.voice_client.source: continue
                 vc, source, state = guild.voice_client, guild.voice_client.source, self.get_state(gid)
                 elapsed = int(time.time() - source.start_time + state.get('elapsed', 0))
                 if vc.is_paused(): elapsed = int(state.get('last_elapsed', elapsed))
                 state['last_elapsed'] = elapsed
-                
-                embed = self.create_music_embed(gid, source, elapsed)
-                await msg.edit(embed=embed)
-                if elapsed % 30 == 0: await vc.channel.edit(name=f"🎵 {source.title[:20]}...")
+                await msg.edit(embed=self.create_music_embed(gid, source, elapsed))
             except: pass
 
     def create_music_embed(self, gid, source, elapsed):
@@ -244,12 +246,11 @@ class MusicCog(commands.Cog):
         vol_icon = "🔇" if vol == 0 else "🔈" if vol < 0.4 else "🔉" if vol < 0.7 else "🔊"
         embed = discord.Embed(title=f"🎶 正在播放：{source.title}", color=0xed4245)
         if source.thumbnail: embed.set_image(url=source.thumbnail)
-        
         percent = elapsed / source.duration if source.duration > 0 else 0
         bar = list("▬▬▬▬▬▬▬▬▬▬")
         bar[min(int(percent * 10), 9)] = "🔘"
-        embed.description = f"[{''.join(bar)}] `{timedelta(seconds=elapsed)} / {timedelta(seconds=source.duration)}`\n\n👤 **點歌者**：{source.requester.mention}"
-        embed.set_footer(text=f"Yokaro Theater | {vol_icon} {int(vol*100)}% | 🎹 {state['pitch']:.2f}x", icon_url=source.requester.display_avatar.url)
+        embed.description = f"[{''.join(bar)}] `{timedelta(seconds=elapsed)} / {timedelta(seconds=source.duration)}`\n\n👤 **點歌者**：{source.requester.mention if source.requester else '未知'}"
+        embed.set_footer(text=f"Yokaro Theater | {vol_icon} {int(vol*100)}% | 🎹 {state['pitch']:.2f}x", icon_url=source.requester.display_avatar.url if source.requester else None)
         return embed
 
     @commands.command(name='play', aliases=['p'])
@@ -265,30 +266,29 @@ class MusicCog(commands.Cog):
                 state = self.get_state(ctx.guild.id)
                 if not search.startswith("http"):
                     data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch5:{search}", download=False))
-                    # 搜尋結果攔截 Rickroll
                     results = [e for e in data['entries'] if not (state['antirickroll'] and is_rickroll(e.get('title')))]
-                    if not results:
-                        return await ctx.send("🚫 **大總裁！洛洛偵測到這些搜尋結果全是 Rickroll，已經幫您擋掉了！🐾🛡️**")
+                    if not results: return await ctx.send("🚫 **偵測到 Rickroll，已攔截！**")
                     return await ctx.send(f"🔍 搜尋結果：", view=MusicSelectView(self, results, ctx.author))
 
-                # 直接網址攔截 Rickroll
+                # 網址檢查
                 info = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(search, download=False))
                 if state['antirickroll'] and is_rickroll(info.get('title')):
-                    return await ctx.send("🚫 **警告：偵測到 Rickroll 攻擊！洛洛護盾已啟動，拒絕播放該影片！🐾🛡️**")
+                    return await ctx.send("🚫 **警告：偵測到 Rickroll 攻擊！**")
 
                 player = await YTDLSource.from_url(search, loop=self.bot.loop, stream=True, volume=state['volume'], pitch=state['pitch'], theater=state['theater'], requester=ctx.author)
-            if ctx.voice_client.is_playing():
-                gid = ctx.guild.id
-                if gid not in self.queue: self.queue[gid] = []
-                self.queue[gid].append(player)
-                await ctx.send(f"✅ **{player.title}** 已加入隊列！")
-            else: self._play_song(ctx, player)
+                if ctx.voice_client.is_playing():
+                    gid = ctx.guild.id
+                    if gid not in self.queue: self.queue[gid] = []
+                    self.queue[gid].append(player)
+                    await ctx.send(f"✅ **{player.title}** 已加入隊列！")
+                else: self._play_song(ctx, player)
+            except Exception as e: await ctx.send(f"❌ 錯誤: {e}")
 
     def _play_song(self, ctx, player):
         state = self.get_state(ctx.guild.id)
         state['current_url'], state['elapsed'] = player.original_url or player.url, 0
         player.start_time = time.time()
-        self.log_history(player.requester.id, player.title)
+        self.log_history(player.requester.id if player.requester else 0, player.title)
         ctx.voice_client.play(player, after=lambda e: self.play_next(ctx))
         asyncio.run_coroutine_threadsafe(self.send_panel(ctx, player), self.bot.loop)
 
@@ -300,7 +300,7 @@ class MusicCog(commands.Cog):
         gid = ctx.guild.id
         state = self.get_state(gid)
         if state['loop'] == 'single':
-            asyncio.run_coroutine_threadsafe(self.reload_current(ctx.guild), self.bot.loop)
+            asyncio.run_coroutine_threadsafe(self.reload_current_raw(ctx), self.bot.loop)
             return
         if gid in self.queue and self.queue[gid]:
             player = self.queue[gid].pop(0)
@@ -312,74 +312,67 @@ class MusicCog(commands.Cog):
     async def autoplay(self, ctx):
         state = self.get_state(ctx.guild.id)
         if not state.get('current_url'): return
-        data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(state['current_url'], download=False))
-        if 'related_videos' in data:
-            url = f"https://www.youtube.com/watch?v={data['related_videos'][0]['id']}"
-            player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True, requester=self.bot.user)
-            await ctx.send(f"📻 AI 自動續播：**{player.title}**")
-            self._play_song(ctx, player)
+        try:
+            data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(state['current_url'], download=False))
+            if 'related_videos' in data:
+                url = f"https://www.youtube.com/watch?v={data['related_videos'][0]['id']}"
+                player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True, requester=self.bot.user)
+                await ctx.send(f"📻 AI 自動續播：**{player.title}**")
+                self._play_song(ctx, player)
+        except: pass
+
+    async def reload_current_raw(self, ctx):
+        state = self.get_state(ctx.guild.id)
+        player = await YTDLSource.from_url(state['current_url'], loop=self.bot.loop, stream=True, requester=ctx.author)
+        self._play_song(ctx, player)
 
     async def reload_current(self, guild):
-        vc, state = guild.voice_client, self.get_state(guild.id)
+        vc = guild.voice_client
         if not vc or not vc.source: return
-        player = await YTDLSource.from_url(state['current_url'], loop=self.bot.loop, stream=True, volume=state['volume'], pitch=state['pitch'], requester=vc.source.requester)
-        self._play_song(await self.bot.get_context(self.panels[guild.id]), player)
+        state = self.get_state(guild.id)
+        player = await YTDLSource.from_url(state['current_url'], loop=self.bot.loop, stream=True, requester=vc.source.requester)
+        # 此處不發送新面板，僅替換 source
+        vc.source = player
 
     async def resolve_spotify(self, ctx, url):
-        # 簡單實現 Spotify 解析 (Option B)
         async with aiohttp.ClientSession() as session:
             async with session.get(f"https://open.spotify.com/oembed?url={url}") as r:
                 if r.status == 200:
                     data = await r.json()
                     await self.play(ctx, search=f"{data['title']} {data['provider_name']}")
 
+    @commands.command(name='queue', aliases=['q'])
+    async def queue_cmd(self, ctx):
+        q = self.queue.get(ctx.guild.id, [])
+        embed = discord.Embed(title="📜 播放清單", description="\n".join([f"**{i+1}.** {p.title}" for i, p in enumerate(q[:10])]) or "隊列是空的！")
+        await ctx.send(embed=embed)
+
     @commands.command(name='recap')
     async def recap(self, ctx, member: discord.Member = None):
-        """年度聽歌回顧：看看妳最愛點什麼歌！"""
         target = member or ctx.author
-        if not os.path.exists(self.history_file):
-            return await ctx.send("📊 目前還沒有數據喔，快去點歌吧！")
-            
+        if not os.path.exists(self.history_file): return await ctx.send("📊 無數據。")
         with open(self.history_file, 'r', encoding='utf-8') as f:
             history = json.load(f)
-            
         uid = str(target.id)
-        if uid not in history:
-            return await ctx.send(f"📊 {target.display_name} 還沒有點過歌喔！")
-            
+        if uid not in history: return await ctx.send(f"📊 {target.display_name} 無點歌紀錄。")
         user_data = history[uid]
         sorted_songs = sorted(user_data.items(), key=lambda x: x[1], reverse=True)
         top_songs = "\n".join([f"🎵 **{s[0]}** ({s[1]} 次)" for s in sorted_songs[:5]])
-        total_count = sum(user_data.values())
-        
-        embed = discord.Embed(title=f"📊 {target.display_name} 的音樂 DNA", color=0x9b59b6)
-        embed.set_thumbnail(url=target.display_avatar.url)
-        embed.add_field(name="🎧 累計點歌", value=f"{total_count} 首", inline=True)
-        embed.add_field(name="🏆 最愛神曲 TOP 5", value=top_songs or "無", inline=False)
-        embed.set_footer(text="Yokaro Music Analytics 2026")
+        embed = discord.Embed(title=f"📊 {target.display_name} 的音樂回顧", description=top_songs or "無", color=0x9b59b6)
         await ctx.send(embed=embed)
 
     @commands.command(name='antirickroll')
     async def toggle_antirickroll(self, ctx, mode: str = None):
-        """反 Rickroll 護盾：!antirickroll on/off"""
         state = self.get_state(ctx.guild.id)
-        if mode:
-            state['antirickroll'] = mode.lower() == "on"
-        else:
-            state['antirickroll'] = not state['antirickroll']
-        
-        status = "開啟" if state['antirickroll'] else "關閉"
-        await ctx.send(f"🛡️ **反 Rickroll 護盾已 {status}！** 洛洛會誓死守護大總裁的耳朵。")
+        state['antirickroll'] = mode.lower() == "on" if mode else not state['antirickroll']
+        await ctx.send(f"🛡️ 反 Rickroll 已 {'開啟' if state['antirickroll'] else '關閉'}！")
 
     @commands.command(name='247')
+    @commands.has_permissions(administrator=True)
     async def toggle_247(self, ctx):
-        """24/7 永不打烊模式"""
-        if not ctx.author.guild_permissions.manage_guild:
-            return await ctx.send("❌ 只有管理員可以開啟 24/7 模式。")
         state = self.get_state(ctx.guild.id)
         state['247'] = not state.get('247', False)
-        status = "開啟" if state['247'] else "關閉"
-        await ctx.send(f"🌌 **24/7 永不打烊模式已 {status}！**")
+        await ctx.send(f"🌌 24/7 模式已 {'開啟' if state['247'] else '關閉'}！")
 
 async def setup(bot):
     await bot.add_cog(MusicCog(bot))
