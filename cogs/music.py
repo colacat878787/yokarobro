@@ -131,15 +131,19 @@ class MusicControlView(discord.ui.View):
     async def vp(self, interaction, button):
         await self.toggle_filter(interaction, 'vaporwave')
 
-    @discord.ui.button(label="🎬 杜比: OFF", style=discord.ButtonStyle.secondary, row=3)
-    async def dolby(self, interaction, button):
+    @discord.ui.button(label="🎬 杜比: OFF", style=discord.ButtonStyle.secondary, custom_id="mus_dolby", row=3)
+    async def dolby(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.toggle_filter(interaction, 'theater', button)
 
-    @discord.ui.button(label="✨ 修復", style=discord.ButtonStyle.secondary, row=3)
+    @discord.ui.button(label="✨ 修復 (💎)", style=discord.ButtonStyle.secondary, row=3)
     async def exciter(self, interaction, button):
-        await self.toggle_filter(interaction, 'exciter', button)
+        await self.toggle_filter(interaction, 'exciter', button, premium=True)
 
-    async def toggle_filter(self, interaction, f, button=None):
+    async def toggle_filter(self, interaction, f, button=None, premium=False):
+        kuji = self.cog.bot.get_cog("KujiCog")
+        if premium and kuji and not kuji.is_premium(interaction.user.id):
+            return await interaction.response.send_message("💎 **此為 Premium 專屬功能！**\n洛洛偵測到您尚未擁有會員資格。快去 `!一番賞` 抽個 SP 賞來解鎖這項黑科技吧！🐾🎟️", ephemeral=True)
+
         state = self.cog.get_state(interaction.guild_id)
         if f in state['filters']:
             state['filters'].remove(f)
