@@ -54,10 +54,10 @@ class KujiView(discord.ui.View):
 class KujiCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.premium_users = self._load_premium()
         # 強制重置獎池以確保符合大總裁新規格 (A:Premium, B:5000, C:1000, D:500, E:50)
         self.pool = self._default_pool()
         self._save() 
-        self.premium_users = self._load_premium()
         self.bot.add_view(KujiView(self.bot.get_cog("EconomyCog")))
 
     def _load(self):
