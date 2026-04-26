@@ -164,7 +164,19 @@ class MusicCog(commands.Cog):
         self.bot = bot
         self.queue, self.panels, self.states = {}, {}, {}
         self.precache = {} # gid: next_player
+        self.history_file = "music_history.json"
+        self.history = self._load_history()
         self.update_task.start()
+
+    def _load_history(self):
+        if os.path.exists(self.history_file):
+            try:
+                with open(self.history_file, 'r', encoding='utf-8') as f: return json.load(f)
+            except: pass
+        return {}
+
+    def _save_history(self):
+        with open(self.history_file, 'w', encoding='utf-8') as f: json.dump(self.history, f)
 
     def get_state(self, gid):
         if gid not in self.states: self.states[gid] = {'volume': 0.5, 'pitch': 1.0, 'filters': [], 'loop': None, 'autoplay': True, 'antirickroll': True, 'elapsed': 0}
@@ -267,6 +279,26 @@ class MusicCog(commands.Cog):
                 player = await YTDLSource.from_url(search, loop=self.bot.loop, stream=True, volume=state['volume'], filters=state['filters'], requester=ctx.author)
                 self._play_song(ctx, player)
 
+    @commands.command(name='recap', aliases=['回顧', '紀錄'])
+    async def recap(self, ctx, member: discord.Member = None):
+        target = member or ctx.author
+        uid = str(target.id)
+        if uid not in self.history or not self.history[uid]:
+            return await ctx.send(f"📊 **{target.display_name}** 還沒有留下聽歌紀錄喔！")
+        
+        songs = self.history[uid]
+        counts = {}
+        for s in songs: counts[s] = counts.get(s, 0) + 1
+        top_songs = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        desc = f"🎧 **{target.display_name} 的音樂 DNA**\n\n"
+        for i, (title, count) in enumerate(top_songs):
+            desc += f"**{i+1}.** {title} (點播 {count} 次)\n"
+            
+        embed = discord.Embed(title="📊 Yokaro 年度聽歌排行", description=desc, color=0x9b59b6)
+        embed.set_footer(text=f"總點播次數: {len(songs)} 首", icon_url=target.display_avatar.url)
+        await ctx.send(embed=embed)
+
     @commands.command(name='skip', aliases=['跳過', 's'])
     async def skip(self, ctx):
         if ctx.voice_client and ctx.voice_client.is_playing():
@@ -301,6 +333,14 @@ class MusicCog(commands.Cog):
         gid = ctx.guild.id
         state = self.get_state(gid)
         state['current_url'], state['elapsed'] = player.original_url, 0
+        
+        # 紀錄歷史
+        if player.requester:
+            uid = str(player.requester.id)
+            if uid not in self.history: self.history[uid] = []
+            self.history[uid].append(player.title)
+            self._save_history()
+            
         ctx.voice_client.play(player, after=lambda e: self.play_next(ctx.guild))
         asyncio.run_coroutine_threadsafe(self.send_panel(ctx, player), self.bot.loop)
 
