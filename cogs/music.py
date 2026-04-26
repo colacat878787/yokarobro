@@ -32,6 +32,19 @@ ffmpeg_options = {
 
 ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
 
+RICKROLL_KEYWORDS = [
+    "never gonna give you up", "rickroll", "rick roll", "nevergonnagiveyouup",
+    "rickrolled", "rick rolling", "never gonna give u up"
+]
+
+def is_rickroll(title):
+    if not title: return False
+    clean_title = title.lower().replace(" ", "")
+    for kw in RICKROLL_KEYWORDS:
+        if kw.replace(" ", "") in clean_title:
+            return True
+    return False
+
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, *, data, volume=0.5, pitch=1.0, theater=False, requester=None):
         super().__init__(source, volume)
@@ -116,18 +129,71 @@ class MusicControlView(discord.ui.View):
         if interaction.guild.voice_client: interaction.guild.voice_client.stop()
         await interaction.response.defer()
 
-    @discord.ui.button(label="🔀", style=discord.ButtonStyle.secondary, custom_id="mus_shuffle")
+    @discord.ui.button(label="⏹️ 停止", style=discord.ButtonStyle.danger, custom_id="mus_stop", row=0)
+    async def stop(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.guild.voice_client:
+            await interaction.guild.voice_client.disconnect()
+            self.cog.queue[interaction.guild_id] = []
+        await interaction.response.defer()
+
+    @discord.ui.button(label="🔉", style=discord.ButtonStyle.secondary, row=1, custom_id="mus_vol_down")
+    async def vol_down(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_vol(interaction, -0.1)
+
+    @discord.ui.button(label="🔊", style=discord.ButtonStyle.secondary, row=1, custom_id="mus_vol_up")
+    async def vol_up(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_vol(interaction, 0.1)
+
+    @discord.ui.button(label="🎹-", style=discord.ButtonStyle.secondary, row=1, custom_id="mus_pitch_down")
+    async def pitch_down(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_pitch(interaction, -0.05)
+
+    @discord.ui.button(label="🎹+", style=discord.ButtonStyle.secondary, row=1, custom_id="mus_pitch_up")
+    async def pitch_up(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_pitch(interaction, 0.05)
+
+    @discord.ui.button(label="🎲 隨機", style=discord.ButtonStyle.secondary, custom_id="mus_shuffle", row=2)
     async def shuffle(self, interaction: discord.Interaction, button: discord.ui.Button):
         gid = interaction.guild_id
-        if gid in self.cog.queue: random.shuffle(self.cog.queue[gid])
-        await interaction.response.send_message("🎲 隊列已打亂！", ephemeral=True)
+        if gid in self.cog.queue and self.cog.queue[gid]:
+            random.shuffle(self.cog.queue[gid])
+            await interaction.response.send_message("🎲 隊列已打亂！", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ 隊列是空的喔！", ephemeral=True)
 
-    @discord.ui.button(label="🎬 杜比模式", style=discord.ButtonStyle.success, row=2)
+    @discord.ui.button(label="🗑️ 清空", style=discord.ButtonStyle.secondary, custom_id="mus_clear", row=2)
+    async def clear_queue(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.cog.queue[interaction.guild_id] = []
+        await interaction.response.send_message("🧹 播放清單已清空！", ephemeral=True)
+
+    @discord.ui.button(label="📜 列表", style=discord.ButtonStyle.secondary, custom_id="mus_queue_view", row=2)
+    async def view_queue(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ctx = await self.cog.bot.get_context(interaction.message)
+        await self.cog.queue_cmd(ctx)
+        await interaction.response.defer()
+
+    @discord.ui.button(label="🎬 杜比模式", style=discord.ButtonStyle.success, row=3)
     async def dolby(self, interaction: discord.Interaction, button: discord.ui.Button):
         state = self.cog.get_state(interaction.guild_id)
         state['theater'] = not state['theater']
         await self.cog.reload_current(interaction.guild)
         await interaction.response.defer()
+
+    async def _adjust_vol(self, interaction, change):
+        vc = interaction.guild.voice_client
+        state = self.cog.get_state(interaction.guild_id)
+        state['volume'] = max(0.0, min(1.0, state['volume'] + change))
+        if vc and vc.source: vc.source.volume = state['volume']
+        await interaction.response.defer()
+
+    async def _adjust_pitch(self, interaction, change):
+        state = self.cog.get_state(interaction.guild_id)
+        state['pitch'] = max(0.5, min(2.0, state['pitch'] + change))
+        await self.cog.reload_current(interaction.guild)
+        await interaction.response.defer()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return True
 
 class MusicCog(commands.Cog):
     def __init__(self, bot):
@@ -153,7 +219,7 @@ class MusicCog(commands.Cog):
         except: pass
 
     def get_state(self, gid):
-        if gid not in self.states: self.states[gid] = {'volume': 0.5, 'pitch': 1.0, 'theater': False, 'spatial': False, 'loop': None, '247': False}
+        if gid not in self.states: self.states[gid] = {'volume': 0.5, 'pitch': 1.0, 'theater': False, 'spatial': False, 'loop': None, '247': False, 'antirickroll': True}
         return self.states[gid]
 
     @tasks.loop(seconds=1)
@@ -195,12 +261,22 @@ class MusicCog(commands.Cog):
         if "open.spotify.com" in search: return await self.resolve_spotify(ctx, search)
         
         async with ctx.typing():
-            state = self.get_state(ctx.guild.id)
-            if not search.startswith("http"):
-                data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch5:{search}", download=False))
-                return await ctx.send(f"🔍 搜尋結果：", view=MusicSelectView(self, data['entries'], ctx.author))
+            try:
+                state = self.get_state(ctx.guild.id)
+                if not search.startswith("http"):
+                    data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch5:{search}", download=False))
+                    # 搜尋結果攔截 Rickroll
+                    results = [e for e in data['entries'] if not (state['antirickroll'] and is_rickroll(e.get('title')))]
+                    if not results:
+                        return await ctx.send("🚫 **大總裁！洛洛偵測到這些搜尋結果全是 Rickroll，已經幫您擋掉了！🐾🛡️**")
+                    return await ctx.send(f"🔍 搜尋結果：", view=MusicSelectView(self, results, ctx.author))
 
-            player = await YTDLSource.from_url(search, loop=self.bot.loop, stream=True, volume=state['volume'], pitch=state['pitch'], theater=state['theater'], requester=ctx.author)
+                # 直接網址攔截 Rickroll
+                info = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(search, download=False))
+                if state['antirickroll'] and is_rickroll(info.get('title')):
+                    return await ctx.send("🚫 **警告：偵測到 Rickroll 攻擊！洛洛護盾已啟動，拒絕播放該影片！🐾🛡️**")
+
+                player = await YTDLSource.from_url(search, loop=self.bot.loop, stream=True, volume=state['volume'], pitch=state['pitch'], theater=state['theater'], requester=ctx.author)
             if ctx.voice_client.is_playing():
                 gid = ctx.guild.id
                 if gid not in self.queue: self.queue[gid] = []
@@ -282,6 +358,18 @@ class MusicCog(commands.Cog):
         embed.add_field(name="🏆 最愛神曲 TOP 5", value=top_songs or "無", inline=False)
         embed.set_footer(text="Yokaro Music Analytics 2026")
         await ctx.send(embed=embed)
+
+    @commands.command(name='antirickroll')
+    async def toggle_antirickroll(self, ctx, mode: str = None):
+        """反 Rickroll 護盾：!antirickroll on/off"""
+        state = self.get_state(ctx.guild.id)
+        if mode:
+            state['antirickroll'] = mode.lower() == "on"
+        else:
+            state['antirickroll'] = not state['antirickroll']
+        
+        status = "開啟" if state['antirickroll'] else "關閉"
+        await ctx.send(f"🛡️ **反 Rickroll 護盾已 {status}！** 洛洛會誓死守護大總裁的耳朵。")
 
     @commands.command(name='247')
     async def toggle_247(self, ctx):
