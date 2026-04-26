@@ -213,7 +213,18 @@ class MusicCog(commands.Cog):
     def _load_history(self):
         if os.path.exists(self.history_file):
             try:
-                with open(self.history_file, 'r', encoding='utf-8') as f: return json.load(f)
+                with open(self.history_file, 'r', encoding='utf-8') as f: 
+                    data = json.load(f)
+                    for k, v in list(data.items()):
+                        if isinstance(v, dict):
+                            new_list = []
+                            for song, count in v.items():
+                                if isinstance(count, int): new_list.extend([song] * count)
+                                else: new_list.append(song)
+                            data[k] = new_list
+                        elif not isinstance(v, list):
+                            data[k] = []
+                    return data
             except: pass
         return {}
 
