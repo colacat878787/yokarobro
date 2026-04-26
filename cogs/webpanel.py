@@ -6,6 +6,7 @@ import os
 import secrets
 import threading
 import re
+import json
 from flask import Flask, render_template_string, request, jsonify
 import psutil
 
@@ -30,257 +31,287 @@ def save_token(token):
 
 panel_token = load_token()
 
-HTML_TEMPLATE = """
+HTML_TEMPLATE = \"\"\"
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang=\"zh-TW\">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yokaro Pro Admin Panel</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <meta charset=\"UTF-8\">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+    <title>Yokaro Dash | 系統控制中心</title>
+    <link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap\" rel=\"stylesheet\">
+    <link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css\">
     <style>
-        :root { --bg: #0f0c29; --glass: rgba(255, 255, 255, 0.05); --border: rgba(255, 255, 255, 0.1); --primary: #ff0080; --secondary: #7928ca; --text: #fff; }
-        body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
-        .glass-panel { background: var(--glass); backdrop-filter: blur(12px); border: 1px solid var(--border); border-radius: 20px; padding: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); margin-bottom: 20px; }
-        h1, h2 { color: var(--primary); text-shadow: 0 0 10px rgba(255,0,128,0.5); margin-top: 0; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-        .stat-card { background: rgba(0,0,0,0.4); padding: 15px; border-radius: 12px; text-align: center; }
-        .stat-value { font-size: 24px; color: #00d2ff; font-weight: 600; display: block; margin-top: 5px; }
-        .dashboard-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; margin-top: 20px; }
-        select, input, button { background: rgba(0,0,0,0.5); border: 1px solid var(--border); color: white; padding: 10px; border-radius: 8px; width: 100%; font-family: 'Outfit', sans-serif; margin-bottom: 10px; box-sizing: border-box; }
-        button { background: linear-gradient(45deg, var(--primary), var(--secondary)); cursor: pointer; font-weight: 600; border: none; transition: 0.3s; }
-        button:hover { filter: brightness(1.2); box-shadow: 0 0 15px var(--primary); }
-        .chat-container { display: flex; flex-direction: column; height: 500px; background: rgba(0,0,0,0.6); border-radius: 10px; padding: 15px; margin-bottom: 10px; }
-        .chat-box { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 5px; }
-        .msg { background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; font-size: 14px; width: fit-content; max-width: 80%; }
-        .msg.bot { background: rgba(255,0,128,0.2); border-left: 3px solid var(--primary); align-self: flex-end; }
-        .msg span { font-size: 11px; color: #bbb; display: block; margin-bottom: 4px; }
+        :root {
+            --sidebar-bg: #202225;
+            --main-bg: #36393f;
+            --header-bg: #2f3136;
+            --card-bg: #2f3136;
+            --accent: #5865f2;
+            --text-primary: #ffffff;
+            --text-secondary: #b9bbbe;
+            --danger: #ed4245;
+            --input-bg: #202225;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--main-bg);
+            color: var(--text-primary);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .sidebar {
+            width: 260px;
+            background-color: var(--sidebar-bg);
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+            border-right: 1px solid rgba(0,0,0,0.2);
+        }
+        .sidebar-brand {
+            padding: 0 24px 24px;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .nav-item {
+            padding: 12px 24px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: 0.2s;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .nav-item:hover, .nav-item.active {
+            background-color: rgba(255,255,255,0.05);
+            color: var(--text-primary);
+        }
+        .nav-item.active { border-left: 4px solid var(--accent); padding-left: 20px; background-color: rgba(88,101,242,0.1); }
         
-        .tabs { display: flex; gap: 10px; margin-bottom: 15px; }
-        .tab-btn { flex: 1; background: rgba(255,255,255,0.1); border: none; padding: 10px; border-radius: 8px; cursor: pointer; color: white; font-weight: 600; }
-        .tab-btn.active { background: var(--primary); box-shadow: 0 0 10px var(--primary); }
+        .content { flex: 1; display: flex; flex-direction: column; }
+        header {
+            height: 56px;
+            background-color: var(--header-bg);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            justify-content: space-between;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.2);
+        }
+        .stats-bar { display: flex; gap: 24px; font-size: 13px; color: var(--text-secondary); }
+        .stats-bar b { color: var(--text-primary); font-weight: 600; }
+
+        main { flex: 1; padding: 24px; overflow-y: auto; }
+        .grid { display: grid; grid-template-columns: 320px 1fr; gap: 24px; height: 100%; }
+        .card { background-color: var(--card-bg); border-radius: 8px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px;}
+        .card-label { font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 12px; letter-spacing: 0.5px; }
         
+        select, input, button {
+            width: 100%;
+            background-color: var(--input-bg);
+            border: 1px solid rgba(0,0,0,0.3);
+            color: #dcddde;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            outline: none;
+            font-family: inherit;
+            font-size: 14px;
+        }
+        button { background-color: var(--accent); color: white; border: none; cursor: pointer; font-weight: 600; transition: 0.2s; }
+        button:hover { background-color: #4752c4; }
+        button.secondary { background-color: #4f545c; }
+        button.danger { background-color: var(--danger); }
+
+        .chat-box {
+            flex: 1;
+            background-color: rgba(0,0,0,0.1);
+            border-radius: 4px;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 16px;
+            min-height: 400px;
+        }
+        .msg { font-size: 14px; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px; }
+        .msg-meta { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
+        .msg-author { font-weight: 600; color: #fff; margin-right: 6px; }
+        .msg.bot .msg-author { color: var(--accent); }
+
+        .mode-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+        .mode-tabs button { margin-bottom: 0; padding: 8px; }
+
         ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 10px; }
-        ::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #202225; border-radius: 4px; }
     </style>
 </head>
 <body>
-    <div class="glass-panel">
-        <h1>🌌 Yokaro 系統中樞</h1>
-        <div class="stats-grid" id="stats">讀取中...</div>
+    <div class=\"sidebar\">
+        <div class=\"sidebar-brand\"><i class=\"fas fa-bolt\"></i> Yokaro Dash</div>
+        <div class=\"nav-item active\" id=\"nav-comm\" onclick=\"switchPage('comm')\"><i class=\"fas fa-comments\"></i> 控制中心</div>
+        <div class=\"nav-item\" id=\"nav-stats\" onclick=\"switchPage('stats')\"><i class=\"fas fa-microchip\"></i> 系統日誌</div>
+        <div class=\"nav-item\" style=\"margin-top: auto; color: var(--danger)\" onclick=\"revoke()\"><i class=\"fas fa-key\"></i> 註銷連結</div>
     </div>
 
-    <div class="dashboard-grid">
-        <div class="glass-panel">
-            <div class="tabs">
-                <button class="tab-btn active" id="tab-server" onclick="switchTab('server')">🌍 伺服器通訊</button>
-                <button class="tab-btn" id="tab-dm" onclick="switchTab('dm')">👤 私訊 (DM)</button>
-            </div>
-            
-            <div id="panel-server">
-                <label>選擇伺服器</label>
-                <select id="guild-select" onchange="loadChannels()"><option value="">請選擇...</option></select>
-                
-                <label>文字頻道 (通訊用)</label>
-                <select id="text-channel-select" onchange="switchChat()"></select>
+    <div class=\"content\">
+        <header>
+            <div id=\"page-title\" style=\"font-weight: 600\">控制中心</div>
+            <div class=\"stats-bar\" id=\"top-stats\">連線中...</div>
+        </header>
 
-                <label>語音頻道 (播音用)</label>
-                <select id="voice-channel-select"></select>
-                <div style="display:flex; gap:10px;">
-                    <button onclick="joinVoice()">🎤 進入</button>
-                    <button onclick="leaveVoice()" style="background: #e74c3c">🛑 離開</button>
+        <main>
+            <div class=\"grid\" id=\"comm-view\">
+                <div class=\"card\">
+                    <div class=\"card-label\">目標選擇</div>
+                    <div class=\"mode-tabs\">
+                        <button id=\"btn-server\" onclick=\"setMode('server')\">伺服器</button>
+                        <button id=\"btn-dm\" onclick=\"setMode('dm')\" class=\"secondary\">私訊</button>
+                    </div>
+
+                    <div id=\"pane-server\">
+                        <label class=\"card-label\">伺服器</label>
+                        <select id=\"g-sel\" onchange=\"loadChannels()\"></select>
+                        <label class=\"card-label\">頻道</label>
+                        <select id=\"c-sel\" onchange=\"switchChat()\"></select>
+                    </div>
+
+                    <div id=\"pane-dm\" style=\"display:none\">
+                        <label class=\"card-label\">最近對話</label>
+                        <select id=\"d-sel\" onchange=\"switchChat(true)\"></select>
+                        <label class=\"card-label\">手動 ID</label>
+                        <input type=\"text\" id=\"d-id\" onchange=\"switchChat()\">
+                    </div>
+
+                    <div class=\"card-label\" style=\"margin-top:20px\">語音廣播</div>
+                    <select id=\"v-sel\"></select>
+                    <div style=\"display:flex; gap:8px\">
+                        <button onclick=\"joinVoice()\">進入</button>
+                        <button onclick=\"leaveVoice()\" class=\"danger\">離開</button>
+                    </div>
+                </div>
+
+                <div class=\"card\">
+                    <div class=\"card-label\" id=\"chat-label\">即時訊息串流</div>
+                    <div class=\"chat-box\" id=\"chat-box\">請選擇一個頻道開始通訊...</div>
+                    <div style=\"display:flex; gap:12px\">
+                        <input type=\"text\" id=\"m-in\" placeholder=\"以此身分發送訊息...\" onkeypress=\"if(event.key==='Enter') send()\">
+                        <button style=\"width:100px\" onclick=\"send()\">發送</button>
+                    </div>
                 </div>
             </div>
 
-            <div id="panel-dm" style="display:none;">
-                <label>選擇最近私訊聯絡人</label>
-                <select id="dm-select" onchange="switchChat(true)"></select>
-                <label>或手動輸入 ID</label>
-                <input type="text" id="dm-user-id" placeholder="例如: 1113353915010920452" onchange="switchChat()">
-                <button onclick="switchChat()">載入私訊紀錄</button>
+            <div id=\"stats-view\" style=\"display:none\">
+                <div class=\"card\">
+                    <div class=\"card-label\">效能即時監控</div>
+                    <div id=\"full-stats\" style=\"line-height: 2\">正在獲取數據...</div>
+                </div>
             </div>
-        </div>
-
-        <div class="glass-panel">
-            <h2 id="chat-title">💬 遠端通訊介面</h2>
-            <div class="chat-container">
-                <div class="chat-box" id="chat-box">請在左側選擇頻道或使用者...</div>
-            </div>
-            <div style="display:flex; gap:10px;">
-                <input type="text" id="msg-input" placeholder="以優卡洛的身分發言..." onkeypress="if(event.key === 'Enter') sendMessage()">
-                <button style="width:100px" onclick="sendMessage()">發送</button>
-            </div>
-        </div>
+        </main>
     </div>
 
     <script>
         const token = new URLSearchParams(window.location.search).get('token');
-        let currentMode = 'server'; // 'server' or 'dm'
-        let currentTarget = '';
-        let chatLoop = null;
-        let lastMsgCount = 0;
+        let mode = 'server', target = '', lastCount = 0;
 
-        async function fetchAPI(endpoint, method='GET', body=null) {
-            const opts = { method, headers: { 'Authorization': token } };
-            if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
-            const res = await fetch(endpoint, opts);
-            return res.json();
+        async function api(path, method='GET', body=null) {
+            const h = { 'Authorization': token };
+            if(body) h['Content-Type']='application/json';
+            const r = await fetch(path, { method, headers: h, body: body?JSON.stringify(body):null });
+            return r.json();
         }
 
         async function updateStats() {
-            const data = await fetchAPI('/api/stats');
-            document.getElementById('stats').innerHTML = `
-                <div class="stat-card">CPU 溫度/使用率<span class="stat-value">${data.cpu_temp}°C / ${data.cpu_percent}%</span></div>
-                <div class="stat-card">記憶體用量<span class="stat-value">${data.ram_mb} MB</span></div>
-                <div class="stat-card">系統延遲<span class="stat-value">${data.latency} ms</span></div>
-                <div class="stat-card">活躍伺服器<span class="stat-value">${data.guilds}</span></div>
-            `;
+            const d = await api('/api/stats');
+            document.getElementById('top-stats').innerHTML = `<span>CPU: <b>\${d.cpu_temp}°C</b></span><span>RAM: <b>\${d.ram_mb}MB</b></span><span>Ping: <b>\${d.latency}ms</b></span>`;
+            if(document.getElementById('stats-view').style.display !== 'none') {
+                document.getElementById('full-stats').innerHTML = `<p>CPU 使用率: <b>\${d.cpu_percent}%</b></p><p>CPU 溫度: <b>\${d.cpu_temp}°C</b></p><p>記憶體佔用: <b>\${d.ram_mb} MB</b></p><p>API 延遲: <b>\${d.latency} ms</b></p><p>所在伺服器: <b>\${d.guilds}</b></p>`;
+            }
         }
 
-        async function init() {
-            updateStats();
-            setInterval(updateStats, 5000);
-            
-            const guilds = await fetchAPI('/api/guilds');
-            const sel = document.getElementById('guild-select');
-            guilds.forEach(g => {
-                const opt = document.createElement('option');
-                opt.value = g.id; opt.textContent = g.name;
-                sel.appendChild(opt);
-            });
-            
-            const dms = await fetchAPI('/api/dm_list');
-            const dmSel = document.getElementById('dm-select');
-            dmSel.innerHTML = '<option value="">請選擇...</option>';
-            dms.forEach(u => {
-                const opt = document.createElement('option');
-                opt.value = u.id; opt.textContent = u.name;
-                dmSel.appendChild(opt);
-            });
-            
-            // 啟動 1.5 秒即時輪詢引擎 (Real-time polling)
-            chatLoop = setInterval(pollChat, 1500);
+        function switchPage(p) {
+            document.getElementById('nav-comm').classList.toggle('active', p==='comm');
+            document.getElementById('nav-stats').classList.toggle('active', p==='stats');
+            document.getElementById('comm-view').style.display = p==='comm' ? 'grid' : 'none';
+            document.getElementById('stats-view').style.display = p==='stats' ? 'block' : 'none';
+            document.getElementById('page-title').innerText = p==='comm' ? '控制中心' : '系統日誌';
         }
 
-        function switchTab(mode) {
-            currentMode = mode;
-            document.getElementById('tab-server').classList.toggle('active', mode === 'server');
-            document.getElementById('tab-dm').classList.toggle('active', mode === 'dm');
-            document.getElementById('panel-server').style.display = mode === 'server' ? 'block' : 'none';
-            document.getElementById('panel-dm').style.display = mode === 'dm' ? 'block' : 'none';
-            
-            document.getElementById('chat-title').innerText = mode === 'server' ? '💬 頻道通訊介面' : '👤 私訊 (DM) 介面';
-            document.getElementById('chat-box').innerHTML = '請選擇目標...';
-            currentTarget = '';
+        function setMode(m) {
+            mode = m;
+            document.getElementById('pane-server').style.display = m==='server' ? 'block' : 'none';
+            document.getElementById('pane-dm').style.display = m==='dm' ? 'block' : 'none';
+            document.getElementById('btn-server').className = m==='server' ? '' : 'secondary';
+            document.getElementById('btn-dm').className = m==='dm' ? '' : 'secondary';
+            target = '';
         }
 
         async function loadChannels() {
-            const gid = document.getElementById('guild-select').value;
-            if(!gid) return;
-            const data = await fetchAPI(`/api/channels/${gid}`);
-            
-            const txt = document.getElementById('text-channel-select');
-            txt.innerHTML = '<option value="">請選擇...</option>';
-            data.text.forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c.id; opt.textContent = `#${c.name}`;
-                txt.appendChild(opt);
-            });
-
-            const voc = document.getElementById('voice-channel-select');
-            voc.innerHTML = '<option value="">請選擇...</option>';
-            data.voice.forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c.id; opt.textContent = `🔊 ${c.name}`;
-                voc.appendChild(opt);
-            });
+            const gid = document.getElementById('g-sel').value;
+            const d = await api(\`/api/channels/\${gid}\`);
+            const cs = document.getElementById('c-sel'); cs.innerHTML = '<option value=\"\">選擇頻道...</option>';
+            d.text.forEach(c => cs.innerHTML += \`<option value=\"\${c.id}\">#\${c.name}</option>\`);
+            const vs = document.getElementById('v-sel'); vs.innerHTML = '<option value=\"\">選擇語音...</option>';
+            d.voice.forEach(c => vs.innerHTML += \`<option value=\"\${c.id}\">\${c.name}</option>\`);
         }
 
-        function switchChat(fromSelect = false) {
-            if (currentMode === 'server') {
-                currentTarget = document.getElementById('text-channel-select').value;
-            } else {
-                if (fromSelect) {
-                    currentTarget = document.getElementById('dm-select').value;
-                    document.getElementById('dm-user-id').value = currentTarget;
-                } else {
-                    currentTarget = document.getElementById('dm-user-id').value.trim();
-                }
+        function switchChat(isDMSel = false) {
+            if(mode==='server') target = document.getElementById('c-sel').value;
+            else {
+                if(isDMSel) { target = document.getElementById('d-sel').value; document.getElementById('d-id').value = target; }
+                else target = document.getElementById('d-id').value;
             }
-            lastMsgCount = 0;
-            document.getElementById('chat-box').innerHTML = "讀取中...";
-            pollChat(true); // force scroll to bottom on first load
+            lastCount = 0;
+            document.getElementById('chat-box').innerHTML = '載入訊息串...';
+            poll();
         }
 
-        async function pollChat(forceScroll = false) {
-            if (!currentTarget) return;
-            
-            let msgs = [];
-            if (currentMode === 'server') {
-                msgs = await fetchAPI(`/api/chat/${currentTarget}`);
-            } else {
-                msgs = await fetchAPI(`/api/dm/${currentTarget}`);
-            }
-            
-            if (msgs.error) {
-                if (lastMsgCount !== -1) {
-                    document.getElementById('chat-box').innerHTML = `<div class="msg">❌ ${msgs.error}</div>`;
-                    lastMsgCount = -1;
-                }
-                return;
-            }
-
-            if (msgs.length !== lastMsgCount || forceScroll) {
-                const box = document.getElementById('chat-box');
-                const isScrolledToBottom = box.scrollHeight - box.clientHeight <= box.scrollTop + 50;
-                
-                box.innerHTML = "";
-                msgs.reverse().forEach(m => {
-                    box.innerHTML += `<div class="msg ${m.is_bot ? 'bot' : ''}"><span>${m.time} | ${m.author}</span>${m.content}</div>`;
+        async function poll() {
+            if(!target) return;
+            const ms = await api(mode === 'server' ? \`/api/chat/\${target}\` : \`/api/dm/\${target}\`);
+            if(ms.length !== lastCount) {
+                const box = document.getElementById('chat-box'); box.innerHTML = '';
+                ms.reverse().forEach(m => {
+                    box.innerHTML += \`<div class=\"msg \${m.is_bot?'bot':''}\"><div class=\"msg-meta\">\${m.time}</div><span class=\"msg-author\">\${m.author}:</span>\${m.content}</div>\`;
                 });
-                lastMsgCount = msgs.length;
-                
-                if (forceScroll || isScrolledToBottom) {
-                    box.scrollTop = box.scrollHeight;
-                }
+                box.scrollTop = box.scrollHeight; lastCount = ms.length;
             }
         }
 
-        async function sendMessage() {
-            const input = document.getElementById('msg-input');
-            const txt = input.value.trim();
-            if(!currentTarget || !txt) return;
-            
-            input.value = ""; // 清空輸入框
-            
-            if (currentMode === 'server') {
-                await fetchAPI('/api/send', 'POST', { channel_id: currentTarget, content: txt });
-            } else {
-                await fetchAPI('/api/dm/send', 'POST', { user_id: currentTarget, content: txt });
-            }
-            pollChat(true); // 立刻刷新
+        async function send() {
+            const i = document.getElementById('m-in'), t = i.value;
+            if(!t || !target) return; i.value = '';
+            await api(mode==='server'?'/api/send':'/api/dm/send', 'POST', mode==='server'?{channel_id:target,content:t}:{user_id:target,content:t});
+            setTimeout(poll, 500);
         }
 
-        async function joinVoice() {
-            const cid = document.getElementById('voice-channel-select').value;
-            if(!cid) return;
-            await fetchAPI('/api/voice/join', 'POST', { channel_id: cid });
-            alert("已加入語音頻道");
-        }
+        async function joinVoice() { const cid = document.getElementById('v-sel').value; if(cid) api('/api/voice/join','POST',{channel_id:cid}); }
+        async function leaveVoice() { const gid = document.getElementById('g-sel').value; if(gid) api('/api/voice/leave','POST',{guild_id:gid}); }
+        function revoke() { if(confirm('確定註銷？')) window.location.href = \`/api/revoke?token=\${token}\`; }
 
-        async function leaveVoice() {
-            const gid = document.getElementById('guild-select').value;
-            if(!gid) return;
-            await fetchAPI('/api/voice/leave', 'POST', { guild_id: gid });
-            alert("已退出語音頻道");
-        }
-
-        init();
+        (async () => {
+            updateStats(); setInterval(updateStats, 5000); setInterval(poll, 2000);
+            const gs = await api('/api/guilds');
+            const gsel = document.getElementById('g-sel'); gsel.innerHTML = '<option>選擇伺服器...</option>';
+            gs.forEach(g => gsel.innerHTML += \`<option value=\"\${g.id}\">\${g.name}</option>\`);
+            const ds = await api('/api/dm_list');
+            const dsel = document.getElementById('d-sel'); dsel.innerHTML = '<option>選擇私訊...</option>';
+            ds.forEach(d => dsel.innerHTML += \`<option value=\"\${d.id}\">\${d.name}</option>\`);
+        })();
     </script>
 </body>
 </html>
-"""
+\"\"\"
 
 def auth_required(f):
     def wrapper(*args, **kwargs):
@@ -310,16 +341,39 @@ def api_stats():
         "guilds": len(bot_instance.guilds)
     })
 
-@app.route("/api/guilds")
 @app.route("/api/revoke")
 def api_revoke():
+    import json
     global panel_token
     auth = request.args.get("token")
     if auth != panel_token: return "Unauthorized", 403
     
-    panel_token = secrets.token_urlsafe(24)
-    save_token(panel_token)
-    return "✅ 連結已註銷！舊網址已失效，請回到 Discord 使用 !webpanel 獲取新連結。"
+    # 建立新 Token 並存檔 (讓舊的徹底失效)
+    new_token = secrets.token_urlsafe(24)
+    panel_token = new_token
+    save_token(new_token)
+    
+    # 建立一個異步任務來關閉隧道並重啟機器人
+    def shutdown():
+        import time, os
+        time.sleep(2) # 讓網頁有時間傳回響應
+        cog = bot_instance.get_cog('WebPanelCog')
+        if cog and cog.tunnel_process:
+            cog.tunnel_process.terminate()
+        os._exit(0) # 強制結束進程，觸發 Pterodactyl 自動重啟
+
+    threading.Thread(target=shutdown).start()
+
+    return """
+    <body style="background:#202225; color:white; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; text-align:center;">
+        <div>
+            <h1 style="color:#ed4245; font-size:48px;">🔒 系統已註銷</h1>
+            <p style="font-size:20px;">安全隧道已關閉，端口已釋放。</p>
+            <p style="color:#b9bbbe;">機器人正在執行安全重啟... 請稍後在 Discord 重新獲取連結。</p>
+            <script>setTimeout(() => { window.close(); }, 5000);</script>
+        </div>
+    </body>
+    """
 
 @app.route("/api/guilds")
 @auth_required
@@ -448,6 +502,7 @@ def api_join():
 @app.route("/api/voice/leave", methods=['POST'])
 @auth_required
 def api_leave():
+    import json
     data = request.json
     guild = bot_instance.get_guild(int(data['guild_id']))
     if guild and guild.voice_client:
@@ -461,52 +516,87 @@ class WebPanelCog(commands.Cog):
         bot_instance = bot
         loop_instance = bot.loop
         self.tunnel_process = None
+        self.tunnel_url = ""
+        
+        # 啟動 Flask (使用動態隨機端口避免衝突)
+        import random
+        self.port = random.randint(6000, 9000)
+        
+        def run_flask():
+            # 嘗試清理可能殘留的舊端口 (雖然隨機了，但還是保險一下)
+            try: subprocess.run(["fuser", "-k", f"{self.port}/tcp"], capture_output=True)
+            except: pass
+            
+            try:
+                print(f"📡 Flask 正在嘗試啟動於端口: {self.port}")
+                app.run(host="0.0.0.0", port=self.port, debug=False, use_reloader=False)
+            except Exception as e:
+                print(f"⚠️ Flask 啟動失敗: {e}")
+
+        threading.Thread(target=run_flask, daemon=True).start()
 
     @commands.command(name='webpanel')
     async def open_panel(self, ctx):
         if ctx.author.id not in ADMIN_IDS: return await ctx.send("❌ 此為大總裁專屬儀表板。")
         
         global panel_token
-        if not panel_token:
+        if not panel_token or panel_token == "":
             panel_token = secrets.token_urlsafe(24)
             save_token(panel_token)
         
+        # 強制重置隧道
+        if self.tunnel_url:
+            if self.tunnel_process and self.tunnel_process.poll() is not None:
+                self.tunnel_url = ""
+        
+        await ctx.send(f"📡 正在建立安全隧道 (Port: {self.port})...")
+        
+        if self.tunnel_url:
+            full_url = f"{self.tunnel_url}/?token={panel_token}"
+            revoke_url = f"{self.tunnel_url}/api/revoke?token={panel_token}"
+            embed = discord.Embed(title="🌌 Yokaro 系統中樞連線資訊", color=0xff0080)
+            embed.description = f"您的後台連結為永久有效，除非點擊註銷。\n\n🔗 **[點此進入管理面板]({full_url})**\n\n🚨 **[危急時點此註銷所有網址]({revoke_url})**"
+            try:
+                await ctx.author.send(embed=embed)
+                await ctx.send("✅ 連結已發送到您的私訊！")
+            except:
+                await ctx.send(f"❌ 無法私訊您，請開啟私訊功能。")
+            return
+
+        # 下載/檢查 cloudflared...
+        import platform
+        dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+        if platform.system() == "Windows": dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
         if not os.path.exists("./cloudflared"):
-            await ctx.send("📡 **首次啟動隧道，洛洛正在自動下載 Cloudflared 核心套件 (Linux)...**")
-            subprocess.run(["curl", "-L", "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64", "-o", "cloudflared"])
-            subprocess.run(["chmod", "+x", "cloudflared"])
+            await ctx.send("📡 正在安裝隧道核心...")
+            subprocess.run(["curl", "-L", dl_url, "-o", "cloudflared"])
+            if platform.system() != "Windows": subprocess.run(["chmod", "+x", "cloudflared"])
 
         try:
             if self.tunnel_process: self.tunnel_process.terminate()
             self.tunnel_process = subprocess.Popen(
-                ["./cloudflared", "tunnel", "--url", "http://localhost:5000"],
+                [\"./cloudflared\", \"tunnel\", \"--url\", \"http://localhost:5000\"],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
             )
             
-            url = ""
             for _ in range(30):
                 await asyncio.sleep(0.5)
                 line = self.tunnel_process.stdout.readline()
                 match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
                 if match:
-                    url = match.group(0)
+                    self.tunnel_url = match.group(0)
                     break
                     
-            if url:
-                full_url = f"{url}/?token={panel_token}"
-                revoke_url = f"{url}/api/revoke?token={panel_token}"
-                embed = discord.Embed(title="🌌 Yokaro 系統中樞連線資訊", color=0xff0080)
-                embed.description = f"您的管理連結已持久化，重啟機器人後依然有效。\n\n🔗 **[點此進入管理面板]({full_url})**\n\n🚨 **[如果您覺得網址外洩，點此立即註銷舊網址]({revoke_url})**"
+            if self.tunnel_url:
+                full_url = f\"{self.tunnel_url}/?token={panel_token}\"
+                revoke_url = f\"{self.tunnel_url}/api/revoke?token={panel_token}\"
+                embed = discord.Embed(title=\"🌌 Yokaro 系統中樞連線資訊\", color=0xff0080)
+                embed.description = f\"您的後台連結為永久有效，除非點擊註銷。\\n\\n🔗 **[點此進入管理面板]({full_url})**\\n\\n🚨 **[危急時點此註銷所有網址]({revoke_url})**\"
                 await ctx.author.send(embed=embed)
-                await ctx.send("✅ **安全隧道已建立，永久連線資訊已發送至您的私訊！**")
-                
-                def run_flask():
-                    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
-                threading.Thread(target=run_flask, daemon=True).start()
-                
-            else: await ctx.send("❌ 無法獲取隧道網址。")
+                await ctx.send(\"✅ **安全隧道已建立，永久密鑰已發送至您的私訊！**\")
+            else: await ctx.send(\"❌ 無法獲取隧道網址。\")
         except Exception as e:
-            await ctx.send(f"❌ 隧道啟動失敗: {e}")
+            await ctx.send(f\"❌ 隧道啟動失敗: {e}\")
 
 async def setup(bot):
     await bot.add_cog(WebPanelCog(bot))
