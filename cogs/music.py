@@ -162,6 +162,10 @@ class MusicControlView(discord.ui.View):
 class MusicCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        # 強制重置獎池以確保符合大總裁新規格 (A:Premium, B:5000, C:1000, D:500, E:50)
+        self.pool = self._default_pool()
+        self._save() 
+        self.premium_users = self._load_premium()
         self.queue, self.panels, self.states = {}, {}, {}
         self.precache = {} # gid: next_player
         self.update_task.start()
@@ -216,7 +220,42 @@ class MusicCog(commands.Cog):
         embed.set_footer(text=f"Yokaro Pro | {vol_icon} {int(state['volume']*100)}% | 點歌者: {source.requester.display_name if source.requester else '未知'}", icon_url=source.requester.display_avatar.url if source.requester else None)
         return embed
 
-    @commands.command(name='play', aliases=['播放', 'p'])
+    @commands.command(name='playnext', aliases=['pn', '插隊'])
+    async def playnext(self, ctx, *, search):
+        if not ctx.voice_client: await ctx.author.voice.channel.connect()
+        info = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(search, download=False))
+        if ctx.guild.id not in self.queue: self.queue[ctx.guild.id] = []
+        self.queue[ctx.guild.id].insert(0, search)
+        await ctx.send(f"⏭️ **{info.get('title')}** 已插隊至下一首！")
+
+    @commands.command(name='shuffle', aliases=['亂序'])
+    async def shuffle(self, ctx):
+        if ctx.guild.id in self.queue:
+            random.shuffle(self.queue[ctx.guild.id])
+            await ctx.send("🔀 **隊列已隨機亂序！**")
+        else:
+            await ctx.send("隊列是空的喔！")
+
+    @commands.command(name='247')
+    @commands.has_permissions(administrator=True)
+    async def toggle_247(self, ctx):
+        state = self.get_state(ctx.guild.id)
+        state['247'] = not state.get('247', False)
+        status = "✅ 已開啟" if state['247'] else "❌ 已關閉"
+        await ctx.send(f"🌌 **24/7 模式 {status}**")
+
+    @commands.command(name='8d')
+    async def spatial(self, ctx):
+        kuji = self.bot.get_cog("KujiCog")
+        if kuji and not kuji.is_premium(ctx.author.id):
+            return await ctx.send("💎 **8D 環繞為 Premium 專屬功能！** 請去抽個 A 賞吧！")
+        state = self.get_state(ctx.guild.id)
+        if 'theater' in state['filters']: state['filters'].remove('theater')
+        state['filters'].append('theater')
+        await self.reload_current(ctx.guild)
+        await ctx.send("🎧 **8D 虛擬環繞音效已啟動！**")
+
+    @commands.command(name='play', aliases=['播放', '播', 'p'])
     async def play(self, ctx, *, search):
         if not ctx.voice_client: await ctx.author.voice.channel.connect()
         async with ctx.typing():
