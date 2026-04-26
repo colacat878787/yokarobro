@@ -68,7 +68,7 @@ def index():
                                  latency=round(bot_instance.latency * 1000),
                                  token=panel_token)
 
-@app.route("/reboot", method=['POST'])
+@app.route("/reboot", methods=['POST'])
 def reboot():
     os._exit(0)
 
