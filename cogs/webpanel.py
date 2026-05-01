@@ -518,33 +518,27 @@ class WebPanelCog(commands.Cog):
         loop_instance = asyncio.get_event_loop()
         self.tunnel_process = None
         self.cert_path = "/home/container/.cloudflared/cert.pem"
+        self.tunnel_url = "" # 初始值
         
         # 啟動時自動嘗試開啟隧道 (延後執行確保 Cog 已加載)
         self.bot.loop.create_task(self.delayed_start())
         
-        # 啟動 Flask (使用百年證書加密)
+        # 啟動 Flask
         import random
         self.port = random.randint(6000, 9000)
         
-        # --- 自動生成百年證書 ---
         if not os.path.exists("cert.pem") or not os.path.exists("key.pem"):
-            print("📜 正在為大總裁鍛造百年加密證書...")
             subprocess.run([
                 "openssl", "req", "-x509", "-newkey", "rsa:4096", 
                 "-keyout", "key.pem", "-out", "cert.pem", 
                 "-days", "36500", "-nodes", 
                 "-subj", "/C=TW/ST=Taipei/L=Yokaro/O=YokaroBot/OU=Security/CN=yokaro.bot"
             ], capture_output=True)
-            print("✅ 百年證書鍛造完成！有效期限至 2126 年。")
 
         def run_flask():
-            try: subprocess.run(["fuser", "-k", f"{self.port}/tcp"], capture_output=True)
-            except: pass
             try:
-                print(f"📡 Flask (HTTPS) 正在啟動於端口: {self.port}")
-                # 啟用 SSL
                 app.run(host="0.0.0.0", port=self.port, debug=False, use_reloader=False, ssl_context=('cert.pem', 'key.pem'))
-            except Exception as e: print(f"⚠️ Flask 啟動失敗: {e}")
+            except: pass
         threading.Thread(target=run_flask, daemon=True).start()
 
     async def delayed_start(self):
@@ -552,28 +546,40 @@ class WebPanelCog(commands.Cog):
         await self.auto_start_tunnel()
 
     async def auto_start_tunnel(self):
-        domain = os.getenv("CUSTOM_DOMAIN")
+        # 優先從 .env 檔案讀取，最準確
+        domain = None
+        if os.path.exists(".env"):
+            with open(".env", "r") as f:
+                for line in f:
+                    if "CUSTOM_DOMAIN=" in line:
+                        domain = line.split("=")[1].strip()
+        
+        if not domain: domain = os.getenv("CUSTOM_DOMAIN")
+        
         if domain:
-            print(f"🚀 [自動化] 正在連線至您的專屬域名: {domain}...")
+            self.tunnel_url = f"https://{domain}"
+            print(f"🚀 [自動化] 偵測到域名 {domain}，正在開機自動連線...")
             env = os.environ.copy()
             env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
             os.chmod("/home/container/cloudflared", 0o755)
             try:
+                # 終極殺招：啟動前先砍掉殘留進程
+                subprocess.run(["pkill", "-f", "cloudflared"], capture_output=True)
                 self.tunnel_process = subprocess.Popen(
                     ["/home/container/cloudflared", "tunnel", "run", "yokaro-bot"],
                     env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
                 )
-                print(f"✅ [正式模式] 隧道已建立: https://{domain}")
+                print(f"✅ [自動化] 隧道已成功在背景運作: {self.tunnel_url}")
             except Exception as e:
-                print(f"❌ 隧道啟動失敗: {e}")
+                print(f"❌ 隧道自動啟動失敗: {e}")
 
     @commands.group(name='tunnel')
     async def tunnel_group(self, ctx):
-        allowed_ids = [467554275921494017]
+        allowed_ids = [467554275921494017] # 大總裁 ID
         if ctx.author.id not in allowed_ids and not await self.bot.is_owner(ctx.author):
             return
         if ctx.invoked_subcommand is None:
-            await ctx.send("📡 **隧道管理中心**\n`!tunnel login` - 登入 Cloudflare\n`!tunnel setup <域名>` - 創建並綁定域名\n`!tunnel start` - 切換至正式模式")
+            await ctx.send("📡 **隧道管理中心**\n`!tunnel login` - 登入 Cloudflare\n`!tunnel setup <域名>` - 創建並綁定域名\n`!tunnel start` - 手動重啟隧道")
 
     @tunnel_group.command(name='login')
     async def tunnel_login(self, ctx):
@@ -607,21 +613,6 @@ class WebPanelCog(commands.Cog):
 
     @tunnel_group.command(name='setup')
     async def tunnel_setup(self, ctx, domain: str):
-        await ctx.send(f"🛠️ **正在為 {domain} 及其子域名進行雙重綁定...**")
-        try:
-            # 確保檔案可執行
-            os.chmod("/home/container/cloudflared", 0o755)
-            
-            env = os.environ.copy()
-            env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
-            
-            # 1. 創建隧道
-            res1 = subprocess.run(["/home/container/cloudflared", "tunnel", "create", "yokaro-bot"], env=env, capture_output=True, text=True)
-            if res1.returncode != 0 and "already exists" not in res1.stderr:
-                return await ctx.send(f"❌ 創建隧道失敗: `{res1.stderr}`")
-
-            # 2. 綁定主域名
-            res2 = subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", domain], env=env, capture_output=True, text=True)
             
             # 3. 綁定 stat 子域名
             stat_domain = f"stat.{domain}"
