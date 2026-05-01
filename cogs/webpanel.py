@@ -657,7 +657,7 @@ STAT_HTML_TEMPLATE = """
         }
         body {
             margin: 0; background: var(--bg-dark); color: white;
-            font-family: 'Outfit', 'Noto Sans TC', 'Noto Sans JP', 'Segoe UI Symbol', 'Apple Color Emoji', sans-serif;
+            font-family: 'Noto Sans TC', 'Noto Sans JP', 'Outfit', 'Segoe UI Symbol', 'Apple Color Emoji', sans-serif;
             height: 100vh; display: flex; justify-content: center; align-items: center;
             overflow: hidden; perspective: 1000px;
         }
