@@ -587,11 +587,17 @@ class WebPanelCog(commands.Cog):
     async def tunnel_setup(self, ctx, domain: str):
         await ctx.send(f"🛠️ **正在為 {domain} 進行初始化...**")
         try:
-            subprocess.run(["./cloudflared", "tunnel", "create", "yokaro-bot"], capture_output=True)
-            subprocess.run(["./cloudflared", "tunnel", "route", "dns", "yokaro-bot", domain], capture_output=True)
+            # 1. 創建隧道
+            res1 = subprocess.run(["./cloudflared", "tunnel", "create", "yokaro-bot"], capture_output=True, text=True)
+            # 2. 綁定 DNS
+            res2 = subprocess.run(["./cloudflared", "tunnel", "route", "dns", "yokaro-bot", domain], capture_output=True, text=True)
             
+            # 即時寫入並同步記憶
             with open(".env", "a") as f:
                 f.write(f"\nCUSTOM_DOMAIN={domain}\nNAMED_TUNNEL=yokaro-bot")
+            
+            os.environ["CUSTOM_DOMAIN"] = domain
+            os.environ["NAMED_TUNNEL"] = "yokaro-bot"
                 
             await ctx.send(f"✅ **設置完成！**\n域名: `{domain}`\n隧道名稱: `yokaro-bot`\n請輸入 `!tunnel start` 啟動！")
         except Exception as e:
@@ -599,16 +605,21 @@ class WebPanelCog(commands.Cog):
 
     @tunnel_group.command(name='start')
     async def tunnel_start(self, ctx):
-        if self.tunnel_process: self.tunnel_process.terminate()
-        self.tunnel_url = f"https://{os.getenv('CUSTOM_DOMAIN', 'yokaro.wayna1015.ccwu.cc')}"
+        if self.tunnel_process: 
+            self.tunnel_process.terminate()
+            await asyncio.sleep(2) # 等待舊進程關閉
+            
+        # 確保記憶已同步
+        domain = os.environ.get("CUSTOM_DOMAIN", "yokaro.wayna1015.ccwu.cc")
+        self.tunnel_url = f"https://{domain}"
         
         asyncio.run_coroutine_threadsafe(self.auto_start_tunnel(), self.bot.loop)
-        await ctx.send(f"🚀 **隧道已切換至正式模式！**\n網址: {self.tunnel_url}")
+        await ctx.send(f"🚀 **正在切換至正式模式...**\n請稍候 5-10 秒後訪問: {self.tunnel_url}")
 
     async def auto_start_tunnel(self):
         await asyncio.sleep(5)
-        domain = os.getenv("CUSTOM_DOMAIN")
-        named = os.getenv("NAMED_TUNNEL")
+        domain = os.environ.get("CUSTOM_DOMAIN")
+        named = os.environ.get("NAMED_TUNNEL")
         
         import platform
         dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
