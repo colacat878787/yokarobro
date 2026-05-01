@@ -507,12 +507,16 @@ def music_add(guild_id):
     if not guild or not music_cog: return jsonify({"error": "Not found"}), 404
     
     async def do_add():
-        # 尋找一個在語音頻道內的人，或者就用機器人自己
+        # 建立一個具有語音狀態的 Mock 帳號
         author = guild.me
         if guild.voice_client and guild.voice_client.channel.members:
-            # 優先找頻道裡的人類
             humans = [m for m in guild.voice_client.channel.members if not m.bot]
             if humans: author = humans[0]
+
+        # 模擬 VoiceState
+        class MockVoiceState:
+            def __init__(self, channel):
+                self.channel = channel
 
         class MockCtx:
             def __init__(self, guild, author, bot):
@@ -520,17 +524,26 @@ def music_add(guild_id):
                 self.author = author
                 self.bot = bot
                 self.voice_client = guild.voice_client
-            async def send(self, *args, **kwargs): print(f"[WebMusic] {args}")
+                # 關鍵：模擬語音狀態，讓指令通過檢查
+                self.author.voice = MockVoiceState(guild.voice_client.channel) if guild.voice_client else None
+            async def send(self, *args, **kwargs): 
+                content = args[0] if args else kwargs.get('content', '')
+                print(f"🎵 [WebMusic] {content}")
             
         ctx = MockCtx(guild, author, bot_instance)
         
-        # 1. 加入隊列
-        await music_cog.play(music_cog, ctx, search=url)
-        
-        # 2. 強制檢查播放狀態：如果沒在唱，就再叫它唱一次
-        await asyncio.sleep(1)
-        if guild.voice_client and not guild.voice_client.is_playing():
-            await music_cog.play(music_cog, ctx, search=None) # 觸發播放
+        try:
+            # 1. 直接執行加入邏輯
+            print(f"🛰️ [WebMusic] 正在為 {guild.name} 點歌: {url}")
+            await music_cog.play(ctx, search=url)
+            
+            # 2. 如果沒在唱，強制開唱
+            await asyncio.sleep(2)
+            if guild.voice_client and not guild.voice_client.is_playing() and not guild.voice_client.is_paused():
+                print("⚡ [WebMusic] 播放器未啟動，手動觸發播放...")
+                await music_cog.play(ctx, search=None)
+        except Exception as e:
+            print(f"❌ [WebMusic] 執行播放指令失敗: {e}")
         
     asyncio.run_coroutine_threadsafe(do_add(), loop_instance)
     return jsonify({"status": "ok"})
