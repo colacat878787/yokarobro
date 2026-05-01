@@ -216,7 +216,9 @@ MUSIC_HTML_TEMPLATE = """
 
     <script>
         const guildId = window.location.pathname.split('/').pop();
-        let lastTitle = '';
+        let localPos = 0;
+        let totalDur = 0;
+        let isPaused = true;
 
         async function api(path, method='GET', body=null) {
             const opts = { method };
@@ -225,12 +227,20 @@ MUSIC_HTML_TEMPLATE = """
             return res.json();
         }
 
+        function formatTime(secs) {
+            const d = new Date(secs * 1000);
+            const h = d.getUTCHours();
+            const m = d.getUTCMinutes();
+            const s = d.getUTCSeconds();
+            if(h > 0) return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            return `${m}:${s.toString().padStart(2,'0')}`;
+        }
+
         async function update() {
             const data = await api('/status');
             if(data.error || !data.playing) {
                 document.getElementById('no-track').style.display = 'block';
                 document.getElementById('player-content').style.display = 'none';
-                document.getElementById('queue-list').innerHTML = '';
                 return;
             }
             document.getElementById('no-track').style.display = 'none';
@@ -241,11 +251,14 @@ MUSIC_HTML_TEMPLATE = """
             document.getElementById('track-author').innerText = track.author || 'YouTube';
             document.getElementById('track-cover').src = track.thumbnail;
             document.getElementById('time-total').innerText = track.duration_str;
-            document.getElementById('time-current').innerText = data.position_str;
-            document.getElementById('prog-fill').style.width = data.progress + '%';
             document.getElementById('requester-info').innerText = '點歌者: ' + (track.requester || '系統');
             document.getElementById('play-btn').innerHTML = data.is_paused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
             document.getElementById('track-cover').className = data.is_paused ? 'cover-art' : 'cover-art playing';
+
+            // 同步本地狀態
+            localPos = data.position;
+            totalDur = track.duration;
+            isPaused = data.is_paused;
 
             // Queue
             const qList = document.getElementById('queue-list');
@@ -264,6 +277,16 @@ MUSIC_HTML_TEMPLATE = """
             });
         }
 
+        // 絲滑本地更新 (每一秒跑一次)
+        setInterval(() => {
+            if(!isPaused && localPos < totalDur) {
+                localPos += 1;
+                document.getElementById('time-current').innerText = formatTime(localPos);
+                const pct = (localPos / totalDur) * 100;
+                document.getElementById('prog-fill').style.width = pct + '%';
+            }
+        }, 1000);
+
         async function control(action) { await api('/control', 'POST', {action}); update(); }
         async function search() {
             const input = document.getElementById('search-input');
@@ -274,7 +297,7 @@ MUSIC_HTML_TEMPLATE = """
             update();
         }
 
-        setInterval(update, 2000);
+        setInterval(update, 5000); // 伺服器校準頻率改為 5 秒
         update();
     </script>
 </body>
