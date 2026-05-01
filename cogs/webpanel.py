@@ -589,15 +589,27 @@ class WebPanelCog(commands.Cog):
     async def auto_start_tunnel(self):
         await asyncio.sleep(5)
         domain = os.getenv("CUSTOM_DOMAIN")
-                    ["./cloudflared", "tunnel", "--no-autoupdate", "run", "--token", token],
+        named = os.getenv("NAMED_TUNNEL")
+        
+        import platform
+        dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+        if platform.system() == "Windows": dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+        if not os.path.exists("./cloudflared"):
+            subprocess.run(["curl", "-L", dl_url, "-o", "cloudflared"])
+            if platform.system() != "Windows": subprocess.run(["chmod", "+x", "cloudflared"])
+
+        try:
+            if named:
+                print(f"🔗 正在啟動具名隧道: {named} ({domain})...")
+                self.tunnel_process = subprocess.Popen(
+                    ["./cloudflared", "tunnel", "--no-autoupdate", "run", "--url", f"https://localhost:{self.port}", "--no-tls-verify", named],
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
                 )
-                self.tunnel_url = f"https://{domain}" if domain else "https://your-custom-domain.com"
-                print(f"✅ 自定義隧道已啟動: {self.tunnel_url}")
+                self.tunnel_url = f"https://{domain}"
             else:
-                print("📡 未偵測到 Token，啟動臨時 trycloudflare 隧道...")
+                print("📡 啟動臨時 trycloudflare 隧道...")
                 self.tunnel_process = subprocess.Popen(
-                    ["./cloudflared", "tunnel", "--url", f"http://localhost:{self.port}"],
+                    ["./cloudflared", "tunnel", "--url", f"https://localhost:{self.port}", "--no-tls-verify"],
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
                 )
                 for _ in range(30):
