@@ -201,7 +201,15 @@ MUSIC_HTML_TEMPLATE = """
             </div>
         </div>
 
-        <div class="queue-card">
+            <div class="section-header"><i class="fas fa-microphone-lines"></i> 語音頻道切換</div>
+            <div id="channel-selector" style="margin-bottom:20px;">
+                <select id="vc-select" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; padding:12px; border-radius:12px; outline:none; cursor:pointer;">
+                    <option value="">正在載入頻道...</option>
+                </select>
+                <button onclick="joinChannel()" style="width:100%; margin-top:10px; background:var(--accent); border:none; color:white; padding:10px; border-radius:10px; cursor:pointer; font-weight:600; transition:0.2s;">
+                    <i class="fas fa-plug"></i> 讓優卡洛加入頻道
+                </button>
+            </div>
             <div class="section-header"><i class="fas fa-search"></i> 點歌系統</div>
             <div class="search-box">
                 <i class="fas fa-search"></i>
@@ -297,8 +305,33 @@ MUSIC_HTML_TEMPLATE = """
             update();
         }
 
+        async function loadChannels() {
+            const data = await api('/channels');
+            const select = document.getElementById('vc-select');
+            select.innerHTML = '';
+            data.channels.forEach(ch => {
+                const opt = document.createElement('option');
+                opt.value = ch.id;
+                opt.innerText = (ch.current ? '🔊 ' : '') + ch.name;
+                if(ch.current) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+
+        async function joinChannel() {
+            const select = document.getElementById('vc-select');
+            const chId = select.value;
+            if(!chId) return;
+            const btn = select.nextElementSibling;
+            btn.innerText = '正在加入...'; btn.disabled = true;
+            await api('/join', 'POST', {channel_id: chId});
+            btn.innerHTML = '<i class="fas fa-plug"></i> 讓優卡洛加入頻道'; btn.disabled = false;
+            update();
+        }
+
         setInterval(update, 5000); // 伺服器校準頻率改為 5 秒
         update();
+        loadChannels(); // 載入頻道清單
     </script>
 </body>
 </html>
@@ -401,7 +434,34 @@ def music_add(guild_id):
         cmd = music_cog.play
         await cmd(music_cog, ctx, search=query)
         
-    asyncio.run_coroutine_threadsafe(do_add(), loop_instance)
+@app.route("/api/music/<int:guild_id>/channels")
+def music_channels(guild_id):
+    guild = bot_instance.get_guild(guild_id)
+    if not guild: return jsonify({"channels": []})
+    
+    channels = []
+    for vc in guild.voice_channels:
+        channels.append({
+            "id": str(vc.id),
+            "name": vc.name,
+            "current": guild.voice_client and guild.voice_client.channel.id == vc.id
+        })
+    return jsonify({"channels": channels})
+
+@app.route("/api/music/<int:guild_id>/join", methods=['POST'])
+def music_join(guild_id):
+    data = request.json
+    channel_id = int(data.get("channel_id"))
+    guild = bot_instance.get_guild(guild_id)
+    channel = bot_instance.get_channel(channel_id)
+    
+    if not guild or not channel: return jsonify({"error": "Not found"}), 404
+    
+    async def do_join():
+        if guild.voice_client: await guild.voice_client.move_to(channel)
+        else: await channel.connect()
+            
+    asyncio.run_coroutine_threadsafe(do_join(), loop_instance)
     return jsonify({"status": "ok"})
 
 class MusicWebPanelCog(commands.Cog):
