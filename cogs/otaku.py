@@ -142,8 +142,9 @@ class OtakuCog(commands.Cog):
     async def user_status(self, ctx, user_id: int = None):
         if not user_id: user_id = ctx.author.id
         
+        # 使用主域名路徑，避免子域名解析失敗
         domain = os.getenv("CUSTOM_DOMAIN", "yokaro.wayna1015.ccwu.cc")
-        url = f"https://stat.{domain}/api/status/{user_id}"
+        url = f"https://{domain}/api/status/{user_id}"
         
         embed = discord.Embed(
             title="💎 純金打造 ‧ 雲端狀態櫥窗",

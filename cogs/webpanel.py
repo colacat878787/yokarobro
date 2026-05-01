@@ -614,15 +614,10 @@ class WebPanelCog(commands.Cog):
 
     @tunnel_group.command(name='setup')
     async def tunnel_setup(self, ctx, domain: str):
-        # 簡單粗暴的扁平化邏輯：yokaro.wayna1015.ccwu.cc -> yokaro-stat.wayna1015.ccwu.cc
+        # 徹底簡化：一切回歸主域名，不再處理子域名
         main_domain = domain
-        if "-stat." not in domain:
-            stat_domain = domain.replace(".", "-stat.", 1)
-        else:
-            stat_domain = domain
-            main_domain = domain.replace("-stat.", ".", 1)
         
-        await ctx.send(f"🛠️ **正在為 {main_domain} 進行終極域名綁定...**")
+        await ctx.send(f"🛠️ **正在為 {main_domain} 進行主域名守護綁定...**")
         try:
             os.chmod("/home/container/cloudflared", 0o755)
             env = os.environ.copy()
@@ -634,16 +629,13 @@ class WebPanelCog(commands.Cog):
             # 2. 綁定主站
             subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", main_domain], env=env, capture_output=True, text=True)
             
-            # 3. 綁定狀態頁
-            subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", stat_domain], env=env, capture_output=True, text=True)
-            
-            # 更新 .env (改為追加模式，不覆蓋舊資料)
+            # 更新 .env (追加模式)
             with open(".env", "a") as f:
                 f.write(f"\nCUSTOM_DOMAIN={main_domain}\nNAMED_TUNNEL=yokaro-bot\n")
             
             self.tunnel_url = f"https://{main_domain}"
                 
-            await ctx.send(f"✅ **設置完成！**\n💎 儀表板: `https://{main_domain}`\n👑 狀態頁: `https://{stat_domain}`\n\n這次域名絕對正確了！請等候幾分鐘生效！🐾✨")
+            await ctx.send(f"✅ **設置完成！**\n💎 儀表板: `https://{main_domain}/music/<id>`\n👑 狀態頁: `https://{main_domain}/api/status/<id>`\n\n主域名已就緒，洛洛正在為您開路！🐾✨")
             await self.auto_start_tunnel()
         except Exception as e:
             await ctx.send(f"❌ 設置發生異常: {e}")
