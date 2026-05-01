@@ -519,8 +519,8 @@ class WebPanelCog(commands.Cog):
         self.tunnel_process = None
         self.cert_path = "/home/container/.cloudflared/cert.pem"
         
-        # 啟動時自動嘗試開啟隧道
-        self.bot.loop.create_task(self.auto_start_tunnel())
+        # 啟動時自動嘗試開啟隧道 (延後執行確保 Cog 已加載)
+        self.bot.loop.create_task(self.delayed_start())
         
         # 啟動 Flask (使用百年證書加密)
         import random
@@ -546,13 +546,32 @@ class WebPanelCog(commands.Cog):
                 app.run(host="0.0.0.0", port=self.port, debug=False, use_reloader=False, ssl_context=('cert.pem', 'key.pem'))
             except Exception as e: print(f"⚠️ Flask 啟動失敗: {e}")
         threading.Thread(target=run_flask, daemon=True).start()
-        
-        # --- 自動啟動隧道 ---
-        asyncio.run_coroutine_threadsafe(self.auto_start_tunnel(), self.bot.loop)
+
+    async def delayed_start(self):
+        await self.bot.wait_until_ready()
+        await self.auto_start_tunnel()
+
+    async def auto_start_tunnel(self):
+        domain = os.getenv("CUSTOM_DOMAIN")
+        if domain:
+            print(f"🚀 [自動化] 正在連線至您的專屬域名: {domain}...")
+            env = os.environ.copy()
+            env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
+            os.chmod("/home/container/cloudflared", 0o755)
+            try:
+                self.tunnel_process = subprocess.Popen(
+                    ["/home/container/cloudflared", "tunnel", "run", "yokaro-bot"],
+                    env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+                )
+                print(f"✅ [正式模式] 隧道已建立: https://{domain}")
+            except Exception as e:
+                print(f"❌ 隧道啟動失敗: {e}")
 
     @commands.group(name='tunnel')
     async def tunnel_group(self, ctx):
-        if ctx.author.id not in ADMIN_IDS: return
+        allowed_ids = [467554275921494017]
+        if ctx.author.id not in allowed_ids and not await self.bot.is_owner(ctx.author):
+            return
         if ctx.invoked_subcommand is None:
             await ctx.send("📡 **隧道管理中心**\n`!tunnel login` - 登入 Cloudflare\n`!tunnel setup <域名>` - 創建並綁定域名\n`!tunnel start` - 切換至正式模式")
 
