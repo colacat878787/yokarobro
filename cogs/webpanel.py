@@ -640,22 +640,6 @@ class WebPanelCog(commands.Cog):
         except Exception as e:
             await ctx.send(f"❌ 設置發生異常: {e}")
 
-    @tunnel_group.command(name='start')
-    async def tunnel_start(self, ctx):
-        if self.tunnel_process: 
-            self.tunnel_process.terminate()
-            await asyncio.sleep(2)
-            
-        await ctx.send("🚀 **正在手動啟動具名隧道...**")
-        os.chmod("/home/container/cloudflared", 0o755)
-        
-        env = os.environ.copy()
-        env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
-        
-        try:
-            self.tunnel_process = subprocess.Popen(
-                ["/home/container/cloudflared", "tunnel", "run", "yokaro-bot"],
-                env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
             )
             await ctx.send("✅ **隧道已在背景啟動！** 請稍候幾分鐘待 DNS 生效。")
         except Exception as e:
@@ -664,96 +648,129 @@ class WebPanelCog(commands.Cog):
 # --- 狀態頁面 HTML 模板 (純金 Liquid Gold 旗艦版) ---
 STAT_HTML_TEMPLATE = """
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ user.display_name }} | Live Status</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>{{ user.display_name }} | 純金身分</title>
+    <meta charset="utf-8">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;600;800&family=Noto+Sans+TC:wght@300;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --gold: linear-gradient(135deg, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
-            --bg: #0a0a0a;
-            --glass: rgba(255, 255, 255, 0.03);
+            --gold-primary: #bf953f;
+            --gold-light: #fcf6ba;
+            --gold-dark: #8a6d3b;
+            --bg-dark: #050505;
         }
         body {
-            margin: 0; background: var(--bg); color: white; font-family: 'Outfit', sans-serif;
-            display: flex; justify-content: center; align-items: center; min-height: 100vh;
-            background-image: radial-gradient(circle at 50% 50%, #1a1a1a, #000);
+            margin: 0; background: var(--bg-dark); color: white;
+            font-family: 'Outfit', 'Noto Sans TC', sans-serif;
+            height: 100vh; display: flex; justify-content: center; align-items: center;
+            overflow: hidden; perspective: 1000px;
+        }
+        
+        /* 金粉背景 */
+        .particles {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, #1a150a 0%, #000 100%);
+            z-index: -1;
+        }
+        .particle {
+            position: absolute; background: var(--gold-primary);
+            border-radius: 50%; opacity: 0.3;
+            animation: float-up var(--d) linear infinite;
+        }
+        @keyframes float-up {
+            0% { transform: translateY(100vh) scale(0); opacity: 0; }
+            50% { opacity: 0.5; }
+            100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+        }
+
+        .gold-card {
+            width: 380px; padding: 40px;
+            background: rgba(15, 15, 15, 0.9);
+            border-radius: 30px;
+            border: 1px solid rgba(191, 149, 63, 0.4);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8), inset 0 0 20px rgba(191,149,63,0.05);
+            text-align: center; position: relative;
+            animation: hover-sway 6s ease-in-out infinite;
+            backdrop-filter: blur(15px);
             overflow: hidden;
         }
-        .gold-border {
-            position: relative; padding: 2px; border-radius: 40px;
-            background: var(--gold);
-            box-shadow: 0 0 50px rgba(191, 149, 63, 0.3);
-            animation: rotate 10s linear infinite;
+        @keyframes hover-sway {
+            0%, 100% { transform: translateY(0) rotateX(2deg); }
+            50% { transform: translateY(-10px) rotateX(-2deg); }
         }
-        @keyframes rotate { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
-        
-        .card {
-            background: rgba(10,10,10,0.9);
-            backdrop-filter: blur(50px);
-            border-radius: 38px;
-            width: 450px; padding: 40px;
-            display: flex; flex-direction: column; align-items: center;
+
+        /* 掃光特效 */
+        .gold-card::before {
+            content: ''; position: absolute; top: 0; left: -150%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(252, 246, 186, 0.1), transparent);
+            transform: skewX(-20deg); animation: sweep 4s infinite;
         }
-        .avatar-wrap {
-            position: relative; width: 150px; height: 150px; margin-bottom: 25px;
+        @keyframes sweep { 0% { left: -150%; } 50% { left: 150%; } 100% { left: 150%; } }
+
+        .avatar-box {
+            position: relative; width: 120px; height: 120px; margin: 0 auto 25px;
         }
         .avatar {
-            width: 100%; height: 100%; border-radius: 50%; border: 4px solid #bf953f;
-            box-shadow: 0 0 30px rgba(191, 149, 63, 0.5);
+            width: 100%; height: 100%; border-radius: 50%;
+            border: 3px solid var(--gold-primary); padding: 5px;
+            background: linear-gradient(135deg, #bf953f, #fcf6ba, #aa771c);
+            object-fit: cover;
         }
         .status-dot {
-            position: absolute; bottom: 10px; right: 10px; width: 25px; height: 25px;
-            border-radius: 50%; border: 4px solid #000;
+            position: absolute; bottom: 5px; right: 5px; width: 22px; height: 22px;
+            border: 3px solid #111; border-radius: 50%;
         }
-        .online { background: #2ed573; box-shadow: 0 0 15px #2ed573; }
-        .dnd { background: #ff4757; box-shadow: 0 0 15px #ff4757; }
-        .idle { background: #ffa502; box-shadow: 0 0 15px #ffa502; }
-        .offline { background: #747d8c; }
+        .status-dot.online { background: #2ecc71; box-shadow: 0 0 15px #2ecc71; }
+        .status-dot.idle { background: #f1c40f; box-shadow: 0 0 15px #f1c40f; }
+        .status-dot.dnd { background: #e74c3c; box-shadow: 0 0 15px #e74c3c; }
+        .status-dot.offline { background: #95a5a6; }
 
-        h1 { font-size: 32px; font-weight: 800; background: var(--gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 10px 0; }
-        .tag { color: #888; font-size: 14px; margin-bottom: 30px; }
+        .name-text {
+            font-size: 30px; font-weight: 800; margin-bottom: 5px;
+            background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .tag-text { color: #666; font-size: 14px; margin-bottom: 25px; letter-spacing: 1px; }
 
         .activity-card {
-            width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(191, 149, 63, 0.2);
-            border-radius: 24px; padding: 20px; display: flex; align-items: center; gap: 20px;
-            margin-bottom: 20px;
+            background: rgba(255,255,255,0.03); border-radius: 18px; padding: 18px;
+            margin-top: 15px; text-align: left; border: 1px solid rgba(255,255,255,0.05);
+            display: flex; align-items: center; gap: 15px;
         }
-        .activity-icon { width: 60px; height: 60px; border-radius: 12px; object-fit: cover; }
-        .activity-info h2 { font-size: 16px; margin: 0; color: #fcf6ba; }
-        .activity-info p { font-size: 13px; margin: 5px 0 0; color: #aaa; }
+        .activity-icon { width: 55px; height: 55px; border-radius: 10px; border: 1px solid rgba(191,149,63,0.3); }
+        .activity-info h2 { font-size: 10px; color: var(--gold-primary); font-weight: 800; letter-spacing: 2px; margin: 0 0 5px; }
+        .activity-info p { font-size: 13px; margin: 2px 0; color: #ccc; }
+        .activity-title { font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 3px; }
 
-        .footer { font-size: 12px; color: #444; margin-top: 20px; letter-spacing: 2px; }
+        .footer-text { margin-top: 40px; font-size: 9px; color: #333; letter-spacing: 4px; text-transform: uppercase; }
     </style>
 </head>
 <body>
-    <div class="gold-border">
-        <div class="card">
-            <div class="avatar-wrap">
-                <img src="{{ user.display_avatar.url }}" class="avatar">
-                <div class="status-dot {{ status }}"></div>
-            </div>
-            <h1>{{ user.display_name }}</h1>
-            <div class="tag">@{{ user.name }}</div>
-
-            {% if activity %}
-            <div class="activity-card">
-                <img src="{{ activity.large_image_url or 'https://cdn-icons-png.flaticon.com/512/681/681392.png' }}" class="activity-icon">
-                <div class="activity-info">
-                    <h2>正在遊玩 {{ activity.name }}</h2>
-                    <p>{{ activity.details or '' }}</p>
-                    <p>{{ activity.state or '' }}</p>
-                </div>
-            </div>
-            {% else %}
-            <div style="color:#555; font-size:14px; margin: 20px 0;">目前沒有活動中 💤</div>
-            {% endif %}
-
-            <div class="footer">STAT.WAYNA1015.CCWU.CC</div>
+    <div class="particles"></div>
+    <div class="gold-card">
+        <div class="avatar-box">
+            <img src="{{ user.display_avatar.url }}" class="avatar">
+            <div class="status-dot {{ status }}"></div>
         </div>
+        <div class="name-text">{{ user.display_name }}</div>
+        <div class="tag-text">@{{ user.name }}</div>
+
+        {% if activity %}
+        <div class="activity-card">
+            <img src="{{ activity.large_image_url or 'https://cdn-icons-png.flaticon.com/512/681/681392.png' }}" class="activity-icon">
+            <div class="activity-info">
+                <h2>{{ activity.type == 0 and '正在遊玩' or '正在聆聽' }}</h2>
+                <div class="activity-title">{{ activity.name }}</div>
+                <p>{{ activity.details or '' }}</p>
+                <p>{{ activity.state or '' }}</p>
+            </div>
+        </div>
+        {% else %}
+        <div style="color:#555; font-size:14px; margin: 20px 0;">目前沒有活動中 💤</div>
+        {% endif %}
+
+        <div class="footer-text">STAT.WAYNA1015.CCWU.CC</div>
     </div>
     <script>setTimeout(() => location.reload(), 15000);</script>
 </body>
@@ -763,9 +780,6 @@ STAT_HTML_TEMPLATE = """
 @app.route("/api/status/<int:user_id>")
 def user_status_page(user_id):
     from flask import render_template_string
-    user = bot_instance.get_user(user_id)
-    if not user: return "User not found", 404
-    
     # 找尋 Presence (需要伺服器成員)
     member = None
     for guild in bot_instance.guilds:
@@ -777,7 +791,7 @@ def user_status_page(user_id):
     status = str(member.status)
     activity = None
     for act in member.activities:
-        if act.type == discord.ActivityType.playing or act.type == discord.ActivityType.listening:
+        if act.type in [discord.ActivityType.playing, discord.ActivityType.listening, discord.ActivityType.streaming]:
             activity = act
             break
             
@@ -787,37 +801,13 @@ def user_status_page(user_id):
     async def tunnel_start(self, ctx):
         if self.tunnel_process: 
             self.tunnel_process.terminate()
-            await asyncio.sleep(2) # 等待舊進程關閉
-            
-        # 確保記憶已同步
-        domain = os.environ.get("CUSTOM_DOMAIN", "yokaro.wayna1015.ccwu.cc")
-        self.tunnel_url = f"https://{domain}"
-        
-        asyncio.run_coroutine_threadsafe(self.auto_start_tunnel(), self.bot.loop)
-        await ctx.send(f"🚀 **正在切換至正式模式...**\n請稍候 5-10 秒後訪問: {self.tunnel_url}")
+            await asyncio.sleep(2)
+        await ctx.send("🚀 **正在手動啟動具名隧道...**")
+        await self.auto_start_tunnel()
 
     async def auto_start_tunnel(self):
-        await asyncio.sleep(5)
+        # 優先從 .env 讀取
         domain = os.environ.get("CUSTOM_DOMAIN")
-        named = os.environ.get("NAMED_TUNNEL")
-        
-        import platform
-        dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
-        if platform.system() == "Windows": dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
-        if not os.path.exists("./cloudflared"):
-            subprocess.run(["curl", "-L", dl_url, "-o", "cloudflared"])
-            if platform.system() != "Windows": subprocess.run(["chmod", "+x", "cloudflared"])
-
-        try:
-            if named:
-                print(f"🚀 [自動化] 正在連線至您的專屬域名: {domain}...")
-                # 指定 Pterodactyl 的 .cloudflared 路徑
-                cred_path = "/home/container/.cloudflared"
-                self.tunnel_process = subprocess.Popen(
-                    ["./cloudflared", "tunnel", "--no-autoupdate", "run", "--url", f"https://localhost:{self.port}", "--no-tls-verify", named],
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                    env={**os.environ, "CLOUDFLARED_HOME": cred_path}
-                )
                 self.tunnel_url = f"https://{domain}"
                 print(f"✅ [正式模式] 隧道已建立: {self.tunnel_url}")
             else:
