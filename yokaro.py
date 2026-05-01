@@ -47,7 +47,8 @@ class YokaroBot(commands.Bot):
             'cogs.tickets',
             'cogs.music_recommend',
             'cogs.management',
-            'cogs.system'
+            'cogs.system',
+            'cogs.music_web'
         ]
 
     async def setup_hook(self):
