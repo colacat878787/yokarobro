@@ -14,6 +14,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True # 需要在 Discord Developer Portal 打開
+intents.presences = True # 必須開啟才能看到遊戲狀態！
 
 import logging
 from utils import mobile_status # 啟用手機在線模式
