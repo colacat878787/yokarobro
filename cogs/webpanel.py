@@ -585,23 +585,147 @@ class WebPanelCog(commands.Cog):
 
     @tunnel_group.command(name='setup')
     async def tunnel_setup(self, ctx, domain: str):
-        await ctx.send(f"🛠️ **正在為 {domain} 進行初始化...**")
+        await ctx.send(f"🛠️ **正在為 {domain} 及其子域名進行雙重綁定...**")
         try:
-            # 1. 創建隧道
-            res1 = subprocess.run(["./cloudflared", "tunnel", "create", "yokaro-bot"], capture_output=True, text=True)
-            # 2. 綁定 DNS
-            res2 = subprocess.run(["./cloudflared", "tunnel", "route", "dns", "yokaro-bot", domain], capture_output=True, text=True)
+            # 1. 創建隧道 (如果已存在會跳過)
+            subprocess.run(["./cloudflared", "tunnel", "create", "yokaro-bot"], capture_output=True, text=True)
+            # 2. 綁定主域名
+            subprocess.run(["./cloudflared", "tunnel", "route", "dns", "yokaro-bot", domain], capture_output=True, text=True)
+            # 3. 綁定 stat 子域名
+            stat_domain = f"stat.{domain}"
+            subprocess.run(["./cloudflared", "tunnel", "route", "dns", "yokaro-bot", stat_domain], capture_output=True, text=True)
             
-            # 即時寫入並同步記憶
             with open(".env", "a") as f:
                 f.write(f"\nCUSTOM_DOMAIN={domain}\nNAMED_TUNNEL=yokaro-bot")
             
             os.environ["CUSTOM_DOMAIN"] = domain
             os.environ["NAMED_TUNNEL"] = "yokaro-bot"
                 
-            await ctx.send(f"✅ **設置完成！**\n域名: `{domain}`\n隧道名稱: `yokaro-bot`\n請輸入 `!tunnel start` 啟動！")
+            await ctx.send(f"✅ **設置完成！**\n主域名: `{domain}`\n狀態頁面: `https://{stat_domain}`\n請輸入 `!tunnel start` 啟動！")
         except Exception as e:
             await ctx.send(f"❌ 設置失敗: {e}")
+
+# --- 狀態頁面 HTML 模板 (純金 Liquid Gold 旗艦版) ---
+STAT_HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ user.display_name }} | Live Status</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --gold: linear-gradient(135deg, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
+            --bg: #0a0a0a;
+            --glass: rgba(255, 255, 255, 0.03);
+        }
+        body {
+            margin: 0; background: var(--bg); color: white; font-family: 'Outfit', sans-serif;
+            display: flex; justify-content: center; align-items: center; min-height: 100vh;
+            background-image: radial-gradient(circle at 50% 50%, #1a1a1a, #000);
+            overflow: hidden;
+        }
+        .gold-border {
+            position: relative; padding: 2px; border-radius: 40px;
+            background: var(--gold);
+            box-shadow: 0 0 50px rgba(191, 149, 63, 0.3);
+            animation: rotate 10s linear infinite;
+        }
+        @keyframes rotate { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
+        
+        .card {
+            background: rgba(10,10,10,0.9);
+            backdrop-filter: blur(50px);
+            border-radius: 38px;
+            width: 450px; padding: 40px;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .avatar-wrap {
+            position: relative; width: 150px; height: 150px; margin-bottom: 25px;
+        }
+        .avatar {
+            width: 100%; height: 100%; border-radius: 50%; border: 4px solid #bf953f;
+            box-shadow: 0 0 30px rgba(191, 149, 63, 0.5);
+        }
+        .status-dot {
+            position: absolute; bottom: 10px; right: 10px; width: 25px; height: 25px;
+            border-radius: 50%; border: 4px solid #000;
+        }
+        .online { background: #2ed573; box-shadow: 0 0 15px #2ed573; }
+        .dnd { background: #ff4757; box-shadow: 0 0 15px #ff4757; }
+        .idle { background: #ffa502; box-shadow: 0 0 15px #ffa502; }
+        .offline { background: #747d8c; }
+
+        h1 { font-size: 32px; font-weight: 800; background: var(--gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 10px 0; }
+        .tag { color: #888; font-size: 14px; margin-bottom: 30px; }
+
+        .activity-card {
+            width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(191, 149, 63, 0.2);
+            border-radius: 24px; padding: 20px; display: flex; align-items: center; gap: 20px;
+            margin-bottom: 20px;
+        }
+        .activity-icon { width: 60px; height: 60px; border-radius: 12px; object-fit: cover; }
+        .activity-info h2 { font-size: 16px; margin: 0; color: #fcf6ba; }
+        .activity-info p { font-size: 13px; margin: 5px 0 0; color: #aaa; }
+
+        .footer { font-size: 12px; color: #444; margin-top: 20px; letter-spacing: 2px; }
+    </style>
+</head>
+<body>
+    <div class="gold-border">
+        <div class="card">
+            <div class="avatar-wrap">
+                <img src="{{ user.display_avatar.url }}" class="avatar">
+                <div class="status-dot {{ status }}"></div>
+            </div>
+            <h1>{{ user.display_name }}</h1>
+            <div class="tag">@{{ user.name }}</div>
+
+            {% if activity %}
+            <div class="activity-card">
+                <img src="{{ activity.large_image_url or 'https://cdn-icons-png.flaticon.com/512/681/681392.png' }}" class="activity-icon">
+                <div class="activity-info">
+                    <h2>正在遊玩 {{ activity.name }}</h2>
+                    <p>{{ activity.details or '' }}</p>
+                    <p>{{ activity.state or '' }}</p>
+                </div>
+            </div>
+            {% else %}
+            <div style="color:#555; font-size:14px; margin: 20px 0;">目前沒有活動中 💤</div>
+            {% endif %}
+
+            <div class="footer">STAT.WAYNA1015.CCWU.CC</div>
+        </div>
+    </div>
+    <script>setTimeout(() => location.reload(), 15000);</script>
+</body>
+</html>
+"""
+
+@app.route("/api/status/<int:user_id>")
+def user_status_page(user_id):
+    from flask import render_template_string
+    user = bot_instance.get_user(user_id)
+    if not user: return "User not found", 404
+    
+    # 找尋 Presence (需要伺服器成員)
+    member = None
+    for guild in bot_instance.guilds:
+        member = guild.get_member(user_id)
+        if member: break
+    
+    if not member: return "Member not found in any common guild", 404
+    
+    status = str(member.status)
+    activity = None
+    for act in member.activities:
+        if act.type == discord.ActivityType.playing or act.type == discord.ActivityType.listening:
+            activity = act
+            break
+            
+    return render_template_string(STAT_HTML_TEMPLATE, user=member, status=status, activity=activity)
 
     @tunnel_group.command(name='start')
     async def tunnel_start(self, ctx):
