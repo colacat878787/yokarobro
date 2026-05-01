@@ -32,7 +32,7 @@ class RestockView(discord.ui.View):
     def __init__(self, cog):
         super().__init__(timeout=None)
         self.cog = cog
-        # 動態生成按鈕
+        # 動態生成按鈕，並補齊 custom_id 以支持持久化
         prizes = [
             "💎 A賞: Yokaro Premium 永久會員",
             "💰 B賞: 5,000 卡洛幣",
@@ -42,7 +42,8 @@ class RestockView(discord.ui.View):
         ]
         for p in prizes:
             label = p.split(": ")[0]
-            btn = discord.ui.Button(label=label, style=discord.ButtonStyle.secondary)
+            # 持久化視圖必須要有 custom_id
+            btn = discord.ui.Button(label=label, style=discord.ButtonStyle.secondary, custom_id=f"kuji_restock_{label}")
             btn.callback = self.create_callback(p)
             self.add_item(btn)
 
