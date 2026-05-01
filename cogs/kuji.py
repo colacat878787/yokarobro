@@ -98,13 +98,19 @@ class KujiView(discord.ui.View):
         uid = str(interaction.user.id)
         kuji_cog = self.economy_cog.bot.get_cog("KujiCog")
         
-        is_free = interaction.user.id == 1113353915010920452
-        cost = 0 if is_free else 500
+        is_admin = interaction.user.id == 1113353915010920452
+        cost = 0 if is_admin else 500
 
-        if not is_free and self.economy_cog.get_balance(uid) < cost:
+        if not is_admin and self.economy_cog.get_balance(uid) < cost:
             return await interaction.edit_original_response(content="嗷嗷嗷～錢包不夠 $500 喔！")
 
-        prize = kuji_cog.draw_prize()
+        # 大總裁神抽：必中 A 賞
+        if is_admin:
+            prize = "💎 A賞: Yokaro Premium 永久會員"
+            self.economy_cog.add_money(uid, 114514191981081024)
+        else:
+            prize = kuji_cog.draw_prize()
+            
         if not prize:
             return await interaction.edit_original_response(content="😱 本輪一番賞已完售！管理員已收到通知進行補貨。")
 
@@ -114,7 +120,9 @@ class KujiView(discord.ui.View):
         msg = await interaction.followup.send(f"🌌 {interaction.user.mention} 正在抽賞...")
         await asyncio.sleep(1)
 
-        embed = discord.Embed(title="🎊 恭喜中獎！", description=f"{interaction.user.mention} 抽中了：\n\n✨ **【 {prize} 】** ✨", color=0xf1c40f if "A賞" in prize else 0x3498db)
+        embed = discord.Embed(title="🎊 恭喜中獎！", description=f"{interaction.user.mention} 抽中了：\n\n✨ **【 {prize} 】** ✨", color=0xf1c40f)
+        if is_admin:
+            embed.add_field(name="👑 大總裁特權", value="💰 額外獲得福利金：**$114,514,191,981,081,024** 元！")
         await msg.edit(content=None, embed=embed, view=KujiGiftView(prize, interaction.user, kuji_cog))
 
     @discord.ui.button(label="🎲 十連抽 ($5000)", style=discord.ButtonStyle.success, custom_id="kuji_draw_10")
@@ -123,23 +131,30 @@ class KujiView(discord.ui.View):
         uid = str(interaction.user.id)
         kuji_cog = self.economy_cog.bot.get_cog("KujiCog")
         
-        is_free = interaction.user.id == 1113353915010920452
-        cost = 0 if is_free else 5000
+        is_admin = interaction.user.id == 1113353915010920452
+        cost = 0 if is_admin else 5000
 
-        if not is_free and self.economy_cog.get_balance(uid) < cost:
+        if not is_admin and self.economy_cog.get_balance(uid) < cost:
             return await interaction.edit_original_response(content="嗷嗷嗷～錢包不夠 $5000 喔！")
-        if len(kuji_cog.pool) < 10:
+        if not is_admin and len(kuji_cog.pool) < 10:
             return await interaction.edit_original_response(content="❌ 獎池剩餘數量不足十個！")
             
         self.economy_cog.add_money(uid, -cost)
         msg = await interaction.followup.send(f"🌌 {interaction.user.mention} 正在進行十連抽...", ephemeral=False)
         await asyncio.sleep(1)
 
-        prizes = [kuji_cog.draw_prize() for _ in range(10)]
+        if is_admin:
+            prizes = ["💎 A賞: Yokaro Premium 永久會員"] * 10
+            self.economy_cog.add_money(uid, 114514191981081024 * 10)
+        else:
+            prizes = [kuji_cog.draw_prize() for _ in range(10)]
+            
         for p in prizes: kuji_cog.grant_prize(interaction.user, p)
             
         desc = "\n".join([f"**第 {i+1} 抽:** {p}" for i, p in enumerate(prizes)])
         embed = discord.Embed(title="🎊 十連抽結果！", description=f"{interaction.user.mention} 的十抽結果：\n\n{desc}", color=0x9b59b6)
+        if is_admin:
+            embed.add_field(name="👑 大總裁特權", value=f"💰 額外獲得福利金：**${114514191981081024 * 10:,}** 元！")
         await msg.edit(content=None, embed=embed)
 
     @discord.ui.button(label="💎 一次抽完 (包台 $100,000)", style=discord.ButtonStyle.danger, custom_id="kuji_buyout")
