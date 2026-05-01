@@ -52,52 +52,62 @@ class OtakuCog(commands.Cog):
 
     @tasks.loop(minutes=5)
     async def twitter_loop(self):
-        nitter_instances = ["https://nitter.net", "https://nitter.it", "https://nitter.privacydev.net"]
+        nitter_instances = [
+            "https://nitter.privacydev.net", 
+            "https://nitter.net", 
+            "https://nitter.it",
+            "https://nitter.moomoo.me"
+        ]
         
         async with aiohttp.ClientSession() as session:
             for account in self.monitored_x:
-                try:
-                    # 決定目標頻道
-                    target_id = self.settings["general"]
-                    if account == "WW_JP_Official": target_id = self.settings["ww"]
-                    elif account == "EN_BlueArchive": target_id = self.settings["blue_archive"]
-                    
-                    if not target_id: continue
-                    channel = self.bot.get_channel(target_id)
-                    if not channel: continue
-
-                    instance = nitter_instances[0] 
-                    async with session.get(f"{instance}/{account}/rss") as resp:
-                        if resp.status == 200:
-                            from xml.etree import ElementTree as ET
-                            text = await resp.text()
-                            root = ET.fromstring(text)
-                            
-                            items = root.findall(".//item")
-                            if not items: continue
-                            
-                            latest = items[0]
-                            post_id = latest.find("guid").text
-                            title = latest.find("title").text
-                            link = latest.find("link").text.replace("nitter.net", "x.com")
-                            
-                            if account not in self.last_posts:
-                                self.last_posts[account] = post_id
-                                continue
+                # 遍歷實例直到成功
+                success = False
+                for instance in nitter_instances:
+                    try:
+                        async with session.get(f"{instance}/{account}/rss", timeout=10) as resp:
+                            if resp.status == 200:
+                                text = await resp.text()
+                                if not text or not text.strip(): continue
                                 
-                            if post_id != self.last_posts[account]:
-                                self.last_posts[account] = post_id
-                                embed = discord.Embed(
-                                    title=f"📢 {account} 更新了！",
-                                    description=title,
-                                    url=link,
-                                    color=0x1DA1F2,
-                                    timestamp=datetime.utcnow()
-                                )
-                                embed.set_footer(text="優卡洛 ‧ 肥宅監控衛星")
-                                await channel.send(embed=embed)
-                except Exception as e:
-                    print(f"❌ 監控 {account} 失敗: {e}")
+                                from xml.etree import ElementTree as ET
+                                try:
+                                    root = ET.fromstring(text)
+                                except ET.ParseError: continue
+                                
+                                items = root.findall(".//item")
+                                if not items: continue
+                                
+                                latest = items[0]
+                                post_id = latest.find("guid").text
+                                title = latest.find("title").text
+                                link = latest.find("link").text.replace("nitter.net", "x.com")
+                                
+                                if account not in self.last_posts:
+                                    self.last_posts[account] = post_id
+                                    success = True; break
+                                    
+                                if post_id != self.last_posts[account]:
+                                    self.last_posts[account] = post_id
+                                    # ... 路由發送邏輯 ...
+                                    target_id = self.settings["general"]
+                                    if account == "WW_JP_Official": target_id = self.settings["ww"]
+                                    elif account == "EN_BlueArchive": target_id = self.settings["blue_archive"]
+                                    
+                                    if target_id:
+                                        channel = self.bot.get_channel(target_id)
+                                        if channel:
+                                            embed = discord.Embed(
+                                                title=f"📢 {account} 更新了！",
+                                                description=title,
+                                                url=link,
+                                                color=0x1DA1F2,
+                                                timestamp=datetime.utcnow()
+                                            )
+                                            embed.set_footer(text="優卡洛 ‧ 肥宅監控衛星")
+                                            await channel.send(embed=embed)
+                                    success = True; break
+                    except: continue
                 await asyncio.sleep(2)
 
     @commands.command(name="rbx")

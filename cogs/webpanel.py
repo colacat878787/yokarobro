@@ -515,9 +515,12 @@ class WebPanelCog(commands.Cog):
         self.bot = bot
         global bot_instance, loop_instance
         bot_instance = bot
-        loop_instance = bot.loop
+        loop_instance = asyncio.get_event_loop()
         self.tunnel_process = None
-        self.tunnel_url = ""
+        self.cert_path = "/home/container/.cloudflared/cert.pem"
+        
+        # 啟動時自動嘗試開啟隧道
+        self.bot.loop.create_task(self.auto_start_tunnel())
         
         # 啟動 Flask (使用百年證書加密)
         import random
