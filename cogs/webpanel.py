@@ -614,18 +614,29 @@ class WebPanelCog(commands.Cog):
 
     @tunnel_group.command(name='setup')
     async def tunnel_setup(self, ctx, domain: str):
+        # 如果大總裁輸入了 stat. 開頭的，自動修正為根域名
+        root_domain = domain.replace("stat.", "").replace("yokaro-stat.", "")
+        stat_domain = f"yokaro-stat.{root_domain}"
+        
+        await ctx.send(f"🛠️ **正在為 {root_domain} 進行旗艦級域名綁定...**")
+        try:
+            os.chmod("/home/container/cloudflared", 0o755)
+            env = os.environ.copy()
+            env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
             
-            # 3. 綁定 stat 子域名
-            stat_domain = f"stat.{domain}"
-            res3 = subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", stat_domain], env=env, capture_output=True, text=True)
+            subprocess.run(["/home/container/cloudflared", "tunnel", "create", "yokaro-bot"], env=env, capture_output=True, text=True)
+            subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", root_domain], env=env, capture_output=True, text=True)
+            subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", stat_domain], env=env, capture_output=True, text=True)
             
             with open(".env", "a") as f:
-                f.write(f"\nCUSTOM_DOMAIN={domain}\nNAMED_TUNNEL=yokaro-bot")
+                f.write(f"\nCUSTOM_DOMAIN={root_domain}\nNAMED_TUNNEL=yokaro-bot")
             
-            os.environ["CUSTOM_DOMAIN"] = domain
+            os.environ["CUSTOM_DOMAIN"] = root_domain
             os.environ["NAMED_TUNNEL"] = "yokaro-bot"
+            self.tunnel_url = f"https://{root_domain}"
                 
-            await ctx.send(f"✅ **設置完成！**\n主域名: `{domain}`\n狀態頁面: `https://{stat_domain}`\n請輸入 `!tunnel start` 啟動！")
+            await ctx.send(f"✅ **設置完成！**\n💎 主站: `https://{root_domain}`\n👑 狀態頁: `https://{stat_domain}`\n\n洛洛現在會自動重啟隧道，請稍候！")
+            await self.auto_start_tunnel()
         except Exception as e:
             await ctx.send(f"❌ 設置發生異常: {e}")
 
