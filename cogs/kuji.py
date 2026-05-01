@@ -32,7 +32,6 @@ class RestockView(discord.ui.View):
     def __init__(self, cog):
         super().__init__(timeout=None)
         self.cog = cog
-        # 動態生成按鈕，並補齊 custom_id 以支持持久化
         prizes = [
             "💎 A賞: Yokaro Premium 永久會員",
             "💰 B賞: 5,000 卡洛幣",
@@ -46,6 +45,26 @@ class RestockView(discord.ui.View):
             btn = discord.ui.Button(label=label, style=discord.ButtonStyle.secondary, custom_id=f"kuji_restock_{label}")
             btn.callback = self.create_callback(p)
             self.add_item(btn)
+            
+        # --- 神級補貨按鈕 ---
+        fill_all = discord.ui.Button(label="✨ 諸神黃昏：全部填滿 (99,999)", style=discord.ButtonStyle.danger, custom_id="kuji_fill_all", row=2)
+        fill_all.callback = self.fill_all_callback
+        self.add_item(fill_all)
+
+    async def fill_all_callback(self, interaction: discord.Interaction):
+        if interaction.user.id not in ADMIN_IDS: return await interaction.response.send_message("❌ 您無權動用神權。", ephemeral=True)
+        prizes = [
+            "💎 A賞: Yokaro Premium 永久會員",
+            "💰 B賞: 5,000 卡洛幣",
+            "💰 C賞: 1,000 卡洛幣",
+            "💰 D賞: 500 卡洛幣",
+            "🧧 E賞: 50 卡洛幣"
+        ]
+        self.cog.pool = []
+        for p in prizes:
+            self.cog.pool.extend([p] * 99999)
+        self.cog._save()
+        await interaction.response.send_message("🌌 **萬象更生！** 獎池已全部補滿至 **99,999** 個！", ephemeral=True)
 
     def create_callback(self, prize_name):
         async def callback(interaction: discord.Interaction):
@@ -163,14 +182,18 @@ class KujiView(discord.ui.View):
         uid = str(interaction.user.id)
         kuji_cog = self.economy_cog.bot.get_cog("KujiCog")
         
-        is_free = interaction.user.id == 1113353915010920452
-        cost = 0 if is_free else 100000
+        is_admin = interaction.user.id in ADMIN_IDS
+        cost = 0 if is_admin else 100000
         
         remaining = len(kuji_cog.pool)
         if remaining == 0:
             return await interaction.edit_original_response(content="❌ 獎池目前是空的，無法包台！")
 
-        if not is_free and self.economy_cog.get_balance(uid) < cost:
+        # --- 包台安全鎖 ---
+        if remaining > 10000 and not is_admin:
+            return await interaction.edit_original_response(content="⚠️ **警報：** 目前獎池過於龐大（超過 10,000 個），為了防止金融崩潰，只有管理員可以執行包台！")
+
+        if not is_admin and self.economy_cog.get_balance(uid) < cost:
             return await interaction.edit_original_response(content="嗷嗷嗷～包台需要 $100,000 喔！")
 
         self.economy_cog.add_money(uid, -cost)

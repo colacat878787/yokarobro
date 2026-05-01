@@ -275,13 +275,32 @@ class EconomyCog(commands.Cog):
     def get_balance(self, uid):
         return self.get_user_data(uid)["balance"]
 
-    def add_money(self, uid, amt, bank=False):
-        d = self.get_user_data(uid)
-        if bank:
-            d["bank"] = d.get("bank", 0) + amt
-        else:
-            d["balance"] += amt
+    def add_money(self, user_id, amount):
+        uid = str(user_id)
+        data = self.get_user_data(uid)
+        
+        # 如果是扣款且錢包不足
+        if amount < 0 and data["balance"] < abs(amount):
+            # 嘗試找尋金融模組進行刷卡
+            fin_cog = self.bot.get_cog("FinanceCog")
+            if fin_cog:
+                # 計算差額
+                needed = abs(amount) - data["balance"]
+                success, reason = fin_cog.charge(uid, needed)
+                if success:
+                    # 扣光餘額，差額進信用卡
+                    data["balance"] = 0
+                    self.save_data()
+                    print(f"💳 [Finance] 使用者 {uid} 餘額不足，差額 ${needed} 已由信用卡代付。")
+                    return True
+                else:
+                    print(f"❌ [Finance] 使用者 {uid} 支付失敗: {reason}")
+                    return False
+            return False
+
+        data["balance"] += amount
         self.save_data()
+        return True
 
     @commands.hybrid_command(name='balance', aliases=['錢包', '餘額'])
     async def balance(self, ctx, member: discord.Member = None):
