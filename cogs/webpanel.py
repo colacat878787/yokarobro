@@ -640,11 +640,6 @@ class WebPanelCog(commands.Cog):
         except Exception as e:
             await ctx.send(f"❌ 設置發生異常: {e}")
 
-            )
-            await ctx.send("✅ **隧道已在背景啟動！** 請稍候幾分鐘待 DNS 生效。")
-        except Exception as e:
-            await ctx.send(f"❌ 啟動失敗: {e}")
-
 # --- 狀態頁面 HTML 模板 (純金 Liquid Gold 旗艦版) ---
 STAT_HTML_TEMPLATE = """
 <!DOCTYPE html>
