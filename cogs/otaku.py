@@ -53,54 +53,52 @@ class OtakuCog(commands.Cog):
 
     @tasks.loop(minutes=5)
     async def twitter_loop(self):
+        # 實例清單，增加備援
         nitter_instances = [
             "https://nitter.privacydev.net", 
             "https://nitter.net", 
-            "https://nitter.it",
-            "https://nitter.moomoo.me"
+            "https://nitter.cz",
+            "https://nitter.it"
         ]
         
         async with aiohttp.ClientSession() as session:
             for account in self.monitored_x:
-                # 遍歷實例直到成功
-                success = False
                 for instance in nitter_instances:
                     try:
-                        async with session.get(f"{instance}/{account}/rss", timeout=10) as resp:
+                        async with session.get(f"{instance}/{account}/rss", timeout=15) as resp:
                             if resp.status == 200:
                                 text = await resp.text()
-                                if not text or not text.strip(): continue
-                                
                                 from xml.etree import ElementTree as ET
-                                try:
-                                    root = ET.fromstring(text)
-                                except ET.ParseError: continue
-                                
+                                root = ET.fromstring(text)
                                 items = root.findall(".//item")
                                 if not items: continue
                                 
                                 latest = items[0]
                                 post_id = latest.find("guid").text
                                 title = latest.find("title").text
-                                link = latest.find("link").text.replace("nitter.net", "x.com")
+                                # 轉換回 x.com 連結
+                                link = latest.find("link").text.replace(instance.split("://")[1], "x.com")
                                 
                                 if account not in self.last_posts:
                                     self.last_posts[account] = post_id
-                                    success = True; break
+                                    break
                                     
                                 if post_id != self.last_posts[account]:
                                     self.last_posts[account] = post_id
-                                    # ... 路由發送邏輯 ...
-                                    target_id = self.settings["general"]
-                                    if account == "WW_JP_Official": target_id = self.settings["ww"]
-                                    elif account == "EN_BlueArchive": target_id = self.settings["blue_archive"]
+                                    
+                                    # 路由決定
+                                    target_id = self.settings.get("general")
+                                    if account == "WW_JP_Official": 
+                                        target_id = self.settings.get("ww") or target_id
+                                    elif account == "EN_BlueArchive": 
+                                        target_id = self.settings.get("blue_archive") or target_id
                                     
                                     if target_id:
-                                        channel = self.bot.get_channel(target_id)
+                                        channel = self.bot.get_channel(int(target_id))
                                         if channel:
                                             embed = discord.Embed(
-                                                title=f"📢 {account} 更新了！",
-                                                description=title,
+                                                title=f"📢 {account} 有新消息！",
+                                                description=title[:200] + "...",
                                                 url=link,
                                                 color=0x1DA1F2,
                                                 timestamp=datetime.utcnow()
