@@ -610,7 +610,6 @@ class MusicCog(commands.Cog):
             await ctx.send("🛑 劇院已關閉，洛洛下班啦～")
 
     @commands.command(name='shuffle', aliases=['亂序'])
-    @commands.command(name='shuffle', aliases=['亂序'])
     async def shuffle(self, ctx):
         if ctx.guild.id in self.queue and len(self.queue[ctx.guild.id]) > 0:
             random.shuffle(self.queue[ctx.guild.id])
