@@ -13,19 +13,23 @@ import random
 # --- YTDL 設定 ---
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
-    'noplaylist': 'True',
+    'noplaylist': True,
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': False,
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    'source_address': '0.0.0.0'
+    'source_address': '0.0.0.0',
+    # 嘗試避開 JS 依賴
+    'extract_flat': 'in_playlist',
+    'youtube_include_dash_manifest': False,
 }
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
 class YTDLSource(discord.PCMVolumeTransformer):
+    # ... (保持原樣)
     def __init__(self, source, *, data, volume=0.5, pitch=1.0, theater=True, exciter=True, bass=True, requester=None):
         super().__init__(source, volume)
         self.data = data
@@ -606,12 +610,33 @@ class MusicCog(commands.Cog):
             await ctx.send("🛑 劇院已關閉，洛洛下班啦～")
 
     @commands.command(name='shuffle', aliases=['亂序'])
+    @commands.command(name='shuffle', aliases=['亂序'])
     async def shuffle(self, ctx):
         if ctx.guild.id in self.queue and len(self.queue[ctx.guild.id]) > 0:
             random.shuffle(self.queue[ctx.guild.id])
             await ctx.send("🔀 **隊列已隨機亂序！**")
         else:
             await ctx.send("隊列是空的喔！")
+
+    async def play_next(self, guild):
+        if guild.id not in self.queue or len(self.queue[guild.id]) == 0:
+            print("📭 [Music] 播放清單已空。")
+            return
+
+        source_data = self.queue[guild.id].pop(0)
+        vc = guild.voice_client
+        if not vc: return
+
+        try:
+            print(f"🎵 [Music] 正在提取並播放: {source_data.get('title')}")
+            # 傳遞請求者資訊，讓 UI 能顯示是誰點的
+            source = await YTDLSource.from_url(source_data['webpage_url'], loop=self.bot.loop, stream=True, requester=source_data.get('requester'))
+            vc.play(source, after=lambda e: self.bot.loop.create_task(self.play_next(guild)))
+            print(f"✅ [Music] '{source.title}' 播放啟動成功！")
+        except Exception as e:
+            print(f"❌ [Music] 播放啟動失敗: {e}")
+            # 如果失敗，嘗試跳到下一首
+            self.bot.loop.create_task(self.play_next(guild))
 
     @commands.command(name='bass', aliases=['重低音'])
     async def set_bass(self, ctx):
