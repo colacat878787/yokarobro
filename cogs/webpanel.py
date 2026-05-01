@@ -614,28 +614,36 @@ class WebPanelCog(commands.Cog):
 
     @tunnel_group.command(name='setup')
     async def tunnel_setup(self, ctx, domain: str):
-        # 如果大總裁輸入了 stat. 開頭的，自動修正為根域名
-        root_domain = domain.replace("stat.", "").replace("yokaro-stat.", "")
-        stat_domain = f"yokaro-stat.{root_domain}"
+        # 智能解析：如果使用者輸入 yokaro.wayna1015.ccwu.cc
+        # 我們要把 root 定義在 wayna1015.ccwu.cc
+        parts = domain.split('.')
+        if len(parts) >= 3:
+            root_only = ".".join(parts[-2:]) # wayna1015.ccwu.cc
+            prefix = ".".join(parts[:-2])   # yokaro
+        else:
+            root_only = domain
+            prefix = "yokaro"
+
+        main_domain = domain
+        stat_domain = f"{prefix}-stat.{root_only}"
         
-        await ctx.send(f"🛠️ **正在為 {root_domain} 進行旗艦級域名綁定...**")
+        await ctx.send(f"🛠️ **正在為 {main_domain} 進行極致扁平化綁定...**")
         try:
             os.chmod("/home/container/cloudflared", 0o755)
             env = os.environ.copy()
             env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
             
             subprocess.run(["/home/container/cloudflared", "tunnel", "create", "yokaro-bot"], env=env, capture_output=True, text=True)
-            subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", root_domain], env=env, capture_output=True, text=True)
+            subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", main_domain], env=env, capture_output=True, text=True)
             subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", stat_domain], env=env, capture_output=True, text=True)
             
-            with open(".env", "a") as f:
-                f.write(f"\nCUSTOM_DOMAIN={root_domain}\nNAMED_TUNNEL=yokaro-bot")
+            # 更新 .env
+            with open(".env", "w") as f:
+                f.write(f"CUSTOM_DOMAIN={main_domain}\nNAMED_TUNNEL=yokaro-bot\n")
             
-            os.environ["CUSTOM_DOMAIN"] = root_domain
-            os.environ["NAMED_TUNNEL"] = "yokaro-bot"
-            self.tunnel_url = f"https://{root_domain}"
+            self.tunnel_url = f"https://{main_domain}"
                 
-            await ctx.send(f"✅ **設置完成！**\n💎 主站: `https://{root_domain}`\n👑 狀態頁: `https://{stat_domain}`\n\n洛洛現在會自動重啟隧道，請稍候！")
+            await ctx.send(f"✅ **設置完成！**\n💎 儀表板: `https://{main_domain}`\n👑 狀態頁: `https://{stat_domain}`\n\n兩者皆為第一層子域，SSL 證書現在能完美保護它們了！🐾✨")
             await self.auto_start_tunnel()
         except Exception as e:
             await ctx.send(f"❌ 設置發生異常: {e}")

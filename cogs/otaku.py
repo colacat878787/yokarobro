@@ -17,6 +17,7 @@ class OtakuCog(commands.Cog):
         self.settings_file = "otaku_settings.json"
         self.settings = self.load_settings()
         self.last_posts = {} # account: last_id
+        print(f"👁️ [Otaku] Twitter 監控已就緒，名單：{len(self.monitored_x)} 位。")
         self.twitter_loop.start()
 
     def load_settings(self):
