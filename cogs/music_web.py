@@ -261,17 +261,15 @@ MUSIC_HTML_TEMPLATE = """
                 <div class="section-title"><i class="fas fa-search"></i> 音樂搜尋</div>
                 <div class="input-group">
                     <i class="fas fa-music"></i>
-                    <input type="text" placeholder="搜尋或貼上連結..." id="search-input" onkeypress="if(event.key==='Enter') search()">
+                    <input type="text" placeholder="輸入關鍵字按下 Enter..." id="search-input" onkeypress="if(event.key==='Enter') search()">
                 </div>
                 
-                <div class="section-title" style="margin-top:30px;">
-                    <i class="fas fa-list-ol"></i> 播放隊列 
-                    <span id="queue-count" style="margin-left:auto; color:var(--accent)">0</span>
+                <!-- 搜尋結果預覽區 -->
+                <div id="search-results" style="display:none; margin-bottom:20px; padding:10px; background:rgba(0,0,0,0.2); border-radius:16px; border:1px solid rgba(255,255,255,0.05);">
+                    <div class="section-title" style="font-size:12px;"><i class="fas fa-list-check"></i> 請選擇歌曲</div>
+                    <div id="results-list"></div>
+                    <button class="action-btn btn-danger" style="margin-top:10px; padding:8px; font-size:12px;" onclick="closeSearch()">取消搜尋</button>
                 </div>
-                <div class="queue-list" id="queue-list">
-                    <!-- Items -->
-                </div>
-            </div>
         </div>
     </div>
 
@@ -363,13 +361,44 @@ MUSIC_HTML_TEMPLATE = """
         }, 1000);
 
         async function control(action) { await api('/control', 'POST', {action}); update(); }
+        
         async function search() {
             const input = document.getElementById('search-input');
             const q = input.value; if(!q) return;
-            input.value = '傳送指令中...'; input.disabled = true;
-            await api('/add', 'POST', {query: q});
+            input.value = '正在搜尋...'; input.disabled = true;
+            
+            const data = await api(`/search?q=${encodeURIComponent(q)}`);
             input.value = ''; input.disabled = false;
+            
+            if(data.results && data.results.length > 0) {
+                const resDiv = document.getElementById('search-results');
+                const listDiv = document.getElementById('results-list');
+                listDiv.innerHTML = '';
+                data.results.forEach(item => {
+                    listDiv.innerHTML += `
+                        <div class="queue-item" style="cursor:pointer; background:rgba(255,255,255,0.03);" onclick="selectSong('${item.url}')">
+                            <img src="${item.thumbnail}" class="queue-thumb">
+                            <div class="queue-meta">
+                                <div class="queue-name">${item.title}</div>
+                                <div class="queue-dur">${item.author} • ${item.duration}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                resDiv.style.display = 'block';
+            } else {
+                alert('找不到相關歌曲 😰');
+            }
+        }
+
+        async function selectSong(url) {
+            document.getElementById('search-results').style.display = 'none';
+            await api('/add', 'POST', {url: url});
             update();
+        }
+
+        function closeSearch() {
+            document.getElementById('search-results').style.display = 'none';
         }
 
         setInterval(update, 5000); update(); loadChannels();
@@ -444,30 +473,55 @@ def music_leave(guild_id):
         asyncio.run_coroutine_threadsafe(guild.voice_client.disconnect(), loop_instance)
     return jsonify({"status": "ok"})
 
-@app.route("/api/music/<guild_id>/add", methods=['POST'])
+@app.route("/api/music/<int:guild_id>/search")
+def music_search(guild_id):
+    query = request.args.get('q')
+    if not query: return jsonify({"results": []})
+    
+    # 使用 yt-dlp 進行搜尋 (獲取前 5 個結果)
+    import yt_dlp
+    YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': True, 'quiet': True, 'default_search': 'ytsearch5'}
+    with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
+        try:
+            info = ydl.extract_info(query, download=False)
+            results = []
+            for entry in info.get('entries', []):
+                results.append({
+                    "title": entry.get('title'),
+                    "url": entry.get('webpage_url'),
+                    "thumbnail": entry.get('thumbnail'),
+                    "duration": str(timedelta(seconds=entry.get('duration', 0))),
+                    "author": entry.get('uploader')
+                })
+            return jsonify({"results": results})
+        except Exception as e:
+            return jsonify({"error": str(e), "results": []})
+
+@app.route("/api/music/<int:guild_id>/add", methods=['POST'])
 def music_add(guild_id):
     data = request.json
-    query = data.get('query')
-    gid = int(guild_id)
+    url = data.get('url') # 現在接收精確的 URL
+    guild = bot_instance.get_guild(guild_id)
+    music_cog = bot_instance.get_cog("MusicCog")
+    
+    if not guild or not music_cog: return jsonify({"error": "Not found"}), 404
     
     async def do_add():
-        music_cog = bot_instance.get_cog("MusicCog")
-        guild = bot_instance.get_guild(gid)
-        if not music_cog or not guild: return
-        
-        # 這裡需要模擬一個 ctx
+        # 模擬 Ctx
         class MockCtx:
             def __init__(self, guild, bot):
                 self.guild = guild
-                self.author = bot.user # 以機器人身分點歌
+                self.author = bot.user
                 self.bot = bot
             async def send(self, *args, **kwargs): pass
             
         ctx = MockCtx(guild, bot_instance)
-        # 呼叫 MusicCog 的播放邏輯 (假設指令名稱是 play)
-        cmd = music_cog.play
-        await cmd(music_cog, ctx, search=query)
+        # 直接調用播放邏輯
+        await music_cog.play(music_cog, ctx, search=url)
         
+    asyncio.run_coroutine_threadsafe(do_add(), loop_instance)
+    return jsonify({"status": "ok"})
+
 @app.route("/api/music/<int:guild_id>/channels")
 def music_channels(guild_id):
     guild = bot_instance.get_guild(guild_id)
