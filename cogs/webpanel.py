@@ -754,7 +754,7 @@ STAT_HTML_TEMPLATE = """
         <div class="activity-card">
             <img src="{{ activity.large_image_url or 'https://cdn-icons-png.flaticon.com/512/681/681392.png' }}" class="activity-icon">
             <div class="activity-info">
-                <h2>{% if activity.type.value == 0 %}正在遊玩{% elif activity.type.value == 2 %}正在聆聽{% else %}正在行動{% endif %}</h2>
+                <h2>{% if activity.type.value == 1 %}現場直播中{% elif activity.type.value == 0 %}正在遊玩{% elif activity.type.value == 2 %}正在聆聽{% else %}正在行動{% endif %}</h2>
                 <div class="activity-title">{{ activity.name }}</div>
                 <p>{{ activity.details or '' }}</p>
                 <p>{{ activity.state or '' }}</p>
