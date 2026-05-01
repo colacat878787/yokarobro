@@ -555,14 +555,33 @@ class WebPanelCog(commands.Cog):
 
     @tunnel_group.command(name='login')
     async def tunnel_login(self, ctx):
-        await ctx.send("🔑 **正在啟動登入程序...**\n請點擊下方連結進行授權，完成後回到這裡輸入 `!tunnel setup <您的域名>`")
-        await ctx.send(f"請在伺服器終端執行: `./cloudflared tunnel login` 或點擊連結 (如果有顯示)")
+        await ctx.send("🔑 **正在獲取 Cloudflare 授權連結...**")
+        
         proc = await asyncio.create_subprocess_shell(
             "./cloudflared tunnel login",
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.STDOUT
         )
-        await ctx.send("請查看機器人控制台獲取登入連結！")
+        
+        found_url = False
+        try:
+            while True:
+                line = await proc.stdout.readline()
+                if not line: break
+                text = line.decode().strip()
+                print(f"[Tunnel Login] {text}")
+                
+                match = re.search(r'https://dash\.cloudflare\.com/argotunnel\?callback=[^\s]+', text)
+                if match:
+                    url = match.group(0)
+                    embed = discord.Embed(title="🔑 Cloudflare 授權請求", color=0xf38020)
+                    embed.description = f"請點擊下方連結登入並授權：\n\n🔗 **[點此授權登入]({url})**\n\n授權後請回到這裡輸入 `!tunnel setup <您的域名>`"
+                    await ctx.send(embed=embed)
+                    found_url = True
+                    break
+            
+            if not found_url: await ctx.send("❌ 無法抓取到連結，請檢查控制台。")
+        except Exception as e: await ctx.send(f"❌ 錯誤: {e}")
 
     @tunnel_group.command(name='setup')
     async def tunnel_setup(self, ctx, domain: str):
