@@ -500,24 +500,37 @@ def music_search(guild_id):
 @app.route("/api/music/<int:guild_id>/add", methods=['POST'])
 def music_add(guild_id):
     data = request.json
-    url = data.get('url') # 現在接收精確的 URL
+    url = data.get('url')
     guild = bot_instance.get_guild(guild_id)
     music_cog = bot_instance.get_cog("MusicCog")
     
     if not guild or not music_cog: return jsonify({"error": "Not found"}), 404
     
     async def do_add():
-        # 模擬 Ctx
+        # 尋找一個在語音頻道內的人，或者就用機器人自己
+        author = guild.me
+        if guild.voice_client and guild.voice_client.channel.members:
+            # 優先找頻道裡的人類
+            humans = [m for m in guild.voice_client.channel.members if not m.bot]
+            if humans: author = humans[0]
+
         class MockCtx:
-            def __init__(self, guild, bot):
+            def __init__(self, guild, author, bot):
                 self.guild = guild
-                self.author = bot.user
+                self.author = author
                 self.bot = bot
-            async def send(self, *args, **kwargs): pass
+                self.voice_client = guild.voice_client
+            async def send(self, *args, **kwargs): print(f"[WebMusic] {args}")
             
-        ctx = MockCtx(guild, bot_instance)
-        # 直接調用播放邏輯
+        ctx = MockCtx(guild, author, bot_instance)
+        
+        # 1. 加入隊列
         await music_cog.play(music_cog, ctx, search=url)
+        
+        # 2. 強制檢查播放狀態：如果沒在唱，就再叫它唱一次
+        await asyncio.sleep(1)
+        if guild.voice_client and not guild.voice_client.is_playing():
+            await music_cog.play(music_cog, ctx, search=None) # 觸發播放
         
     asyncio.run_coroutine_threadsafe(do_add(), loop_instance)
     return jsonify({"status": "ok"})
