@@ -647,7 +647,7 @@ STAT_HTML_TEMPLATE = """
 <head>
     <title>{{ user.display_name }} | 純金身分</title>
     <meta charset="utf-8">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;600;800&family=Noto+Sans+TC:wght@300;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;600;800&family=Noto+Sans+TC:wght@300;700&family=Noto+Sans+JP:wght@300;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --gold-primary: #bf953f;
@@ -657,12 +657,11 @@ STAT_HTML_TEMPLATE = """
         }
         body {
             margin: 0; background: var(--bg-dark); color: white;
-            font-family: 'Outfit', 'Noto Sans TC', sans-serif;
+            font-family: 'Outfit', 'Noto Sans TC', 'Noto Sans JP', 'Segoe UI Symbol', 'Apple Color Emoji', sans-serif;
             height: 100vh; display: flex; justify-content: center; align-items: center;
             overflow: hidden; perspective: 1000px;
         }
         
-        /* 金粉背景 */
         .particles {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: radial-gradient(circle at center, #1a150a 0%, #000 100%);
@@ -695,7 +694,6 @@ STAT_HTML_TEMPLATE = """
             50% { transform: translateY(-10px) rotateX(-2deg); }
         }
 
-        /* 掃光特效 */
         .gold-card::before {
             content: ''; position: absolute; top: 0; left: -150%; width: 100%; height: 100%;
             background: linear-gradient(90deg, transparent, rgba(252, 246, 186, 0.1), transparent);
@@ -722,9 +720,10 @@ STAT_HTML_TEMPLATE = """
         .status-dot.offline { background: #95a5a6; }
 
         .name-text {
-            font-size: 30px; font-weight: 800; margin-bottom: 5px;
+            font-size: 26px; font-weight: 800; margin-bottom: 5px;
             background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            word-break: break-all;
         }
         .tag-text { color: #666; font-size: 14px; margin-bottom: 25px; letter-spacing: 1px; }
 
@@ -742,7 +741,7 @@ STAT_HTML_TEMPLATE = """
     </style>
 </head>
 <body>
-    <div class="particles"></div>
+    <div class="particles" id="particles"></div>
     <div class="gold-card">
         <div class="avatar-box">
             <img src="{{ user.display_avatar.url }}" class="avatar">
@@ -755,19 +754,32 @@ STAT_HTML_TEMPLATE = """
         <div class="activity-card">
             <img src="{{ activity.large_image_url or 'https://cdn-icons-png.flaticon.com/512/681/681392.png' }}" class="activity-icon">
             <div class="activity-info">
-                <h2>{{ activity.type == 0 and '正在遊玩' or '正在聆聽' }}</h2>
+                <h2>{% if activity.type.value == 0 %}正在遊玩{% elif activity.type.value == 2 %}正在聆聽{% else %}正在行動{% endif %}</h2>
                 <div class="activity-title">{{ activity.name }}</div>
                 <p>{{ activity.details or '' }}</p>
                 <p>{{ activity.state or '' }}</p>
             </div>
         </div>
         {% else %}
-        <div style="color:#555; font-size:14px; margin: 20px 0;">目前沒有活動中 💤</div>
+        <div style="color:#444; font-size:12px; margin: 30px 0; letter-spacing: 2px;">RELAXING IN LUXURY 🍃</div>
         {% endif %}
 
         <div class="footer-text">STAT.WAYNA1015.CCWU.CC</div>
     </div>
-    <script>setTimeout(() => location.reload(), 15000);</script>
+    <script>
+        const container = document.getElementById('particles');
+        for(let i=0; i<40; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            const size = Math.random() * 3 + 1 + 'px';
+            p.style.width = size; p.style.height = size;
+            p.style.left = Math.random() * 100 + '%';
+            p.style.setProperty('--d', Math.random() * 10 + 5 + 's');
+            p.style.animationDelay = Math.random() * 5 + 's';
+            container.appendChild(p);
+        }
+        setTimeout(() => location.reload(), 30000);
+    </script>
 </body>
 </html>
 """
