@@ -519,22 +519,45 @@ class WebPanelCog(commands.Cog):
         self.tunnel_process = None
         self.tunnel_url = ""
         
-        # 啟動 Flask (使用動態隨機端口避免衝突)
+        # 啟動 Flask
         import random
         self.port = random.randint(6000, 9000)
-        
         def run_flask():
-            # 嘗試清理可能殘留的舊端口 (雖然隨機了，但還是保險一下)
             try: subprocess.run(["fuser", "-k", f"{self.port}/tcp"], capture_output=True)
             except: pass
-            
             try:
-                print(f"📡 Flask 正在嘗試啟動於端口: {self.port}")
+                print(f"📡 Flask 正在啟動於端口: {self.port}")
                 app.run(host="0.0.0.0", port=self.port, debug=False, use_reloader=False)
-            except Exception as e:
-                print(f"⚠️ Flask 啟動失敗: {e}")
-
+            except Exception as e: print(f"⚠️ Flask 啟動失敗: {e}")
         threading.Thread(target=run_flask, daemon=True).start()
+        
+        # --- 自動啟動隧道 ---
+        asyncio.run_coroutine_threadsafe(self.auto_start_tunnel(), self.bot.loop)
+
+    async def auto_start_tunnel(self):
+        await asyncio.sleep(5) # 等待一下確保 Flask 跑起來
+        print("📡 正在嘗試自動建立安全隧道...")
+        import platform
+        dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+        if platform.system() == "Windows": dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+        if not os.path.exists("./cloudflared"):
+            subprocess.run(["curl", "-L", dl_url, "-o", "cloudflared"])
+            if platform.system() != "Windows": subprocess.run(["chmod", "+x", "cloudflared"])
+
+        try:
+            self.tunnel_process = subprocess.Popen(
+                ["./cloudflared", "tunnel", "--url", f"http://localhost:{self.port}"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            )
+            for _ in range(30):
+                await asyncio.sleep(1)
+                line = self.tunnel_process.stdout.readline()
+                match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
+                if match:
+                    self.tunnel_url = match.group(0)
+                    print(f"✅ 自動隧道建立完成: {self.tunnel_url}")
+                    break
+        except Exception as e: print(f"❌ 自動隧道啟動失敗: {e}")
 
     @commands.command(name='webpanel')
     async def open_panel(self, ctx):

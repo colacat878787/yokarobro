@@ -5,13 +5,9 @@ import os
 import secrets
 import threading
 import json
-from flask import Flask, render_template_string, request, jsonify
-import psutil
+from cogs.webpanel import app, bot_instance, loop_instance
 from datetime import timedelta
-
-app = Flask(__name__)
-bot_instance = None
-loop_instance = None
+import time
 
 # --- 音樂儀表板 HTML 模板 ---
 MUSIC_HTML_TEMPLATE = """
