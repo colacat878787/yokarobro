@@ -614,27 +614,27 @@ class WebPanelCog(commands.Cog):
 
     @tunnel_group.command(name='setup')
     async def tunnel_setup(self, ctx, domain: str):
-        # 智能解析：如果使用者輸入 yokaro.wayna1015.ccwu.cc
-        # 我們要把 root 定義在 wayna1015.ccwu.cc
-        parts = domain.split('.')
-        if len(parts) >= 3:
-            root_only = ".".join(parts[-2:]) # wayna1015.ccwu.cc
-            prefix = ".".join(parts[:-2])   # yokaro
-        else:
-            root_only = domain
-            prefix = "yokaro"
-
+        # 簡單粗暴的扁平化邏輯：yokaro.wayna1015.ccwu.cc -> yokaro-stat.wayna1015.ccwu.cc
         main_domain = domain
-        stat_domain = f"{prefix}-stat.{root_only}"
+        if "-stat." not in domain:
+            stat_domain = domain.replace(".", "-stat.", 1)
+        else:
+            stat_domain = domain
+            main_domain = domain.replace("-stat.", ".", 1)
         
-        await ctx.send(f"🛠️ **正在為 {main_domain} 進行極致扁平化綁定...**")
+        await ctx.send(f"🛠️ **正在為 {main_domain} 進行終極域名綁定...**")
         try:
             os.chmod("/home/container/cloudflared", 0o755)
             env = os.environ.copy()
             env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
             
+            # 1. 創建隧道
             subprocess.run(["/home/container/cloudflared", "tunnel", "create", "yokaro-bot"], env=env, capture_output=True, text=True)
+            
+            # 2. 綁定主站
             subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", main_domain], env=env, capture_output=True, text=True)
+            
+            # 3. 綁定狀態頁
             subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", stat_domain], env=env, capture_output=True, text=True)
             
             # 更新 .env
@@ -643,7 +643,7 @@ class WebPanelCog(commands.Cog):
             
             self.tunnel_url = f"https://{main_domain}"
                 
-            await ctx.send(f"✅ **設置完成！**\n💎 儀表板: `https://{main_domain}`\n👑 狀態頁: `https://{stat_domain}`\n\n兩者皆為第一層子域，SSL 證書現在能完美保護它們了！🐾✨")
+            await ctx.send(f"✅ **設置完成！**\n💎 儀表板: `https://{main_domain}`\n👑 狀態頁: `https://{stat_domain}`\n\n這次域名絕對正確了！請等候幾分鐘生效！🐾✨")
             await self.auto_start_tunnel()
         except Exception as e:
             await ctx.send(f"❌ 設置發生異常: {e}")
