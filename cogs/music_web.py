@@ -518,32 +518,54 @@ def music_add(guild_id):
             def __init__(self, channel):
                 self.channel = channel
 
+        # 模擬 AsyncContextManager for ctx.typing()
+        class MockTyping:
+            async def __aenter__(self): pass
+            async def __aexit__(self, exc_type, exc_val, exc_tb): pass
+
         class MockCtx:
             def __init__(self, guild, author, bot):
                 self.guild = guild
                 self.author = author
                 self.bot = bot
                 self.voice_client = guild.voice_client
-                # 關鍵：模擬語音狀態，讓指令通過檢查
+                self.channel = guild.text_channels[0] if guild.text_channels else None
+                self.message = None # 雖然是 None，但屬性必須存在
+                # 關鍵：模擬語音狀態
                 self.author.voice = MockVoiceState(guild.voice_client.channel) if guild.voice_client else None
+            
+            def typing(self): return MockTyping()
             async def send(self, *args, **kwargs): 
                 content = args[0] if args else kwargs.get('content', '')
                 print(f"🎵 [WebMusic] {content}")
+                # 模擬回傳一個消息對象
+                class MockMsg:
+                    def __init__(self): self.id = 0
+                    async def delete(self): pass
+                    async def edit(self, *args, **kwargs): pass
+                return MockMsg()
             
         ctx = MockCtx(guild, author, bot_instance)
         
         try:
-            # 1. 直接執行加入邏輯
-            print(f"🛰️ [WebMusic] 正在為 {guild.name} 點歌: {url}")
-            await music_cog.play(ctx, search=url)
+            print(f"🛰️ [WebMusic] 正在點歌: {url}")
+            # 直接抓取 MusicCog 的 play 函數對象
+            play_cmd = music_cog.play
+            if hasattr(play_cmd, 'callback'): play_cmd = play_cmd.callback
             
-            # 2. 如果沒在唱，強制開唱
+            # 執行播放
+            await play_cmd(music_cog, ctx, search=url)
+            
+            # 如果還是沒唱，檢查隊列並強啟
             await asyncio.sleep(2)
-            if guild.voice_client and not guild.voice_client.is_playing() and not guild.voice_client.is_paused():
-                print("⚡ [WebMusic] 播放器未啟動，手動觸發播放...")
-                await music_cog.play(ctx, search=None)
+            if guild.voice_client and not guild.voice_client.is_playing():
+                print("⚡ [WebMusic] 偵測到閒置，嘗試手動觸發隊列...")
+                # 這裡如果 play 指令沒帶 search 參數會播放下一首 (視 music.py 邏輯而定)
+                await play_cmd(music_cog, ctx, search=None)
         except Exception as e:
-            print(f"❌ [WebMusic] 執行播放指令失敗: {e}")
+            import traceback
+            print(f"❌ [WebMusic] 致命錯誤: {e}")
+            traceback.print_exc()
         
     asyncio.run_coroutine_threadsafe(do_add(), loop_instance)
     return jsonify({"status": "ok"})
