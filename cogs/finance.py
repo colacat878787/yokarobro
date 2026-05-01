@@ -4,7 +4,45 @@ import json, os, time
 
 FINANCE_FILE = "finance_data.json"
 
+# --- 債務催收視圖 ---
+class RepaymentView(discord.ui.View):
+    def __init__(self, finance_cog, user_id):
+        super().__init__(timeout=60)
+        self.fin = finance_cog
+        self.uid = str(user_id)
+
+    @discord.ui.button(label="🚀 一鍵清償債務", style=discord.ButtonStyle.success, custom_id="fin_repay_all")
+    async def repay_all(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != self.uid:
+            return await interaction.response.send_message("❌ 這不是您的帳單喔！", ephemeral=True)
+        
+        eco = self.fin.bot.get_cog("EconomyCog")
+        user_fin = self.fin.get_user_data(self.uid)
+        balance = eco.get_balance(self.uid)
+        
+        debt = user_fin["used_credit"]
+        if debt <= 0:
+            return await interaction.response.send_message("✅ 您目前沒有債務！", ephemeral=True)
+            
+        if balance <= 0:
+            return await interaction.response.send_message("❌ 您的錢包目前空空如也，沒錢還債喔！去工作吧！", ephemeral=True)
+
+        pay_amount = min(balance, debt)
+        eco.add_money(self.uid, -pay_amount)
+        user_fin["used_credit"] -= pay_amount
+        
+        # 檢查是否解凍
+        if user_fin["used_credit"] < user_fin["credit_limit"]:
+            user_fin["is_frozen"] = False
+            
+        self.fin._save()
+        
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        await interaction.followup.send(f"✅ 還款成功！已從錢包扣除 **${pay_amount:,}** 元。剩餘債務: **${user_fin['used_credit']:,}**", ephemeral=True)
+
 class FinanceCog(commands.Cog):
+    # ... (保持原樣)
     def __init__(self, bot):
         self.bot = bot
         self.data = self._load()

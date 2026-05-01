@@ -275,31 +275,37 @@ class EconomyCog(commands.Cog):
     def get_balance(self, uid):
         return self.get_user_data(uid)["balance"]
 
-    def add_money(self, user_id, amount):
+    def add_money(self, user_id, amount, channel=None):
         uid = str(user_id)
         data = self.get_user_data(uid)
         
         # 如果是扣款且錢包不足
         if amount < 0 and data["balance"] < abs(amount):
-            # 嘗試找尋金融模組進行刷卡
             fin_cog = self.bot.get_cog("FinanceCog")
             if fin_cog:
-                # 計算差額
                 needed = abs(amount) - data["balance"]
                 success, reason = fin_cog.charge(uid, needed)
                 if success:
-                    # 扣光餘額，差額進信用卡
                     data["balance"] = 0
                     self.save_data()
-                    print(f"💳 [Finance] 使用者 {uid} 餘額不足，差額 ${needed} 已由信用卡代付。")
                     return True
-                else:
-                    print(f"❌ [Finance] 使用者 {uid} 支付失敗: {reason}")
-                    return False
+                return False
             return False
 
         data["balance"] += amount
         self.save_data()
+
+        # --- 債務催收鬧鐘 ---
+        if amount > 0: # 賺到錢了
+            fin_cog = self.bot.get_cog("FinanceCog")
+            if fin_cog:
+                user_fin = fin_cog.get_user_data(uid)
+                if user_fin.get("used_credit", 0) > 0 and channel:
+                    from cogs.finance import RepaymentView
+                    asyncio.create_task(channel.send(
+                        f"📢 {self.bot.get_user(int(uid)).mention} 恭喜賺到錢了！\n但別忘了您還有 **${user_fin['used_credit']:,}** 的信用卡債務喔！要現在清償嗎？",
+                        view=RepaymentView(fin_cog, uid)
+                    ))
         return True
 
     @commands.hybrid_command(name='balance', aliases=['錢包', '餘額'])
