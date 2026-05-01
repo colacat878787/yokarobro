@@ -801,25 +801,30 @@ def user_status_page(user_id):
         await self.auto_start_tunnel()
 
     async def auto_start_tunnel(self):
-        # 優先從 .env 讀取
+        # 優先從環境變數或 .env 讀取
         domain = os.environ.get("CUSTOM_DOMAIN")
-                self.tunnel_url = f"https://{domain}"
-                print(f"✅ [正式模式] 隧道已建立: {self.tunnel_url}")
-            else:
-                print("📡 [臨時模式] 啟動 trycloudflare 隧道...")
-                self.tunnel_process = subprocess.Popen(
-                    ["./cloudflared", "tunnel", "--url", f"https://localhost:{self.port}", "--no-tls-verify"],
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-                )
-                for _ in range(30):
-                    await asyncio.sleep(1)
-                    line = self.tunnel_process.stdout.readline()
-                    match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
-                    if match:
-                        self.tunnel_url = match.group(0)
-                        print(f"✅ [臨時模式] 隧道建立完成: {self.tunnel_url}")
-                        break
-        except Exception as e: print(f"❌ 隧道自動啟動失敗: {e}")
+        if not domain and os.path.exists(".env"):
+            with open(".env", "r") as f:
+                for line in f:
+                    if "CUSTOM_DOMAIN=" in line:
+                        domain = line.split("=")[1].strip()
+        
+        if not domain: return
+        
+        print(f"🚀 [自動化] 正在連線至您的專屬域名: {domain}...")
+        env = os.environ.copy()
+        env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
+        os.chmod("/home/container/cloudflared", 0o755)
+        try:
+            subprocess.run(["pkill", "-f", "cloudflared"], capture_output=True)
+            self.tunnel_process = subprocess.Popen(
+                ["/home/container/cloudflared", "tunnel", "run", "--url", f"https://127.0.0.1:{self.port}", "--no-tls-verify", "yokaro-bot"],
+                env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            )
+            self.tunnel_url = f"https://{domain}"
+            print(f"✅ [自動化] 隧道已建立: {self.tunnel_url}")
+        except Exception as e:
+            print(f"❌ 隧道啟動失敗: {e}")
 
     @commands.command(name='webpanel')
     async def open_panel(self, ctx):
