@@ -14,24 +14,58 @@ class OtakuCog(commands.Cog):
             "honkaistarrail", "lun_hong94850", "DarrenHung12", 
             "marika_vtuber", "index96703"
         ]
+        self.settings_file = "otaku_settings.json"
+        self.settings = self.load_settings()
         self.last_posts = {} # account: last_id
         self.twitter_loop.start()
+
+    def load_settings(self):
+        if os.path.exists(self.settings_file):
+            with open(self.settings_file, 'r') as f:
+                return json.load(f)
+        return {"ww": None, "blue_archive": None, "general": None}
+
+    def save_settings(self):
+        with open(self.settings_file, 'w') as f:
+            json.dump(self.settings, f)
 
     def cog_unload(self):
         self.twitter_loop.cancel()
 
+    @commands.command(name="ww")
+    async def set_ww(self, ctx):
+        self.settings["ww"] = ctx.channel.id
+        self.save_settings()
+        await ctx.send(f"✅ **鳴潮 (WW_JP_Official)** 監控已綁定至此頻道！")
+
+    @commands.command(name="蔚藍")
+    async def set_ba(self, ctx):
+        self.settings["blue_archive"] = ctx.channel.id
+        self.save_settings()
+        await ctx.send(f"✅ **蔚藍檔案 (EN_BlueArchive)** 監控已綁定至此頻道！")
+
+    @commands.command(name="肥宅日常")
+    async def set_general(self, ctx):
+        self.settings["general"] = ctx.channel.id
+        self.save_settings()
+        await ctx.send(f"✅ **其餘大佬與遊戲動態** 監控已綁定至此頻道！")
+
     @tasks.loop(minutes=5)
     async def twitter_loop(self):
-        # 這裡洛洛使用一個公開的 Nitter 實例來監控 X (免 API Key，更穩定)
         nitter_instances = ["https://nitter.net", "https://nitter.it", "https://nitter.privacydev.net"]
-        
-        # 獲取要發送的頻道 (假設是當前伺服器的第一個可發言文字頻道，或特定名稱)
-        target_channel_name = "肥宅日常" 
         
         async with aiohttp.ClientSession() as session:
             for account in self.monitored_x:
                 try:
-                    # 隨機選一個實例
+                    # 決定目標頻道
+                    target_id = self.settings["general"]
+                    if account == "WW_JP_Official": target_id = self.settings["ww"]
+                    elif account == "EN_BlueArchive": target_id = self.settings["blue_archive"]
+                    
+                    if not target_id: continue
+                    channel = self.bot.get_channel(target_id)
+                    if not channel: continue
+
                     instance = nitter_instances[0] 
                     async with session.get(f"{instance}/{account}/rss") as resp:
                         if resp.status == 200:
@@ -53,34 +87,18 @@ class OtakuCog(commands.Cog):
                                 
                             if post_id != self.last_posts[account]:
                                 self.last_posts[account] = post_id
-                                # 發送到所有有 "肥宅日常" 頻道的伺服器
-                                for guild in self.bot.guilds:
-                                    channel = discord.utils.get(guild.text_channels, name=target_channel_name)
-                                    if channel:
-                                        embed = discord.Embed(
-                                            title=f"📢 {account} 更新了！",
-                                            description=title,
-                                            url=link,
-                                            color=0x1DA1F2,
-                                            timestamp=datetime.utcnow()
-                                        )
-                                        embed.set_footer(text="優卡洛 ‧ 肥宅監控衛星")
-                                        await channel.send(embed=embed)
+                                embed = discord.Embed(
+                                    title=f"📢 {account} 更新了！",
+                                    description=title,
+                                    url=link,
+                                    color=0x1DA1F2,
+                                    timestamp=datetime.utcnow()
+                                )
+                                embed.set_footer(text="優卡洛 ‧ 肥宅監控衛星")
+                                await channel.send(embed=embed)
                 except Exception as e:
                     print(f"❌ 監控 {account} 失敗: {e}")
                 await asyncio.sleep(2)
-
-    @commands.command(name="肥宅日常")
-    async def otaku_daily(self, ctx):
-        embed = discord.Embed(
-            title="🛰️ 優卡洛 ‧ 肥宅監控衛星",
-            description="目前正在監控以下大佬的 X (Twitter) 動態：",
-            color=0x00ff00
-        )
-        for acc in self.monitored_x:
-            embed.add_field(name=acc, value=f"[點我查看](https://x.com/{acc})", inline=True)
-        embed.set_footer(text="每 5 分鐘自動同步一次轉發/貼文")
-        await ctx.send(embed=embed)
 
     @commands.command(name="rbx")
     async def roblox_profile(self, ctx, username: str):
