@@ -590,13 +590,23 @@ class WebPanelCog(commands.Cog):
     async def tunnel_setup(self, ctx, domain: str):
         await ctx.send(f"🛠️ **正在為 {domain} 及其子域名進行雙重綁定...**")
         try:
-            # 1. 創建隧道 (如果已存在會跳過)
-            subprocess.run(["./cloudflared", "tunnel", "create", "yokaro-bot"], capture_output=True, text=True)
+            # 確保檔案可執行
+            os.chmod("/home/container/cloudflared", 0o755)
+            
+            env = os.environ.copy()
+            env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
+            
+            # 1. 創建隧道
+            res1 = subprocess.run(["/home/container/cloudflared", "tunnel", "create", "yokaro-bot"], env=env, capture_output=True, text=True)
+            if res1.returncode != 0 and "already exists" not in res1.stderr:
+                return await ctx.send(f"❌ 創建隧道失敗: `{res1.stderr}`")
+
             # 2. 綁定主域名
-            subprocess.run(["./cloudflared", "tunnel", "route", "dns", "yokaro-bot", domain], capture_output=True, text=True)
+            res2 = subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", domain], env=env, capture_output=True, text=True)
+            
             # 3. 綁定 stat 子域名
             stat_domain = f"stat.{domain}"
-            subprocess.run(["./cloudflared", "tunnel", "route", "dns", "yokaro-bot", stat_domain], capture_output=True, text=True)
+            res3 = subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", stat_domain], env=env, capture_output=True, text=True)
             
             with open(".env", "a") as f:
                 f.write(f"\nCUSTOM_DOMAIN={domain}\nNAMED_TUNNEL=yokaro-bot")
@@ -606,7 +616,28 @@ class WebPanelCog(commands.Cog):
                 
             await ctx.send(f"✅ **設置完成！**\n主域名: `{domain}`\n狀態頁面: `https://{stat_domain}`\n請輸入 `!tunnel start` 啟動！")
         except Exception as e:
-            await ctx.send(f"❌ 設置失敗: {e}")
+            await ctx.send(f"❌ 設置發生異常: {e}")
+
+    @tunnel_group.command(name='start')
+    async def tunnel_start(self, ctx):
+        if self.tunnel_process: 
+            self.tunnel_process.terminate()
+            await asyncio.sleep(2)
+            
+        await ctx.send("🚀 **正在手動啟動具名隧道...**")
+        os.chmod("/home/container/cloudflared", 0o755)
+        
+        env = os.environ.copy()
+        env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
+        
+        try:
+            self.tunnel_process = subprocess.Popen(
+                ["/home/container/cloudflared", "tunnel", "run", "yokaro-bot"],
+                env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            )
+            await ctx.send("✅ **隧道已在背景啟動！** 請稍候幾分鐘待 DNS 生效。")
+        except Exception as e:
+            await ctx.send(f"❌ 啟動失敗: {e}")
 
 # --- 狀態頁面 HTML 模板 (純金 Liquid Gold 旗艦版) ---
 STAT_HTML_TEMPLATE = """
