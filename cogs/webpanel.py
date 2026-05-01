@@ -519,15 +519,28 @@ class WebPanelCog(commands.Cog):
         self.tunnel_process = None
         self.tunnel_url = ""
         
-        # 啟動 Flask
+        # 啟動 Flask (使用百年證書加密)
         import random
         self.port = random.randint(6000, 9000)
+        
+        # --- 自動生成百年證書 ---
+        if not os.path.exists("cert.pem") or not os.path.exists("key.pem"):
+            print("📜 正在為大總裁鍛造百年加密證書...")
+            subprocess.run([
+                "openssl", "req", "-x509", "-newkey", "rsa:4096", 
+                "-keyout", "key.pem", "-out", "cert.pem", 
+                "-days", "36500", "-nodes", 
+                "-subj", "/C=TW/ST=Taipei/L=Yokaro/O=YokaroBot/OU=Security/CN=yokaro.bot"
+            ], capture_output=True)
+            print("✅ 百年證書鍛造完成！有效期限至 2126 年。")
+
         def run_flask():
             try: subprocess.run(["fuser", "-k", f"{self.port}/tcp"], capture_output=True)
             except: pass
             try:
-                print(f"📡 Flask 正在啟動於端口: {self.port}")
-                app.run(host="0.0.0.0", port=self.port, debug=False, use_reloader=False)
+                print(f"📡 Flask (HTTPS) 正在啟動於端口: {self.port}")
+                # 啟用 SSL
+                app.run(host="0.0.0.0", port=self.port, debug=False, use_reloader=False, ssl_context=('cert.pem', 'key.pem'))
             except Exception as e: print(f"⚠️ Flask 啟動失敗: {e}")
         threading.Thread(target=run_flask, daemon=True).start()
         
@@ -576,13 +589,6 @@ class WebPanelCog(commands.Cog):
     async def auto_start_tunnel(self):
         await asyncio.sleep(5)
         domain = os.getenv("CUSTOM_DOMAIN")
-            subprocess.run(["curl", "-L", dl_url, "-o", "cloudflared"])
-            if platform.system() != "Windows": subprocess.run(["chmod", "+x", "cloudflared"])
-
-        try:
-            if token:
-                print(f"🔗 偵測到自定義隧道 Token，正在連線至 {domain or '自定義域名'}...")
-                self.tunnel_process = subprocess.Popen(
                     ["./cloudflared", "tunnel", "--no-autoupdate", "run", "--token", token],
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
                 )
