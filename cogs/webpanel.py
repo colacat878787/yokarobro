@@ -534,30 +534,75 @@ class WebPanelCog(commands.Cog):
         # --- 自動啟動隧道 ---
         asyncio.run_coroutine_threadsafe(self.auto_start_tunnel(), self.bot.loop)
 
+    @commands.group(name='tunnel')
+    async def tunnel_group(self, ctx):
+        if ctx.author.id not in ADMIN_IDS: return
+        if ctx.invoked_subcommand is None:
+            await ctx.send("📡 **隧道管理中心**\n`!tunnel login` - 登入 Cloudflare\n`!tunnel setup <域名>` - 創建並綁定域名\n`!tunnel start` - 切換至正式模式")
+
+    @tunnel_group.command(name='login')
+    async def tunnel_login(self, ctx):
+        await ctx.send("🔑 **正在啟動登入程序...**\n請點擊下方連結進行授權，完成後回到這裡輸入 `!tunnel setup <您的域名>`")
+        await ctx.send(f"請在伺服器終端執行: `./cloudflared tunnel login` 或點擊連結 (如果有顯示)")
+        proc = await asyncio.create_subprocess_shell(
+            "./cloudflared tunnel login",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        await ctx.send("請查看機器人控制台獲取登入連結！")
+
+    @tunnel_group.command(name='setup')
+    async def tunnel_setup(self, ctx, domain: str):
+        await ctx.send(f"🛠️ **正在為 {domain} 進行初始化...**")
+        try:
+            subprocess.run(["./cloudflared", "tunnel", "create", "yokaro-bot"], capture_output=True)
+            subprocess.run(["./cloudflared", "tunnel", "route", "dns", "yokaro-bot", domain], capture_output=True)
+            
+            with open(".env", "a") as f:
+                f.write(f"\nCUSTOM_DOMAIN={domain}\nNAMED_TUNNEL=yokaro-bot")
+                
+            await ctx.send(f"✅ **設置完成！**\n域名: `{domain}`\n隧道名稱: `yokaro-bot`\n請輸入 `!tunnel start` 啟動！")
+        except Exception as e:
+            await ctx.send(f"❌ 設置失敗: {e}")
+
+    @tunnel_group.command(name='start')
+    async def tunnel_start(self, ctx):
+        if self.tunnel_process: self.tunnel_process.terminate()
+        self.tunnel_url = f"https://{os.getenv('CUSTOM_DOMAIN', 'yokaro.wayna1015.ccwu.cc')}"
+        
+        asyncio.run_coroutine_threadsafe(self.auto_start_tunnel(), self.bot.loop)
+        await ctx.send(f"🚀 **隧道已切換至正式模式！**\n網址: {self.tunnel_url}")
+
     async def auto_start_tunnel(self):
-        await asyncio.sleep(5) # 等待一下確保 Flask 跑起來
-        print("📡 正在嘗試自動建立安全隧道...")
-        import platform
-        dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
-        if platform.system() == "Windows": dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
-        if not os.path.exists("./cloudflared"):
+        await asyncio.sleep(5)
+        domain = os.getenv("CUSTOM_DOMAIN")
             subprocess.run(["curl", "-L", dl_url, "-o", "cloudflared"])
             if platform.system() != "Windows": subprocess.run(["chmod", "+x", "cloudflared"])
 
         try:
-            self.tunnel_process = subprocess.Popen(
-                ["./cloudflared", "tunnel", "--url", f"http://localhost:{self.port}"],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-            )
-            for _ in range(30):
-                await asyncio.sleep(1)
-                line = self.tunnel_process.stdout.readline()
-                match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
-                if match:
-                    self.tunnel_url = match.group(0)
-                    print(f"✅ 自動隧道建立完成: {self.tunnel_url}")
-                    break
-        except Exception as e: print(f"❌ 自動隧道啟動失敗: {e}")
+            if token:
+                print(f"🔗 偵測到自定義隧道 Token，正在連線至 {domain or '自定義域名'}...")
+                self.tunnel_process = subprocess.Popen(
+                    ["./cloudflared", "tunnel", "--no-autoupdate", "run", "--token", token],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+                )
+                self.tunnel_url = f"https://{domain}" if domain else "https://your-custom-domain.com"
+                print(f"✅ 自定義隧道已啟動: {self.tunnel_url}")
+            else:
+                print("📡 未偵測到 Token，啟動臨時 trycloudflare 隧道...")
+                self.tunnel_process = subprocess.Popen(
+                    ["./cloudflared", "tunnel", "--url", f"http://localhost:{self.port}"],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+                )
+                for _ in range(30):
+                    await asyncio.sleep(1)
+                    line = self.tunnel_process.stdout.readline()
+                    match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
+                    if match:
+                        self.tunnel_url = match.group(0)
+                        print(f"✅ 臨時隧道建立完成: {self.tunnel_url}")
+                        break
+        except Exception as e: print(f"❌ 隧道啟動失敗: {e}")
 
     @commands.command(name='webpanel')
     async def open_panel(self, ctx):
