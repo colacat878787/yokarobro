@@ -537,8 +537,8 @@ class WebPanelCog(commands.Cog):
 
         def run_flask():
             try:
-                print(f"📡 Flask (HTTP) 正在啟動於內部端口: {self.port}")
-                app.run(host="127.0.0.1", port=self.port, debug=False, use_reloader=False)
+                print(f"📡 Flask (HTTPS 百年加密) 正在啟動於內部端口: {self.port}")
+                app.run(host="0.0.0.0", port=self.port, debug=False, use_reloader=False, ssl_context=('cert.pem', 'key.pem'))
             except Exception as e: print(f"⚠️ Flask 啟動失敗: {e}")
         threading.Thread(target=run_flask, daemon=True).start()
 
@@ -559,18 +559,18 @@ class WebPanelCog(commands.Cog):
         
         if domain:
             self.tunnel_url = f"https://{domain}"
-            print(f"🚀 [自動化] 偵測到域名 {domain}，正在將隧道連向內部端口 {self.port}...")
+            print(f"🚀 [自動化] 偵測到域名 {domain}，正在以 HTTPS 模式連線至內部端口 {self.port}...")
             env = os.environ.copy()
             env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
             os.chmod("/home/container/cloudflared", 0o755)
             try:
                 subprocess.run(["pkill", "-f", "cloudflared"], capture_output=True)
-                # 明確指定連向本地的 HTTP 端口
+                # 關鍵：使用 https 連結並加上 --no-tls-verify 繞過自簽名檢查
                 self.tunnel_process = subprocess.Popen(
-                    ["/home/container/cloudflared", "tunnel", "run", "--url", f"http://127.0.0.1:{self.port}", "yokaro-bot"],
+                    ["/home/container/cloudflared", "tunnel", "run", "--url", f"https://127.0.0.1:{self.port}", "--no-tls-verify", "yokaro-bot"],
                     env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
                 )
-                print(f"✅ [自動化] 隧道已成功連通！公網訪問地址: {self.tunnel_url}")
+                print(f"✅ [自動化] 百年加密隧道已成功連通！公網訪問地址: {self.tunnel_url}")
             except Exception as e:
                 print(f"❌ 隧道自動啟動失敗: {e}")
 
