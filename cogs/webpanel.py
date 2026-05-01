@@ -630,14 +630,18 @@ class WebPanelCog(commands.Cog):
 
         try:
             if named:
-                print(f"🔗 正在啟動具名隧道: {named} ({domain})...")
+                print(f"🚀 [自動化] 正在連線至您的專屬域名: {domain}...")
+                # 指定 Pterodactyl 的 .cloudflared 路徑
+                cred_path = "/home/container/.cloudflared"
                 self.tunnel_process = subprocess.Popen(
                     ["./cloudflared", "tunnel", "--no-autoupdate", "run", "--url", f"https://localhost:{self.port}", "--no-tls-verify", named],
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                    env={**os.environ, "CLOUDFLARED_HOME": cred_path}
                 )
                 self.tunnel_url = f"https://{domain}"
+                print(f"✅ [正式模式] 隧道已建立: {self.tunnel_url}")
             else:
-                print("📡 啟動臨時 trycloudflare 隧道...")
+                print("📡 [臨時模式] 啟動 trycloudflare 隧道...")
                 self.tunnel_process = subprocess.Popen(
                     ["./cloudflared", "tunnel", "--url", f"https://localhost:{self.port}", "--no-tls-verify"],
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
@@ -648,9 +652,9 @@ class WebPanelCog(commands.Cog):
                     match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
                     if match:
                         self.tunnel_url = match.group(0)
-                        print(f"✅ 臨時隧道建立完成: {self.tunnel_url}")
+                        print(f"✅ [臨時模式] 隧道建立完成: {self.tunnel_url}")
                         break
-        except Exception as e: print(f"❌ 隧道啟動失敗: {e}")
+        except Exception as e: print(f"❌ 隧道自動啟動失敗: {e}")
 
     @commands.command(name='webpanel')
     async def open_panel(self, ctx):

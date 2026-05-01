@@ -22,15 +22,16 @@ MUSIC_HTML_TEMPLATE = """
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root {
-            --bg: #0b0e14;
-            --card-bg: rgba(255, 255, 255, 0.03);
-            --accent: #5865f2;
-            --accent-glow: rgba(88, 101, 242, 0.4);
+            --bg: #05070a;
+            --card-bg: rgba(20, 24, 35, 0.6);
+            --accent: #7289da;
+            --accent-glow: rgba(114, 137, 218, 0.4);
             --text-primary: #ffffff;
-            --text-secondary: #949ba4;
-            --danger: #ed4245;
+            --text-secondary: #aeb5bd;
+            --danger: #ff4757;
+            --success: #2ed573;
         }
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         body {
             font-family: 'Outfit', sans-serif;
             background-color: var(--bg);
@@ -38,195 +39,245 @@ MUSIC_HTML_TEMPLATE = """
             margin: 0;
             display: flex;
             justify-content: center;
-            align-items: center;
             min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 10% 10%, rgba(114, 137, 218, 0.05), transparent 30%),
+                radial-gradient(circle at 90% 90%, rgba(255, 71, 87, 0.05), transparent 30%);
             overflow-x: hidden;
-            background-image: radial-gradient(circle at 50% -20%, #1e2129, #0b0e14);
         }
         .container {
             width: 100%;
-            max-width: 1000px;
+            max-width: 1100px;
             padding: 40px 20px;
             display: grid;
-            grid-template-columns: 1fr 350px;
+            grid-template-columns: 1fr 380px;
             gap: 30px;
         }
-        @media (max-width: 850px) { .container { grid-template-columns: 1fr; } }
+        @media (max-width: 950px) { .container { grid-template-columns: 1fr; } }
 
-        /* Player Card */
-        .player-card {
+        /* Glass Panel Base */
+        .glass-panel {
             background: var(--card-bg);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255,255,255,0.05);
-            border-radius: 24px;
-            padding: 30px;
+            backdrop-filter: blur(25px) saturate(180%);
+            -webkit-backdrop-filter: blur(25px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 32px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.4);
+        }
+
+        /* Player Main Card */
+        .player-card {
+            padding: 40px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            text-align: center;
             position: relative;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+        .cover-wrapper {
+            position: relative;
+            margin-bottom: 30px;
+        }
+        .cover-wrapper::after {
+            content: '';
+            position: absolute;
+            top: 15px; left: 15px; right: 15px; bottom: 15px;
+            background: inherit;
+            filter: blur(40px);
+            opacity: 0.6;
+            z-index: -1;
         }
         .cover-art {
-            width: 280px;
-            height: 280px;
-            border-radius: 20px;
+            width: 320px;
+            height: 320px;
+            border-radius: 28px;
             object-fit: cover;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            margin-bottom: 25px;
-            transition: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 15px 45px rgba(0,0,0,0.6);
         }
-        .cover-art.playing { transform: scale(1.05); }
-        .track-info h1 { margin: 10px 0 5px; font-size: 24px; font-weight: 600; }
-        .track-info p { margin: 0; color: var(--text-secondary); font-size: 16px; }
+        .cover-art.playing { animation: pulse 4s infinite ease-in-out; }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+        }
+
+        .track-info h1 { font-size: 28px; font-weight: 800; margin: 15px 0 8px; letter-spacing: -0.5px; text-align: center; }
+        .track-info p { color: var(--text-secondary); font-size: 18px; margin: 0; text-align: center; }
         
-        /* Progress Bar */
-        .progress-container { width: 100%; margin: 30px 0; }
+        .progress-container { width: 100%; margin: 35px 0 20px; }
         .progress-bar {
             width: 100%;
-            height: 6px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            position: relative;
+            height: 8px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            cursor: pointer;
             overflow: hidden;
         }
         .progress-fill {
             height: 100%;
-            background: var(--accent);
+            background: linear-gradient(90deg, var(--accent), #9ba8e9);
             width: 0%;
-            box-shadow: 0 0 10px var(--accent-glow);
-            transition: width 1s linear;
+            border-radius: 20px;
+            box-shadow: 0 0 15px var(--accent-glow);
         }
-        .time-info { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
+        .time-labels { display: flex; justify-content: space-between; margin-top: 12px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
 
-        /* Controls */
-        .controls { display: flex; gap: 25px; align-items: center; }
-        .btn {
-            background: none;
-            border: none;
-            color: var(--text-primary);
-            font-size: 24px;
-            cursor: pointer;
-            transition: 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-        }
-        .btn:hover { background: rgba(255,255,255,0.1); color: var(--accent); }
-        .btn.play-pause {
-            background: var(--accent);
-            width: 65px;
-            height: 65px;
-            font-size: 28px;
-            box-shadow: 0 0 20px var(--accent-glow);
-        }
-        .btn.play-pause:hover { transform: scale(1.1); background: #6772f1; }
-
-        /* Queue Card */
-        .queue-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(20px);
+        .main-controls { display: flex; gap: 30px; align-items: center; }
+        .control-btn {
+            background: rgba(255,255,255,0.03);
             border: 1px solid rgba(255,255,255,0.05);
-            border-radius: 24px;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            max-height: 700px;
+            color: white;
+            width: 55px; height: 55px;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
         }
-        .section-header { font-size: 14px; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-        .queue-list { overflow-y: auto; flex: 1; padding-right: 5px; }
-        .queue-item {
+        .control-btn:hover { background: rgba(255,255,255,0.1); transform: translateY(-3px); color: var(--accent); }
+        .play-pause-btn {
+            width: 75px; height: 75px;
+            background: var(--accent);
+            font-size: 28px;
+            box-shadow: 0 10px 25px var(--accent-glow);
+        }
+        .play-pause-btn:hover { transform: scale(1.1); box-shadow: 0 15px 35px var(--accent-glow); }
+
+        /* Sidebar Cards */
+        .sidebar-section { padding: 25px; margin-bottom: 20px; }
+        .section-title {
+            font-size: 14px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 12px;
-            border-radius: 12px;
-            margin-bottom: 8px;
-            transition: 0.2s;
+            gap: 10px;
+        }
+
+        .input-group { position: relative; margin-bottom: 25px; }
+        .input-group i { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); }
+        .input-group input, .input-group select {
+            width: 100%;
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 14px 15px 14px 45px;
+            color: white;
+            outline: none;
+            font-size: 14px;
+        }
+        .input-group input:focus, .input-group select:focus { border-color: var(--accent); background: rgba(0,0,0,0.4); }
+
+        .action-btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 16px;
+            border: none;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            margin-bottom: 10px;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-danger { background: rgba(255, 71, 87, 0.15); color: var(--danger); border: 1px solid rgba(255, 71, 87, 0.2); }
+        .btn-danger:hover { background: var(--danger); color: white; }
+
+        .queue-list { overflow-y: auto; max-height: 400px; padding-right: 5px; }
+        .queue-item {
+            display: flex; align-items: center; gap: 15px; padding: 12px;
+            border-radius: 18px; margin-bottom: 10px;
+            background: rgba(255,255,255,0.02);
         }
         .queue-item:hover { background: rgba(255,255,255,0.05); }
-        .queue-thumb { width: 45px; height: 45px; border-radius: 8px; object-fit: cover; }
-        .queue-info { flex: 1; overflow: hidden; }
-        .queue-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .queue-author { font-size: 12px; color: var(--text-secondary); }
+        .queue-thumb { width: 50px; height: 50px; border-radius: 12px; object-fit: cover; }
+        .queue-meta { flex: 1; overflow: hidden; }
+        .queue-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .queue-dur { font-size: 12px; color: var(--text-secondary); }
 
-        /* Search Box */
-        .search-box {
-            position: relative;
-            margin-bottom: 20px;
-        }
-        .search-box input {
-            width: 100%;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: white;
-            padding: 12px 15px 12px 40px;
-            border-radius: 12px;
-            outline: none;
-            transition: 0.3s;
-        }
-        .search-box input:focus { border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
-        .search-box i { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); }
-
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        #no-track { text-align: center; padding: 100px 0; }
+        #no-track i { font-size: 60px; color: var(--accent); opacity: 0.3; margin-bottom: 20px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="player-card">
-            <div id="no-track" style="display:none; font-size:20px; color:var(--text-secondary)">目前沒有正在播放的音樂 💤</div>
-            <div id="player-content">
-                <img src="" alt="Cover" class="cover-art" id="track-cover">
+        <!-- Main Player -->
+        <div class="glass-panel player-card">
+            <div id="no-track" style="display:none;">
+                <i class="fas fa-compact-disc fa-spin"></i>
+                <h2 style="color:var(--text-secondary)">優卡洛正在待機中...</h2>
+                <p style="color:var(--text-secondary)">點擊右側來放首歌吧！</p>
+            </div>
+            <div id="player-content" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+                <div class="cover-wrapper">
+                    <img src="" alt="Cover" class="cover-art" id="track-cover">
+                </div>
                 <div class="track-info">
                     <h1 id="track-title">載入中...</h1>
                     <p id="track-author">-</p>
                 </div>
+                
                 <div class="progress-container">
                     <div class="progress-bar"><div class="progress-fill" id="prog-fill"></div></div>
-                    <div class="time-info">
+                    <div class="time-labels">
                         <span id="time-current">00:00</span>
                         <span id="time-total">00:00</span>
                     </div>
                 </div>
-                <div class="controls">
-                    <button class="btn" onclick="control('prev')"><i class="fas fa-backward-step"></i></button>
-                    <button class="btn play-pause" onclick="control('toggle')" id="play-btn"><i class="fas fa-pause"></i></button>
-                    <button class="btn" onclick="control('skip')"><i class="fas fa-forward-step"></i></button>
+
+                <div class="main-controls">
+                    <button class="control-btn" onclick="control('prev')"><i class="fas fa-backward"></i></button>
+                    <button class="control-btn play-pause-btn" onclick="control('toggle')" id="play-btn"><i class="fas fa-pause"></i></button>
+                    <button class="control-btn" onclick="control('skip')"><i class="fas fa-forward"></i></button>
                 </div>
-                <p style="margin-top:25px; font-size:12px; color:var(--text-secondary)" id="requester-info">點歌者: -</p>
+                
+                <div style="margin-top:40px; display:flex; align-items:center; gap:10px; padding:10px 20px; border-radius:50px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05);">
+                    <i class="fas fa-user-circle" style="color:var(--accent)"></i>
+                    <span id="requester-info" style="font-size:12px; font-weight:600; color:var(--text-secondary)">點歌者: -</span>
+                </div>
             </div>
         </div>
 
-            <div class="section-header"><i class="fas fa-microphone-lines"></i> 語音頻道切換</div>
-            <div id="channel-selector" style="margin-bottom:20px;">
-                <select id="vc-select" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; padding:12px; border-radius:12px; outline:none; cursor:pointer;">
-                    <option value="">正在載入頻道...</option>
-                </select>
-                <button onclick="joinChannel()" style="width:100%; margin-top:10px; background:var(--accent); border:none; color:white; padding:10px; border-radius:10px; cursor:pointer; font-weight:600; transition:0.2s;">
-                    <i class="fas fa-plug"></i> 讓優卡洛加入頻道
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <!-- Voice Control -->
+            <div class="glass-panel sidebar-section">
+                <div class="section-title"><i class="fas fa-signal"></i> 語音通訊</div>
+                <div class="input-group">
+                    <i class="fas fa-microphone-lines"></i>
+                    <select id="vc-select">
+                        <option value="">載入頻道中...</option>
+                    </select>
+                </div>
+                <button class="action-btn btn-primary" onclick="joinChannel()">
+                    <i class="fas fa-plug"></i> 加入頻道
+                </button>
+                <button class="action-btn btn-danger" onclick="leaveChannel()">
+                    <i class="fas fa-sign-out-alt"></i> 讓優卡洛退出語音
                 </button>
             </div>
-            <div class="section-header"><i class="fas fa-search"></i> 點歌系統</div>
-            <div class="search-box">
-                <i class="fas fa-search"></i>
-                <input type="text" placeholder="搜尋歌曲或貼上網址..." id="search-input" onkeypress="if(event.key==='Enter') search()">
-            </div>
-            <div class="section-header"><i class="fas fa-list-ul"></i> 播放隊列 <span id="queue-count" style="margin-left:auto; background:var(--accent); padding:2px 8px; border-radius:20px; font-size:10px;">0</span></div>
-            <div class="queue-list" id="queue-list">
-                <!-- Queue items will be here -->
+
+            <!-- Search & Queue -->
+            <div class="glass-panel sidebar-section" style="flex:1">
+                <div class="section-title"><i class="fas fa-search"></i> 音樂搜尋</div>
+                <div class="input-group">
+                    <i class="fas fa-music"></i>
+                    <input type="text" placeholder="搜尋或貼上連結..." id="search-input" onkeypress="if(event.key==='Enter') search()">
+                </div>
+                
+                <div class="section-title" style="margin-top:30px;">
+                    <i class="fas fa-list-ol"></i> 播放隊列 
+                    <span id="queue-count" style="margin-left:auto; color:var(--accent)">0</span>
+                </div>
+                <div class="queue-list" id="queue-list">
+                    <!-- Items -->
+                </div>
             </div>
         </div>
     </div>
 
     <script>
         const guildId = window.location.pathname.split('/').pop();
-        let localPos = 0;
-        let totalDur = 0;
-        let isPaused = true;
+        let localPos = 0; let totalDur = 0; let isPaused = true;
 
         async function api(path, method='GET', body=null) {
             const opts = { method };
@@ -237,36 +288,28 @@ MUSIC_HTML_TEMPLATE = """
 
         function formatTime(secs) {
             const d = new Date(secs * 1000);
-            const h = d.getUTCHours();
-            const m = d.getUTCMinutes();
-            const s = d.getUTCSeconds();
-            if(h > 0) return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            const m = d.getUTCMinutes(); const s = d.getUTCSeconds();
             return `${m}:${s.toString().padStart(2,'0')}`;
         }
 
         async function update() {
             const data = await api('/status');
-            if(data.error || !data.playing) {
+            if(!data.playing) {
                 document.getElementById('no-track').style.display = 'block';
                 document.getElementById('player-content').style.display = 'none';
-                return;
+            } else {
+                document.getElementById('no-track').style.display = 'none';
+                document.getElementById('player-content').style.display = 'flex';
+                const track = data.track;
+                document.getElementById('track-title').innerText = track.title;
+                document.getElementById('track-author').innerText = track.author;
+                document.getElementById('track-cover').src = track.thumbnail;
+                document.getElementById('time-total').innerText = track.duration_str;
+                document.getElementById('requester-info').innerText = '點歌者: ' + track.requester;
+                document.getElementById('play-btn').innerHTML = data.is_paused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
+                document.getElementById('track-cover').className = data.is_paused ? 'cover-art' : 'cover-art playing';
+                localPos = data.position; totalDur = track.duration; isPaused = data.is_paused;
             }
-            document.getElementById('no-track').style.display = 'none';
-            document.getElementById('player-content').style.display = 'block';
-
-            const track = data.track;
-            document.getElementById('track-title').innerText = track.title;
-            document.getElementById('track-author').innerText = track.author || 'YouTube';
-            document.getElementById('track-cover').src = track.thumbnail;
-            document.getElementById('time-total').innerText = track.duration_str;
-            document.getElementById('requester-info').innerText = '點歌者: ' + (track.requester || '系統');
-            document.getElementById('play-btn').innerHTML = data.is_paused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
-            document.getElementById('track-cover').className = data.is_paused ? 'cover-art' : 'cover-art playing';
-
-            // 同步本地狀態
-            localPos = data.position;
-            totalDur = track.duration;
-            isPaused = data.is_paused;
 
             // Queue
             const qList = document.getElementById('queue-list');
@@ -276,33 +319,13 @@ MUSIC_HTML_TEMPLATE = """
                 qList.innerHTML += `
                     <div class="queue-item">
                         <img src="${item.thumbnail}" class="queue-thumb">
-                        <div class="queue-info">
-                            <div class="queue-title">${item.title}</div>
-                            <div class="queue-author">${item.duration_str}</div>
+                        <div class="queue-meta">
+                            <div class="queue-name">${item.title}</div>
+                            <div class="queue-dur">${item.duration_str}</div>
                         </div>
                     </div>
                 `;
             });
-        }
-
-        // 絲滑本地更新 (每一秒跑一次)
-        setInterval(() => {
-            if(!isPaused && localPos < totalDur) {
-                localPos += 1;
-                document.getElementById('time-current').innerText = formatTime(localPos);
-                const pct = (localPos / totalDur) * 100;
-                document.getElementById('prog-fill').style.width = pct + '%';
-            }
-        }, 1000);
-
-        async function control(action) { await api('/control', 'POST', {action}); update(); }
-        async function search() {
-            const input = document.getElementById('search-input');
-            const q = input.value; if(!q) return;
-            input.value = '正在點歌...'; input.disabled = true;
-            await api('/add', 'POST', {query: q});
-            input.value = ''; input.disabled = false;
-            update();
         }
 
         async function loadChannels() {
@@ -311,58 +334,69 @@ MUSIC_HTML_TEMPLATE = """
             select.innerHTML = '';
             data.channels.forEach(ch => {
                 const opt = document.createElement('option');
-                opt.value = ch.id;
-                opt.innerText = (ch.current ? '🔊 ' : '') + ch.name;
+                opt.value = ch.id; opt.innerText = (ch.current ? '🔊 ' : '') + ch.name;
                 if(ch.current) opt.selected = true;
                 select.appendChild(opt);
             });
         }
 
         async function joinChannel() {
-            const select = document.getElementById('vc-select');
-            const chId = select.value;
+            const chId = document.getElementById('vc-select').value;
             if(!chId) return;
-            const btn = select.nextElementSibling;
-            btn.innerText = '正在加入...'; btn.disabled = true;
             await api('/join', 'POST', {channel_id: chId});
-            btn.innerHTML = '<i class="fas fa-plug"></i> 讓優卡洛加入頻道'; btn.disabled = false;
+            setTimeout(loadChannels, 1000);
+        }
+
+        async function leaveChannel() {
+            if(!confirm('確定要讓優卡洛離開語音頻道嗎？')) return;
+            await api('/leave', 'POST');
+            setTimeout(loadChannels, 1000);
             update();
         }
 
-        setInterval(update, 5000); // 伺服器校準頻率改為 5 秒
-        update();
-        loadChannels(); // 載入頻道清單
+        setInterval(() => {
+            if(!isPaused && localPos < totalDur) {
+                localPos += 1;
+                document.getElementById('time-current').innerText = formatTime(localPos);
+                document.getElementById('prog-fill').style.width = (localPos / totalDur * 100) + '%';
+            }
+        }, 1000);
+
+        async function control(action) { await api('/control', 'POST', {action}); update(); }
+        async function search() {
+            const input = document.getElementById('search-input');
+            const q = input.value; if(!q) return;
+            input.value = '傳送指令中...'; input.disabled = true;
+            await api('/add', 'POST', {query: q});
+            input.value = ''; input.disabled = false;
+            update();
+        }
+
+        setInterval(update, 5000); update(); loadChannels();
     </script>
 </body>
 </html>
 """
 
 # --- API 路由 ---
-@app.route("/music/<guild_id>")
+@app.route("/music/<int:guild_id>")
 def music_index(guild_id):
-    return render_template_string(MUSIC_HTML_TEMPLATE)
+    return render_template_string(MUSIC_HTML_TEMPLATE, guild_id=guild_id)
 
-@app.route("/api/music/<guild_id>/status")
+@app.route("/api/music/<int:guild_id>/status")
 def music_status(guild_id):
     music_cog = bot_instance.get_cog("MusicCog")
     if not music_cog: return jsonify({"error": "Music module not loaded"})
     
-    gid = int(guild_id)
-    vc = None
-    for guild in bot_instance.guilds:
-        if guild.id == gid:
-            vc = guild.voice_client
-            break
-            
-    if not vc or not vc.source:
+    guild = bot_instance.get_guild(guild_id)
+    if not guild or not guild.voice_client or not guild.voice_client.source:
         return jsonify({"playing": False, "queue": []})
         
+    vc = guild.voice_client
     source = vc.source
-    # 處理可能的播放器進度
     elapsed = time.time() - source.start_time
-    progress = (elapsed / source.duration) * 100 if source.duration > 0 else 0
     
-    queue = music_cog.queue.get(gid, [])
+    queue = music_cog.queue.get(guild_id, [])
     q_data = []
     for item in queue[:20]:
         q_data.append({
@@ -375,10 +409,9 @@ def music_status(guild_id):
         "playing": True,
         "is_paused": vc.is_paused(),
         "position": elapsed,
-        "position_str": str(timedelta(seconds=int(elapsed))),
-        "progress": min(100, progress),
         "track": {
             "title": source.title,
+            "author": source.data.get('uploader', 'Unknown'),
             "thumbnail": source.thumbnail,
             "duration": source.duration,
             "duration_str": str(timedelta(seconds=source.duration)),
@@ -387,27 +420,28 @@ def music_status(guild_id):
         "queue": q_data
     })
 
-@app.route("/api/music/<guild_id>/control", methods=['POST'])
+@app.route("/api/music/<int:guild_id>/control", methods=['POST'])
 def music_control(guild_id):
     data = request.json
     action = data.get('action')
-    gid = int(guild_id)
+    guild = bot_instance.get_guild(guild_id)
+    if not guild or not guild.voice_client: return jsonify({"status": "no vc"})
     
+    vc = guild.voice_client
     async def do_control():
-        vc = None
-        for guild in bot_instance.guilds:
-            if guild.id == gid:
-                vc = guild.voice_client
-                break
-        if not vc: return
-        
         if action == 'toggle':
             if vc.is_paused(): vc.resume()
             else: vc.pause()
-        elif action == 'skip':
-            vc.stop()
+        elif action == 'skip': vc.stop()
             
     asyncio.run_coroutine_threadsafe(do_control(), loop_instance)
+    return jsonify({"status": "ok"})
+
+@app.route("/api/music/<int:guild_id>/leave", methods=['POST'])
+def music_leave(guild_id):
+    guild = bot_instance.get_guild(guild_id)
+    if guild and guild.voice_client:
+        asyncio.run_coroutine_threadsafe(guild.voice_client.disconnect(), loop_instance)
     return jsonify({"status": "ok"})
 
 @app.route("/api/music/<guild_id>/add", methods=['POST'])
