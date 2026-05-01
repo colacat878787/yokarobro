@@ -280,9 +280,6 @@ class KujiCog(commands.Cog):
         embed = discord.Embed(title="🎟️ Yokaro Premium 一番賞", description=desc, color=0x3498db)
         await ctx.send(embed=embed, view=KujiView(self.bot.get_cog("EconomyCog")))
 
-async def setup(bot):
-    await bot.add_cog(KujiCog(bot))
 
-import re
 async def setup(bot):
     await bot.add_cog(KujiCog(bot))
