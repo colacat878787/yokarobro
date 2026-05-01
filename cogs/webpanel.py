@@ -637,9 +637,9 @@ class WebPanelCog(commands.Cog):
             # 3. 綁定狀態頁
             subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", stat_domain], env=env, capture_output=True, text=True)
             
-            # 更新 .env
-            with open(".env", "w") as f:
-                f.write(f"CUSTOM_DOMAIN={main_domain}\nNAMED_TUNNEL=yokaro-bot\n")
+            # 更新 .env (改為追加模式，不覆蓋舊資料)
+            with open(".env", "a") as f:
+                f.write(f"\nCUSTOM_DOMAIN={main_domain}\nNAMED_TUNNEL=yokaro-bot\n")
             
             self.tunnel_url = f"https://{main_domain}"
                 
