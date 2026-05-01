@@ -221,7 +221,7 @@ MUSIC_HTML_TEMPLATE = """
         async function api(path, method='GET', body=null) {
             const opts = { method };
             if(body) { opts.headers = {'Content-Type': 'application/json'}; opts.body = JSON.stringify(body); }
-            const res = await fetch(`/api/music/${guildId}\${path}`, opts);
+            const res = await fetch(`/api/music/${guildId}${path}`, opts);
             return res.json();
         }
 
@@ -254,10 +254,10 @@ MUSIC_HTML_TEMPLATE = """
             data.queue.forEach(item => {
                 qList.innerHTML += `
                     <div class="queue-item">
-                        <img src="\${item.thumbnail}" class="queue-thumb">
+                        <img src="${item.thumbnail}" class="queue-thumb">
                         <div class="queue-info">
-                            <div class="queue-title">\${item.title}</div>
-                            <div class="queue-author">\${item.duration_str}</div>
+                            <div class="queue-title">${item.title}</div>
+                            <div class="queue-author">${item.duration_str}</div>
                         </div>
                     </div>
                 `;
