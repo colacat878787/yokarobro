@@ -671,21 +671,21 @@ def music_add(guild_id):
             })
         return jsonify({"channels": channels})
 
-@app.route("/api/music/<int:guild_id>/join", methods=['POST'])
-def music_join(guild_id):
-    data = request.json
-    channel_id = int(data.get("channel_id"))
-    guild = bot_instance.get_guild(guild_id)
-    channel = bot_instance.get_channel(channel_id)
-    
-    if not guild or not channel: return jsonify({"error": "Not found"}), 404
-    
-    async def do_join():
-        if guild.voice_client: await guild.voice_client.move_to(channel)
-        else: await channel.connect()
-            
-    asyncio.run_coroutine_threadsafe(do_join(), loop_instance)
-    return jsonify({"status": "ok"})
+    @app.route("/api/music/<int:guild_id>/join", methods=['POST'])
+    def music_join(guild_id):
+        data = request.json
+        channel_id = int(data.get("channel_id"))
+        guild = bot_instance.get_guild(guild_id)
+        channel = bot_instance.get_channel(channel_id)
+        
+        if not guild or not channel: return jsonify({"error": "Not found"}), 404
+        
+        async def do_join():
+            if guild.voice_client: await guild.voice_client.move_to(channel)
+            else: await channel.connect()
+                
+        asyncio.run_coroutine_threadsafe(do_join(), loop_instance)
+        return jsonify({"status": "ok"})
 
 class MusicWebPanelCog(commands.Cog):
     def __init__(self, bot):
