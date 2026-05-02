@@ -248,25 +248,12 @@ MUSIC_HTML_TEMPLATE = """
                         <option value="">載入頻道中...</option>
                     </select>
                 </div>
-                <button class="action-btn btn-primary" onclick="joinChannel()"><i class="fas fa-sign-in-alt"></i> 進入頻道</button>
-                <button class="action-btn btn-danger" onclick="control('stop')"><i class="fas fa-power-off"></i> 斷開連接</button>
-                
-                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.05); margin:20px 0;">
-                
-                <div class="section-title"><i class="fas fa-broadcast-tower"></i> 雲端廣播 (TTS)</div>
-                <div class="input-group">
-                    <i class="fas fa-comment-dots"></i>
-                    <input type="text" id="tts-input" placeholder="輸入要廣播的文字...">
-                </div>
-                <button class="action-btn btn-primary" onclick="sendTTS()"><i class="fas fa-paper-plane"></i> 發送語音</button>
-                
-                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.05); margin:20px 0;">
-                
-                <div class="section-title"><i class="fas fa-ear-listen"></i> 即時監聽</div>
-                <button class="action-btn" id="monitor-btn" onclick="toggleMonitor()" style="background:rgba(255,255,255,0.05); color:white;">
-                    <i class="fas fa-volume-high"></i> <span>開啟監聽</span>
+                <button class="action-btn btn-primary" onclick="joinChannel()">
+                    <i class="fas fa-plug"></i> 加入頻道
                 </button>
-                <audio id="voice-monitor" style="display:none;"></audio>
+                <button class="action-btn btn-danger" onclick="leaveChannel()">
+                    <i class="fas fa-sign-out-alt"></i> 讓優卡洛退出語音
+                </button>
             </div>
 
             <!-- Search & Queue -->
@@ -373,43 +360,9 @@ MUSIC_HTML_TEMPLATE = """
             }
         }, 1000);
 
-        async function sendTTS() {
-            const input = document.getElementById('tts-input');
-            const text = input.value;
-            if(!text) return;
-            input.value = '正在發送...';
-            await api('/tts', 'POST', {text: text});
-            input.value = '';
-        }
-
-        let isMonitoring = false;
-        function toggleMonitor() {
-            const btn = document.getElementById('monitor-btn');
-            const audio = document.getElementById('voice-monitor');
-            const span = btn.querySelector('span');
-            const icon = btn.querySelector('i');
-
-            if(!isMonitoring) {
-                audio.src = `/api/music/${guildId}/listen?t=${Date.now()}`;
-                audio.play();
-                span.innerText = '停止監聽';
-                btn.style.background = 'var(--danger)';
-                icon.className = 'fas fa-stop-circle';
-                isMonitoring = true;
-            } else {
-                audio.pause();
-                audio.src = '';
-                span.innerText = '開啟監聽';
-                btn.style.background = 'rgba(255,255,255,0.05)';
-                icon.className = 'fas fa-volume-high';
-                isMonitoring = false;
-            }
-        }
-
         async function control(action) { await api('/control', 'POST', {action}); update(); }
         
         async function search() {
-            // ... (保持搜尋邏輯)
             const input = document.getElementById('search-input');
             const q = input.value; if(!q) return;
             input.value = '正在搜尋...'; input.disabled = true;
@@ -454,234 +407,310 @@ MUSIC_HTML_TEMPLATE = """
 </html>
 """
 
-audio_queues = {} # guild_id: asyncio.Queue
+# --- API 路由 ---
+@app.route("/music/<int:guild_id>")
+def music_index(guild_id):
+    return render_template_string(MUSIC_HTML_TEMPLATE, guild_id=guild_id)
 
-def get_wav_header(sample_rate=48000, channels=2, sample_width=2):
-    # 建立一個簡單的 WAV Header，讓瀏覽器識別為音訊流
-    # 這裡我們偽造一個極大的 FileSize，讓瀏覽器以為流是無限長的
-    header = bytearray(b'RIFF')
-    header.extend((0xFFFFFFFF).to_bytes(4, 'little')) # FileSize (dummy)
-    header.extend(b'WAVEfmt ')
-    header.extend((16).to_bytes(4, 'little')) # Subchunk1Size
-    header.extend((1).to_bytes(2, 'little')) # AudioFormat (PCM)
-    header.extend((channels).to_bytes(2, 'little'))
-    header.extend((sample_rate).to_bytes(4, 'little'))
-    header.extend((sample_rate * channels * sample_width).to_bytes(4, 'little')) # ByteRate
-    header.extend((channels * sample_width).to_bytes(2, 'little')) # BlockAlign
-    header.extend((sample_width * 8).to_bytes(2, 'little')) # BitsPerSample
-    header.extend(b'data')
-    header.extend((0xFFFFFFFF).to_bytes(4, 'little')) # DataSize (dummy)
-    return bytes(header)
-
-def setup_web_routes(app, bot, loop):
-    global bot_instance, loop_instance
-    bot_instance = bot
-    loop_instance = loop
-
-    # ... (前面的路由保持不變)
-
-    @app.route("/music/<int:guild_id>")
-    def music_index(guild_id):
-        return render_template_string(MUSIC_HTML_TEMPLATE, guild_id=guild_id)
-
-    @app.route("/api/music/<int:guild_id>/status")
-    def music_status(guild_id):
-        music_cog = bot_instance.get_cog("MusicCog")
-        if not music_cog: return jsonify({"error": "Music module not loaded"})
-        guild = bot_instance.get_guild(guild_id)
-        if not guild or not guild.voice_client or not guild.voice_client.source:
-            return jsonify({"playing": False, "queue": []})
-        vc = guild.voice_client
-        source = vc.source
+@app.route("/api/music/<int:guild_id>/status")
+def music_status(guild_id):
+    music_cog = bot_instance.get_cog("MusicCog")
+    if not music_cog: return jsonify({"error": "Music module not loaded"})
+    
+    guild = bot_instance.get_guild(guild_id)
+    if not guild or not guild.voice_client or not guild.voice_client.source:
+        return jsonify({"playing": False, "queue": []})
         
-        # 安全性檢查：並非所有 AudioSource 都有 start_time (例如 TTS)
-        elapsed = 0
-        if hasattr(source, 'start_time'):
-            elapsed = time.time() - source.start_time
-        elif hasattr(source, 'original') and hasattr(source.original, 'start_time'):
-            elapsed = time.time() - source.original.start_time
-            
-        queue = music_cog.queue.get(guild_id, [])
-        q_data = [{"title": i.get('title', 'Unknown'), "thumbnail": i.get('thumbnail', ''), "duration_str": str(timedelta(seconds=i.get('duration', 0)))} for i in queue[:20]]
-        
-        # 安全獲取曲目資訊
-        title = getattr(source, 'title', "語音廣播 / 外部音訊")
-        author = "Yokaro"
-        if hasattr(source, 'data'):
-            author = source.data.get('uploader', 'Unknown')
-        elif hasattr(source, 'original') and hasattr(source.original, 'data'):
-            author = source.original.data.get('uploader', 'Unknown')
-            
-        thumbnail = getattr(source, 'thumbnail', "https://i.imgur.com/8Q5F9X8.png")
-        duration = getattr(source, 'duration', 0)
-        requester = "系統"
-        if hasattr(source, 'requester'):
-            requester = source.requester.display_name
-        elif hasattr(source, 'original') and hasattr(source.original, 'requester'):
-            requester = source.original.requester.display_name
-
-        return jsonify({
-            "playing": True, "is_paused": vc.is_paused(), "position": elapsed,
-            "track": {
-                "title": title, "author": author,
-                "thumbnail": thumbnail, "duration": duration,
-                "duration_str": str(timedelta(seconds=duration)),
-                "requester": requester
-            }, "queue": q_data
+    vc = guild.voice_client
+    source = vc.source
+    elapsed = 0
+    if hasattr(source, 'start_time'):
+        elapsed = time.time() - source.start_time
+    elif hasattr(source, 'original') and hasattr(source.original, 'start_time'):
+        elapsed = time.time() - source.original.start_time
+    title = getattr(source, 'title', '語音廣播')
+    thumbnail = getattr(source, 'thumbnail', '') or ''
+    duration = getattr(source, 'duration', 0) or 0
+    requester_name = '系統'
+    if hasattr(source, 'requester') and source.requester:
+        requester_name = source.requester.display_name
+    author_name = 'Unknown'
+    if hasattr(source, 'data'): author_name = source.data.get('uploader', 'Unknown')
+    
+    queue = music_cog.queue.get(guild_id, [])
+    q_data = []
+    for item in queue[:20]:
+        q_data.append({
+            "title": item.get('title', 'Unknown'),
+            "thumbnail": item.get('thumbnail', ''),
+            "duration_str": str(timedelta(seconds=item.get('duration', 0)))
         })
+        
+    return jsonify({
+        "playing": True,
+        "is_paused": vc.is_paused(),
+        "position": elapsed,
+        "track": {
+            "title": title,
+            "author": author_name,
+            "thumbnail": thumbnail,
+            "duration": duration,
+            "duration_str": str(timedelta(seconds=duration)),
+            "requester": requester_name
+        },
+        "queue": q_data
+    })
 
-    @app.route("/api/music/<int:guild_id>/control", methods=['POST'])
-    def music_control(guild_id):
-        data = request.json
-        action = data.get('action')
-        guild = bot_instance.get_guild(guild_id)
-        if not guild or not guild.voice_client: return jsonify({"status": "no vc"})
-        vc = guild.voice_client
-        async def do_control():
-            if action == 'toggle':
-                if vc.is_paused(): vc.resume()
-                else: vc.pause()
-            elif action == 'skip': vc.stop()
-            elif action == 'stop': await vc.disconnect()
-        asyncio.run_coroutine_threadsafe(do_control(), loop_instance)
-        return jsonify({"status": "ok"})
+@app.route("/api/music/<int:guild_id>/control", methods=['POST'])
+def music_control(guild_id):
+    data = request.json
+    action = data.get('action')
+    guild = bot_instance.get_guild(guild_id)
+    if not guild or not guild.voice_client: return jsonify({"status": "no vc"})
+    
+    vc = guild.voice_client
+    async def do_control():
+        if action == 'toggle':
+            if vc.is_paused(): vc.resume()
+            else: vc.pause()
+        elif action == 'skip': vc.stop()
+            
+    asyncio.run_coroutine_threadsafe(do_control(), loop_instance)
+    return jsonify({"status": "ok"})
 
-    @app.route("/api/music/<int:guild_id>/leave", methods=['POST'])
-    def music_leave(guild_id):
-        guild = bot_instance.get_guild(guild_id)
-        if guild and guild.voice_client:
-            asyncio.run_coroutine_threadsafe(guild.voice_client.disconnect(), loop_instance)
-        return jsonify({"status": "ok"})
+@app.route("/api/music/<int:guild_id>/leave", methods=['POST'])
+def music_leave(guild_id):
+    guild = bot_instance.get_guild(guild_id)
+    if guild and guild.voice_client:
+        asyncio.run_coroutine_threadsafe(guild.voice_client.disconnect(), loop_instance)
+    return jsonify({"status": "ok"})
 
-    @app.route("/api/music/<int:guild_id>/search")
-    def music_search(guild_id):
-        query = request.args.get('q')
-        if not query: return jsonify({"results": []})
-        import yt_dlp
-        YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': True, 'quiet': True, 'default_search': 'ytsearch5'}
-        with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
-            try:
-                info = ydl.extract_info(query, download=False)
-                results = [{"title": e.get('title'), "url": e.get('webpage_url'), "thumbnail": e.get('thumbnail'), "duration": str(timedelta(seconds=e.get('duration', 0))), "author": e.get('uploader')} for e in info.get('entries', [])]
-                return jsonify({"results": results})
-            except Exception as e: return jsonify({"error": str(e), "results": []})
+@app.route("/api/music/<int:guild_id>/search")
+def music_search(guild_id):
+    query = request.args.get('q')
+    if not query: return jsonify({"results": []})
+    
+    # 使用 yt-dlp 進行搜尋 (獲取前 5 個結果)
+    import yt_dlp
+    YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': True, 'quiet': True, 'default_search': 'ytsearch5'}
+    with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
+        try:
+            info = ydl.extract_info(query, download=False)
+            results = []
+            for entry in info.get('entries', []):
+                results.append({
+                    "title": entry.get('title'),
+                    "url": entry.get('webpage_url'),
+                    "thumbnail": entry.get('thumbnail'),
+                    "duration": str(timedelta(seconds=entry.get('duration', 0))),
+                    "author": entry.get('uploader')
+                })
+            return jsonify({"results": results})
+        except Exception as e:
+            return jsonify({"error": str(e), "results": []})
 
-    @app.route("/api/music/<int:guild_id>/add", methods=['POST'])
-    def music_add(guild_id):
-        data = request.json
-        url = data.get('url')
-        guild = bot_instance.get_guild(guild_id)
-        music_cog = bot.get_cog("MusicCog")
-        if not guild or not music_cog: return jsonify({"error": "Not found"}), 404
-        async def do_add():
-            author = guild.me
-            if guild.voice_client and guild.voice_client.channel.members:
-                humans = [m for m in guild.voice_client.channel.members if not m.bot]
-                if humans: author = humans[0]
-            class MockVoiceState:
-                def __init__(self, channel): self.channel = channel
-            class MockTyping:
-                async def __aenter__(self): pass
-                async def __aexit__(self, exc_type, exc_val, exc_tb): pass
-            class MockCtx:
-                def __init__(self, guild, author, bot):
-                    self.guild, self.author, self.bot = guild, author, bot
-                    self.voice_client = guild.voice_client
-                    self.channel = guild.text_channels[0] if guild.text_channels else None
-                    self.message = None
-                    self.author.voice = MockVoiceState(guild.voice_client.channel) if guild.voice_client else None
-                def typing(self): return MockTyping()
-                async def send(self, *args, **kwargs):
-                    class MockMsg:
-                        def __init__(self): self.id = 0
-                        async def delete(self): pass
-                        async def edit(self, *args, **kwargs): pass
-                    return MockMsg()
-            ctx = MockCtx(guild, author, bot)
-            play_cmd = music_cog.play.callback if hasattr(music_cog.play, 'callback') else music_cog.play
+@app.route("/api/music/<int:guild_id>/add", methods=['POST'])
+def music_add(guild_id):
+    data = request.json
+    url = data.get('url')
+    guild = bot_instance.get_guild(guild_id)
+    music_cog = bot_instance.get_cog("MusicCog")
+    
+    if not guild or not music_cog: return jsonify({"error": "Not found"}), 404
+    
+    async def do_add():
+        # 建立一個具有語音狀態的 Mock 帳號
+        author = guild.me
+        if guild.voice_client and guild.voice_client.channel.members:
+            humans = [m for m in guild.voice_client.channel.members if not m.bot]
+            if humans: author = humans[0]
+
+        # 模擬 VoiceState
+        class MockVoiceState:
+            def __init__(self, channel):
+                self.channel = channel
+
+        # 模擬 AsyncContextManager for ctx.typing()
+        class MockTyping:
+            async def __aenter__(self): pass
+            async def __aexit__(self, exc_type, exc_val, exc_tb): pass
+
+        class MockCtx:
+            def __init__(self, guild, author, bot):
+                self.guild = guild
+                self.author = author
+                self.bot = bot
+                self.voice_client = guild.voice_client
+                self.channel = guild.text_channels[0] if guild.text_channels else None
+                self.message = None # 雖然是 None，但屬性必須存在
+                # 關鍵：模擬語音狀態
+                self.author.voice = MockVoiceState(guild.voice_client.channel) if guild.voice_client else None
+            
+            def typing(self): return MockTyping()
+            async def send(self, *args, **kwargs): 
+                content = args[0] if args else kwargs.get('content', '')
+                print(f"🎵 [WebMusic] {content}")
+                # 模擬回傳一個消息對象
+                class MockMsg:
+                    def __init__(self): self.id = 0
+                    async def delete(self): pass
+                    async def edit(self, *args, **kwargs): pass
+                return MockMsg()
+            
+        ctx = MockCtx(guild, author, bot_instance)
+        
+        try:
+            print(f"🛰️ [WebMusic] 正在點歌: {url}")
+            # 直接抓取 MusicCog 的 play 函數對象
+            play_cmd = music_cog.play
+            if hasattr(play_cmd, 'callback'): play_cmd = play_cmd.callback
+            
+            # 執行播放
             await play_cmd(music_cog, ctx, search=url)
-        asyncio.run_coroutine_threadsafe(do_add(), loop_instance)
-        return jsonify({"status": "ok"})
+            
+            # 如果還是沒唱，檢查隊列並強啟
+            await asyncio.sleep(2)
+            if guild.voice_client and not guild.voice_client.is_playing():
+                print("⚡ [WebMusic] 偵測到閒置，嘗試手動觸發隊列...")
+                # 這裡如果 play 指令沒帶 search 參數會播放下一首 (視 music.py 邏輯而定)
+                await play_cmd(music_cog, ctx, search=None)
+        except Exception as e:
+            import traceback
+            print(f"❌ [WebMusic] 致命錯誤: {e}")
+            traceback.print_exc()
+        
+    asyncio.run_coroutine_threadsafe(do_add(), loop_instance)
+    return jsonify({"status": "ok"})
 
-    @app.route("/api/music/<int:guild_id>/tts", methods=['POST'])
-    def music_tts(guild_id):
-        data = request.json
-        text = data.get("text")
-        guild = bot_instance.get_guild(guild_id)
-        if not guild or not text: return jsonify({"error": "Bad request"}), 400
-        async def do_tts():
+@app.route("/api/music/<int:guild_id>/channels")
+def music_channels(guild_id):
+    guild = bot_instance.get_guild(guild_id)
+    if not guild: return jsonify({"channels": []})
+    
+    channels = []
+    for vc in guild.voice_channels:
+        channels.append({
+            "id": str(vc.id),
+            "name": vc.name,
+            "current": guild.voice_client and guild.voice_client.channel.id == vc.id
+        })
+    return jsonify({"channels": channels})
+
+# 全局音訊隊列 (guild_id -> list of pcm bytes)
+_audio_queues = {}
+
+def _get_wav_header():
+    h = bytearray(b'RIFF')
+    h.extend((0xFFFFFFFF).to_bytes(4, 'little'))
+    h.extend(b'WAVEfmt ')
+    h.extend((16).to_bytes(4, 'little'))
+    h.extend((1).to_bytes(2, 'little'))   # PCM
+    h.extend((2).to_bytes(2, 'little'))   # channels
+    h.extend((48000).to_bytes(4, 'little'))  # sample rate
+    h.extend((48000*2*2).to_bytes(4, 'little'))  # byte rate
+    h.extend((4).to_bytes(2, 'little'))   # block align
+    h.extend((16).to_bytes(2, 'little'))  # bits per sample
+    h.extend(b'data')
+    h.extend((0xFFFFFFFF).to_bytes(4, 'little'))
+    return bytes(h)
+
+@app.route("/api/music/<int:guild_id>/join", methods=['POST'])
+def music_join(guild_id):
+    data = request.json
+    channel_id = int(data.get("channel_id"))
+    guild = bot_instance.get_guild(guild_id)
+    channel = bot_instance.get_channel(channel_id)
+    if not guild or not channel: return jsonify({"error": "Not found"}), 404
+
+    async def do_join():
+        try:
+            import discord.ext.voice_recv as vr
             if guild.voice_client:
+                await guild.voice_client.disconnect(force=True)
+                await asyncio.sleep(0.5)
+            vc = await channel.connect(cls=vr.VoiceRecvClient)
+            # 掛上輕量監聽 Sink
+            class _WebSink(vr.AudioSink):
+                def wants_opus(self): return False
+                def write(self, user, data):
+                    try:
+                        if not data or not data.pcm: return
+                        if guild_id not in _audio_queues: _audio_queues[guild_id] = []
+                        if len(_audio_queues[guild_id]) > 100:
+                            _audio_queues[guild_id] = _audio_queues[guild_id][-50:]
+                        _audio_queues[guild_id].append(data.pcm)
+                    except: pass
+                def cleanup(self): pass
+            vc.listen(_WebSink())
+            print(f"🎙️ [Monitor] 竊聽器已掛載！頻道: {channel.name}")
+        except ImportError:
+            if guild.voice_client: await guild.voice_client.move_to(channel)
+            else: await channel.connect()
+            print("⚠️ [Monitor] voice_recv 不可用")
+        except Exception as e:
+            print(f"❌ [Monitor] 連線失敗: {e}")
+
+    asyncio.run_coroutine_threadsafe(do_join(), loop_instance)
+    return jsonify({"status": "ok"})
+
+@app.route("/api/music/<int:guild_id>/listen")
+def music_listen(guild_id):
+    def generate():
+        yield _get_wav_header()
+        if guild_id not in _audio_queues: _audio_queues[guild_id] = []
+        print(f"🎧 [Monitor] 瀏覽器開始監聽: {guild_id}")
+        try:
+            while True:
+                if _audio_queues.get(guild_id):
+                    data = b"".join(_audio_queues[guild_id])
+                    _audio_queues[guild_id] = []
+                    yield data
+                else:
+                    time.sleep(0.02)
+        except GeneratorExit:
+            print(f"🔇 [Monitor] 瀏覽器停止監聽: {guild_id}")
+    return Response(generate(), mimetype="audio/wav")
+
+@app.route("/api/music/<int:guild_id>/tts", methods=['POST'])
+def music_tts(guild_id):
+    data = request.json
+    text = data.get("text", "")
+    guild = bot_instance.get_guild(guild_id)
+    if not guild or not text: return jsonify({"error": "Bad request"}), 400
+    async def do_tts():
+        if guild.voice_client:
+            try:
                 from gtts import gTTS
                 import io
-                tts = gTTS(text=text, lang='zh-tw')
                 fp = io.BytesIO()
-                tts.write_to_fp(fp)
+                gTTS(text=text, lang='zh-tw').write_to_fp(fp)
                 fp.seek(0)
                 source = discord.FFmpegPCMAudio(fp, pipe=True)
                 if guild.voice_client.is_playing(): guild.voice_client.stop()
                 guild.voice_client.play(source)
-        asyncio.run_coroutine_threadsafe(do_tts(), loop_instance)
-        return jsonify({"status": "ok"})
-
-    @app.route("/api/music/<int:guild_id>/listen")
-    def music_listen(guild_id):
-        def generate_voice():
-            # 1. 發送 WAV 標頭
-            yield get_wav_header()
-            
-            # 2. 準備隊列
-            if guild_id not in audio_queues:
-                audio_queues[guild_id] = []
-            
-            print(f"🎧 [Monitor] 用戶開始監聽伺服器: {guild_id}")
-            
-            try:
-                while True:
-                    if audio_queues[guild_id]:
-                        # 取出所有累積的數據並發送
-                        data = b"".join(audio_queues[guild_id])
-                        audio_queues[guild_id] = []
-                        yield data
-                    else:
-                        # 沒數據時稍微等待，避免 CPU 燒毀
-                        time.sleep(0.05)
-            except GeneratorExit:
-                print(f"🔇 [Monitor] 用戶停止監聽伺服器: {guild_id}")
-
-        return Response(generate_voice(), mimetype="audio/wav")
-
-    @app.route("/api/music/<int:guild_id>/channels")
-    def music_channels(guild_id):
-        guild = bot_instance.get_guild(guild_id)
-        if not guild: return jsonify({"channels": []})
-        channels = [{"id": str(vc.id), "name": vc.name, "current": guild.voice_client and guild.voice_client.channel.id == vc.id} for vc in guild.voice_channels]
-        return jsonify({"channels": channels})
-
-    @app.route("/api/music/<int:guild_id>/join", methods=['POST'])
-    def music_join(guild_id):
-        data = request.json
-        channel_id = int(data.get("channel_id"))
-        guild = bot_instance.get_guild(guild_id)
-        channel = bot_instance.get_channel(channel_id)
-        if not guild or not channel: return jsonify({"error": "Not found"}), 404
-        async def do_join():
-            if guild.voice_client: await guild.voice_client.move_to(channel)
-            else: await channel.connect()
-        asyncio.run_coroutine_threadsafe(do_join(), loop_instance)
-        return jsonify({"status": "ok"})
+            except Exception as e:
+                print(f"❌ [TTS] 失敗: {e}")
+    asyncio.run_coroutine_threadsafe(do_tts(), loop_instance)
+    return jsonify({"status": "ok"})
 
 class MusicWebPanelCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        setup_web_routes(app, bot, bot.loop)
+        global bot_instance, loop_instance
+        bot_instance = bot
+        loop_instance = bot.loop
         
     @commands.command(name='musiclink')
     async def music_link(self, ctx):
+        # 獲取 WebPanel 的隧道網址
         web_cog = self.bot.get_cog("WebPanelCog")
         if not web_cog or not web_cog.tunnel_url:
-            return await ctx.send("❌ WebPanel 隧道未啟動。")
+            return await ctx.send("❌ WebPanel 隧道未啟動，無法獲取連結。")
+            
         url = f"{web_cog.tunnel_url}/music/{ctx.guild.id}"
-        embed = discord.Embed(title="🎵 Yokaro 線上音樂儀表板", description=f"🔗 **[進入音樂廳]({url})**", color=0x5865f2)
+        embed = discord.Embed(title="🎵 Yokaro 線上音樂儀表板", color=0x5865f2)
+        embed.description = f"點擊下方連結即可進入專屬音樂廳，即時控制、點歌與查看歌單！\n\n🔗 **[進入音樂廳]({url})**"
+        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
         await ctx.send(embed=embed)
 
 async def setup(bot):
