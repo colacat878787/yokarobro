@@ -661,33 +661,15 @@ def music_add(guild_id):
     def music_channels(guild_id):
         guild = bot_instance.get_guild(guild_id)
         if not guild: return jsonify({"channels": []})
-        channels = [{"id": str(c.id), "name": c.name} for c in guild.voice_channels]
+        
+        channels = []
+        for vc in guild.voice_channels:
+            channels.append({
+                "id": str(vc.id),
+                "name": vc.name,
+                "current": guild.voice_client and guild.voice_client.channel.id == vc.id
+            })
         return jsonify({"channels": channels})
-        # 即時監聽流 (Audio Stream)
-        def generate_voice():
-            guild = bot_instance.get_guild(guild_id)
-            if not guild or not guild.voice_client: return
-            
-            # 這裡我們需要從 record.py 或 voice_recv 獲取 PCM 數據
-            # 簡單起見，我們先回傳一個「正在嘗試連線」的提示或是靜音流
-            # 真正的實作需要對接 voice_recv 的 sink
-            while True:
-                # 模擬獲取 20ms 的數據
-                yield b'\x00' * 1600 # 靜音占位
-                time.sleep(0.02)
-
-        return Response(generate_voice(), mimetype="audio/wav")
-    guild = bot_instance.get_guild(guild_id)
-    if not guild: return jsonify({"channels": []})
-    
-    channels = []
-    for vc in guild.voice_channels:
-        channels.append({
-            "id": str(vc.id),
-            "name": vc.name,
-            "current": guild.voice_client and guild.voice_client.channel.id == vc.id
-        })
-    return jsonify({"channels": channels})
 
 @app.route("/api/music/<int:guild_id>/join", methods=['POST'])
 def music_join(guild_id):
