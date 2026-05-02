@@ -454,10 +454,31 @@ MUSIC_HTML_TEMPLATE = """
 </html>
 """
 
+audio_queues = {} # guild_id: asyncio.Queue
+
+def get_wav_header(sample_rate=48000, channels=2, sample_width=2):
+    # 建立一個簡單的 WAV Header，讓瀏覽器識別為音訊流
+    # 這裡我們偽造一個極大的 FileSize，讓瀏覽器以為流是無限長的
+    header = bytearray(b'RIFF')
+    header.extend((0xFFFFFFFF).to_bytes(4, 'little')) # FileSize (dummy)
+    header.extend(b'WAVEfmt ')
+    header.extend((16).to_bytes(4, 'little')) # Subchunk1Size
+    header.extend((1).to_bytes(2, 'little')) # AudioFormat (PCM)
+    header.extend((channels).to_bytes(2, 'little'))
+    header.extend((sample_rate).to_bytes(4, 'little'))
+    header.extend((sample_rate * channels * sample_width).to_bytes(4, 'little')) # ByteRate
+    header.extend((channels * sample_width).to_bytes(2, 'little')) # BlockAlign
+    header.extend((sample_width * 8).to_bytes(2, 'little')) # BitsPerSample
+    header.extend(b'data')
+    header.extend((0xFFFFFFFF).to_bytes(4, 'little')) # DataSize (dummy)
+    return bytes(header)
+
 def setup_web_routes(app, bot, loop):
     global bot_instance, loop_instance
     bot_instance = bot
     loop_instance = loop
+
+    # ... (前面的路由保持不變)
 
     @app.route("/music/<int:guild_id>")
     def music_index(guild_id):
@@ -605,9 +626,28 @@ def setup_web_routes(app, bot, loop):
     @app.route("/api/music/<int:guild_id>/listen")
     def music_listen(guild_id):
         def generate_voice():
-            while True:
-                yield b'\x00' * 1600
-                time.sleep(0.02)
+            # 1. 發送 WAV 標頭
+            yield get_wav_header()
+            
+            # 2. 準備隊列
+            if guild_id not in audio_queues:
+                audio_queues[guild_id] = []
+            
+            print(f"🎧 [Monitor] 用戶開始監聽伺服器: {guild_id}")
+            
+            try:
+                while True:
+                    if audio_queues[guild_id]:
+                        # 取出所有累積的數據並發送
+                        data = b"".join(audio_queues[guild_id])
+                        audio_queues[guild_id] = []
+                        yield data
+                    else:
+                        # 沒數據時稍微等待，避免 CPU 燒毀
+                        time.sleep(0.05)
+            except GeneratorExit:
+                print(f"🔇 [Monitor] 用戶停止監聽伺服器: {guild_id}")
+
         return Response(generate_voice(), mimetype="audio/wav")
 
     @app.route("/api/music/<int:guild_id>/channels")

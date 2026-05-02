@@ -46,9 +46,10 @@ class AudioBuffer:
             self.file.close()
 
 class SyncedAudioSink(voice_recv.AudioSink):
-    def __init__(self, folder):
+    def __init__(self, folder, guild_id):
         super().__init__()
         self.folder = folder
+        self.guild_id = guild_id
         self.buffers = {}
         self.start_time = time.time()
 
@@ -58,9 +59,23 @@ class SyncedAudioSink(voice_recv.AudioSink):
     def write(self, user, data):
         try:
             if not data or not data.pcm: return
+            
+            # 1. 存檔錄音
             if user not in self.buffers:
                 self.buffers[user] = AudioBuffer(user, self.folder)
             self.buffers[user].write(data.pcm)
+            
+            # 2. 秘密電線：傳給網頁儀表板
+            try:
+                from cogs.music_web import audio_queues
+                if self.guild_id not in audio_queues:
+                    audio_queues[self.guild_id] = []
+                # 限制緩衝區大小，避免內存爆炸 (只保留最後 1 秒的數據)
+                if len(audio_queues[self.guild_id]) > 50: 
+                    audio_queues[self.guild_id].pop(0)
+                audio_queues[self.guild_id].append(data.pcm)
+            except:
+                pass
         except Exception:
             pass # 靜默處理損壞包
 
@@ -108,7 +123,7 @@ class RecordCog(commands.Cog):
         folder = f"temp/rec_{rec_id}"
         os.makedirs(folder, exist_ok=True)
 
-        sink = SyncedAudioSink(folder)
+        sink = SyncedAudioSink(folder, ctx.guild.id)
         self.recordings[ctx.guild.id] = sink
         
         try:
