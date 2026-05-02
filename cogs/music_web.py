@@ -472,16 +472,40 @@ def setup_web_routes(app, bot, loop):
             return jsonify({"playing": False, "queue": []})
         vc = guild.voice_client
         source = vc.source
-        elapsed = time.time() - source.start_time
+        
+        # 安全性檢查：並非所有 AudioSource 都有 start_time (例如 TTS)
+        elapsed = 0
+        if hasattr(source, 'start_time'):
+            elapsed = time.time() - source.start_time
+        elif hasattr(source, 'original') and hasattr(source.original, 'start_time'):
+            elapsed = time.time() - source.original.start_time
+            
         queue = music_cog.queue.get(guild_id, [])
         q_data = [{"title": i.get('title', 'Unknown'), "thumbnail": i.get('thumbnail', ''), "duration_str": str(timedelta(seconds=i.get('duration', 0)))} for i in queue[:20]]
+        
+        # 安全獲取曲目資訊
+        title = getattr(source, 'title', "語音廣播 / 外部音訊")
+        author = "Yokaro"
+        if hasattr(source, 'data'):
+            author = source.data.get('uploader', 'Unknown')
+        elif hasattr(source, 'original') and hasattr(source.original, 'data'):
+            author = source.original.data.get('uploader', 'Unknown')
+            
+        thumbnail = getattr(source, 'thumbnail', "https://i.imgur.com/8Q5F9X8.png")
+        duration = getattr(source, 'duration', 0)
+        requester = "系統"
+        if hasattr(source, 'requester'):
+            requester = source.requester.display_name
+        elif hasattr(source, 'original') and hasattr(source.original, 'requester'):
+            requester = source.original.requester.display_name
+
         return jsonify({
             "playing": True, "is_paused": vc.is_paused(), "position": elapsed,
             "track": {
-                "title": source.title, "author": source.data.get('uploader', 'Unknown'),
-                "thumbnail": source.thumbnail, "duration": source.duration,
-                "duration_str": str(timedelta(seconds=source.duration)),
-                "requester": source.requester.display_name if source.requester else "Unknown"
+                "title": title, "author": author,
+                "thumbnail": thumbnail, "duration": duration,
+                "duration_str": str(timedelta(seconds=duration)),
+                "requester": requester
             }, "queue": q_data
         })
 
