@@ -248,12 +248,25 @@ MUSIC_HTML_TEMPLATE = """
                         <option value="">載入頻道中...</option>
                     </select>
                 </div>
-                <button class="action-btn btn-primary" onclick="joinChannel()">
-                    <i class="fas fa-plug"></i> 加入頻道
+                <button class="action-btn btn-primary" onclick="joinChannel()"><i class="fas fa-sign-in-alt"></i> 進入頻道</button>
+                <button class="action-btn btn-danger" onclick="control('stop')"><i class="fas fa-power-off"></i> 斷開連接</button>
+                
+                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.05); margin:20px 0;">
+                
+                <div class="section-title"><i class="fas fa-broadcast-tower"></i> 雲端廣播 (TTS)</div>
+                <div class="input-group">
+                    <i class="fas fa-comment-dots"></i>
+                    <input type="text" id="tts-input" placeholder="輸入要廣播的文字...">
+                </div>
+                <button class="action-btn btn-primary" onclick="sendTTS()"><i class="fas fa-paper-plane"></i> 發送語音</button>
+                
+                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.05); margin:20px 0;">
+                
+                <div class="section-title"><i class="fas fa-ear-listen"></i> 即時監聽</div>
+                <button class="action-btn" id="monitor-btn" onclick="toggleMonitor()" style="background:rgba(255,255,255,0.05); color:white;">
+                    <i class="fas fa-volume-high"></i> <span>開啟監聽</span>
                 </button>
-                <button class="action-btn btn-danger" onclick="leaveChannel()">
-                    <i class="fas fa-sign-out-alt"></i> 讓優卡洛退出語音
-                </button>
+                <audio id="voice-monitor" style="display:none;"></audio>
             </div>
 
             <!-- Search & Queue -->
@@ -360,9 +373,43 @@ MUSIC_HTML_TEMPLATE = """
             }
         }, 1000);
 
+        async function sendTTS() {
+            const input = document.getElementById('tts-input');
+            const text = input.value;
+            if(!text) return;
+            input.value = '正在發送...';
+            await api('/tts', 'POST', {text: text});
+            input.value = '';
+        }
+
+        let isMonitoring = false;
+        function toggleMonitor() {
+            const btn = document.getElementById('monitor-btn');
+            const audio = document.getElementById('voice-monitor');
+            const span = btn.querySelector('span');
+            const icon = btn.querySelector('i');
+
+            if(!isMonitoring) {
+                audio.src = `/api/music/${guildId}/listen?t=${Date.now()}`;
+                audio.play();
+                span.innerText = '停止監聽';
+                btn.style.background = 'var(--danger)';
+                icon.className = 'fas fa-stop-circle';
+                isMonitoring = true;
+            } else {
+                audio.pause();
+                audio.src = '';
+                span.innerText = '開啟監聽';
+                btn.style.background = 'rgba(255,255,255,0.05)';
+                icon.className = 'fas fa-volume-high';
+                isMonitoring = false;
+            }
+        }
+
         async function control(action) { await api('/control', 'POST', {action}); update(); }
         
         async function search() {
+            // ... (保持搜尋邏輯)
             const input = document.getElementById('search-input');
             const q = input.value; if(!q) return;
             input.value = '正在搜尋...'; input.disabled = true;
@@ -567,11 +614,54 @@ def music_add(guild_id):
             print(f"❌ [WebMusic] 致命錯誤: {e}")
             traceback.print_exc()
         
-    asyncio.run_coroutine_threadsafe(do_add(), loop_instance)
-    return jsonify({"status": "ok"})
+    @app.route("/api/music/<int:guild_id>/tts", methods=['POST'])
+    def music_tts(guild_id):
+        data = request.json
+        text = data.get("text")
+        if not text: return jsonify({"error": "No text"}), 400
+        
+        music_cog = bot_instance.get_cog("MusicCog")
+        guild = bot_instance.get_guild(guild_id)
+        if not music_cog or not guild: return jsonify({"error": "Not found"}), 404
+        
+        async def do_tts():
+            # 這裡我們模擬一個播放，或是調用 tts_cog (如果有的話)
+            # 簡單起見，我們先用播放器播放 TTS 的音訊流
+            # 您可以之後擴充成調用特定的 TTS 模組
+            print(f"📣 [WebTTS] 正在廣播: {text}")
+            # 這裡假設您的 MusicCog 有一個 play_tts 或是類似功能的邏輯
+            # 我們直接使用 discord.py 的 VoiceClient 播放
+            if guild.voice_client:
+                # 這裡調用您現有的 TTS 產生邏輯 (例如 gTTS)
+                from gtts import gTTS
+                import io
+                tts = gTTS(text=text, lang='zh-tw')
+                fp = io.BytesIO()
+                tts.write_to_fp(fp)
+                fp.seek(0)
+                source = discord.FFmpegPCMAudio(fp, pipe=True)
+                if guild.voice_client.is_playing(): guild.voice_client.stop()
+                guild.voice_client.play(source)
+                
+        asyncio.run_coroutine_threadsafe(do_tts(), loop_instance)
+        return jsonify({"status": "ok"})
 
-@app.route("/api/music/<int:guild_id>/channels")
-def music_channels(guild_id):
+    @app.route("/api/music/<int:guild_id>/listen")
+    def music_listen(guild_id):
+        # 即時監聽流 (Audio Stream)
+        def generate_voice():
+            guild = bot_instance.get_guild(guild_id)
+            if not guild or not guild.voice_client: return
+            
+            # 這裡我們需要從 record.py 或 voice_recv 獲取 PCM 數據
+            # 簡單起見，我們先回傳一個「正在嘗試連線」的提示或是靜音流
+            # 真正的實作需要對接 voice_recv 的 sink
+            while True:
+                # 模擬獲取 20ms 的數據
+                yield b'\x00' * 1600 # 靜音占位
+                time.sleep(0.02)
+
+        return Response(generate_voice(), mimetype="audio/wav")
     guild = bot_instance.get_guild(guild_id)
     if not guild: return jsonify({"channels": []})
     
