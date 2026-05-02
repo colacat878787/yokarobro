@@ -254,6 +254,23 @@ MUSIC_HTML_TEMPLATE = """
                 <button class="action-btn btn-danger" onclick="leaveChannel()">
                     <i class="fas fa-sign-out-alt"></i> 讓優卡洛退出語音
                 </button>
+
+                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.05); margin:16px 0;">
+
+                <div class="section-title"><i class="fas fa-broadcast-tower"></i> 雲端廣播 (TTS)</div>
+                <div class="input-group">
+                    <i class="fas fa-comment-dots"></i>
+                    <input type="text" id="tts-input" placeholder="輸入要廣播的文字..." onkeypress="if(event.key==='Enter') sendTTS()">
+                </div>
+                <button class="action-btn btn-primary" onclick="sendTTS()"><i class="fas fa-paper-plane"></i> 發送語音</button>
+
+                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.05); margin:16px 0;">
+
+                <div class="section-title"><i class="fas fa-ear-listen"></i> 即時監聽</div>
+                <button class="action-btn" id="monitor-btn" onclick="toggleMonitor()" style="background:rgba(255,255,255,0.05); color:white;">
+                    <i class="fas fa-volume-high"></i> <span id="monitor-label">開啟監聽</span>
+                </button>
+                <audio id="voice-monitor" autoplay style="display:none;"></audio>
             </div>
 
             <!-- Search & Queue -->
@@ -399,6 +416,37 @@ MUSIC_HTML_TEMPLATE = """
 
         function closeSearch() {
             document.getElementById('search-results').style.display = 'none';
+        }
+
+        async function sendTTS() {
+            const input = document.getElementById('tts-input');
+            const text = input.value.trim();
+            if(!text) return;
+            input.value = '傳送中...';
+            await api('/tts', 'POST', {text});
+            input.value = '';
+        }
+
+        let isMonitoring = false;
+        function toggleMonitor() {
+            const btn = document.getElementById('monitor-btn');
+            const label = document.getElementById('monitor-label');
+            const audio = document.getElementById('voice-monitor');
+            const icon = btn.querySelector('i');
+            if(!isMonitoring) {
+                audio.src = `/api/music/${guildId}/listen?t=${Date.now()}`;
+                audio.load();
+                label.innerText = '停止監聽';
+                btn.style.background = 'var(--danger)';
+                icon.className = 'fas fa-stop-circle';
+                isMonitoring = true;
+            } else {
+                audio.pause(); audio.src = '';
+                label.innerText = '開啟監聽';
+                btn.style.background = 'rgba(255,255,255,0.05)';
+                icon.className = 'fas fa-volume-high';
+                isMonitoring = false;
+            }
         }
 
         setInterval(update, 5000); update(); loadChannels();
