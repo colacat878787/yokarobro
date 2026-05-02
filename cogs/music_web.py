@@ -435,13 +435,21 @@ MUSIC_HTML_TEMPLATE = """
             const icon = btn.querySelector('i');
             if(!isMonitoring) {
                 audio.src = `/api/music/${guildId}/listen?t=${Date.now()}`;
-                audio.load();
+                const playPromise = audio.play();
+                if(playPromise !== undefined) {
+                    playPromise.catch(e => {
+                        console.warn('Autoplay blocked, retrying on user gesture:', e);
+                        // 顯示音訊元素讓瀏覽器允許播放
+                        audio.style.display = 'block';
+                    });
+                }
                 label.innerText = '停止監聽';
                 btn.style.background = 'var(--danger)';
                 icon.className = 'fas fa-stop-circle';
                 isMonitoring = true;
             } else {
                 audio.pause(); audio.src = '';
+                audio.style.display = 'none';
                 label.innerText = '開啟監聽';
                 btn.style.background = 'rgba(255,255,255,0.05)';
                 icon.className = 'fas fa-volume-high';
@@ -676,7 +684,7 @@ def music_join(guild_id):
             if guild.voice_client:
                 await guild.voice_client.disconnect(force=True)
                 await asyncio.sleep(0.5)
-            vc = await channel.connect(cls=vr.VoiceRecvClient)
+            vc = await channel.connect(cls=vr.VoiceRecvClient, self_deaf=False, self_mute=True)
             # 掛上輕量監聽 Sink
             class _WebSink(vr.AudioSink):
                 def wants_opus(self): return False
@@ -717,7 +725,16 @@ def music_listen(guild_id):
                     time.sleep(0.02)
         except GeneratorExit:
             print(f"🔇 [Monitor] 瀏覽器停止監聽: {guild_id}")
-    return Response(generate(), mimetype="audio/wav")
+    return Response(
+        generate(),
+        mimetype="audio/wav",
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache, no-store",
+            "Connection": "keep-alive",
+            "Transfer-Encoding": "chunked"
+        }
+    )
 
 @app.route("/api/music/<int:guild_id>/tts", methods=['POST'])
 def music_tts(guild_id):
