@@ -652,6 +652,21 @@ def music_add(guild_id):
         def generate_voice():
             guild = bot_instance.get_guild(guild_id)
             if not guild or not guild.voice_client: return
+            while True:
+                yield b'\x00' * 1600 # 靜音占位 (後續可擴充實時數據)
+                time.sleep(0.02)
+        return Response(generate_voice(), mimetype="audio/wav")
+
+    @app.route("/api/music/<int:guild_id>/channels")
+    def music_channels(guild_id):
+        guild = bot_instance.get_guild(guild_id)
+        if not guild: return jsonify({"channels": []})
+        channels = [{"id": str(c.id), "name": c.name} for c in guild.voice_channels]
+        return jsonify({"channels": channels})
+        # 即時監聽流 (Audio Stream)
+        def generate_voice():
+            guild = bot_instance.get_guild(guild_id)
+            if not guild or not guild.voice_client: return
             
             # 這裡我們需要從 record.py 或 voice_recv 獲取 PCM 數據
             # 簡單起見，我們先回傳一個「正在嘗試連線」的提示或是靜音流
