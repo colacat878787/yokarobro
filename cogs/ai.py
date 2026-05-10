@@ -34,11 +34,13 @@ class AICog(commands.Cog):
         self.openai_key = os.getenv("OPENAI_API_KEY")
         self.model = os.getenv("AI_MODEL", "gpt-4o-mini")
         
-        if self.openai_key and not self.openai_key.startswith("YOUR_"):
-            self.api_url = "https://api.openai.com/v1/chat/completions"
+        # 判斷連線模式
+        if self.openai_key and len(self.openai_key) > 20 and not self.openai_key.startswith("YOUR_"):
+            self.api_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1/chat/completions")
+            print(f"✅ [AI] 偵測到 OpenAI API Key，使用雲端模式: {self.model}")
         else:
-            # Fallback for local testing if no key provided
             self.api_url = f"{os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')}/v1/chat/completions"
+            print("⚠️ [AI] 未偵測到有效的 OpenAI Key，切換至 Ollama 本地模式 (localhost:11434)")
 
     @commands.Cog.listener()
     async def on_message(self, message):
