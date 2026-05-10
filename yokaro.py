@@ -50,7 +50,8 @@ class YokaroBot(commands.Bot):
             'cogs.management',
             'cogs.system',
             'cogs.music_web',
-            'cogs.otaku'
+            'cogs.otaku',
+            'cogs.games'
         ]
 
     async def setup_hook(self):
