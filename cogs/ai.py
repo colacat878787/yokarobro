@@ -111,13 +111,10 @@ class AICog(commands.Cog):
         is_gemini = "generativelanguage.googleapis.com" in self.api_url
         
         if is_gemini:
-            # --- Gemini 原生格式 ---
+            # --- Gemini 原生格式 (使用專用 system_instruction) ---
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.active_key}"
-            contents = []
-            # 放入 System Prompt (Gemini 1.5 支援 system_instruction，但簡單起見放第一條)
-            contents.append({"role": "user", "parts": [{"text": f"System Instruction: {SYSTEM_PROMPT}"}]})
-            contents.append({"role": "model", "parts": [{"text": "了解，我會以祈星‧優卡洛（洛洛）的身分與大家交流，嗷嗷嗷～"}]})
             
+            contents = []
             for msg in history:
                 role = "user" if msg["role"] == "user" else "model"
                 contents.append({"role": role, "parts": [{"text": msg["content"]}]})
@@ -125,7 +122,16 @@ class AICog(commands.Cog):
             prompt_content = f"User({user_name}, ID:{user_id}): {user_input}"
             contents.append({"role": "user", "parts": [{"text": prompt_content}]})
             
-            payload = {"contents": contents, "generationConfig": {"maxOutputTokens": 200, "temperature": 0.8}}
+            payload = {
+                "contents": contents,
+                "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+                "generationConfig": {
+                    "maxOutputTokens": 400,
+                    "temperature": 0.9,
+                    "topP": 0.8,
+                    "topK": 40
+                }
+            }
             headers = {"Content-Type": "application/json"}
         else:
             # --- OpenAI / Ollama 格式 ---
