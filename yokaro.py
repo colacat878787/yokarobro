@@ -94,11 +94,15 @@ class YokaroBot(commands.Bot):
         print("📁 Slash Commands 同步完成")
 
     async def on_ready(self):
+        ai_mode = "本地模式 (Ollama)"
+        if os.getenv("GEMINI_API_KEY"): ai_mode = "Google Gemini 模式"
+        elif os.getenv("OPENAI_API_KEY"): ai_mode = "OpenAI GPT 模式"
+        
         print("====================================")
         print(f"🤖 祈星‧優卡洛 (Yokaro) 啟動成功！")
         print(f"👤 登入身分: {self.user.name} (ID: {self.user.id})")
-        print(f"🧠 AI 核心: OpenAI GPT 模式")
-        print(f"📦 版本狀態: 2026-04-12 深度優化 (延遲修復版)")
+        print(f"🧠 AI 核心: {ai_mode}")
+        print(f"📦 版本狀態: 2026-05-10 核心升級 (Gemini 驅動)")
         print("====================================")
         
         # 設定簡單的狀態
