@@ -1,3 +1,4 @@
+# Updated by Yokaro AI Assistant - Gemini Mode Ready
 import discord
 from discord.ext import commands
 import aiohttp
