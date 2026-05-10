@@ -106,40 +106,59 @@ class AICog(commands.Cog):
             self.conversation_history[channel_id] = deque(maxlen=10)
         
         history = self.conversation_history[channel_id]
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        for msg in history:
-            messages.append(msg)
         
-        prompt_content = f"User({user_name}, ID:{user_id}): {user_input}"
-        messages.append({"role": "user", "content": prompt_content})
+        # 判斷是否為 Gemini 模式
+        is_gemini = "generativelanguage.googleapis.com" in self.api_url
+        
+        if is_gemini:
+            # --- Gemini 原生格式 ---
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.active_key}"
+            contents = []
+            # 放入 System Prompt (Gemini 1.5 支援 system_instruction，但簡單起見放第一條)
+            contents.append({"role": "user", "parts": [{"text": f"System Instruction: {SYSTEM_PROMPT}"}]})
+            contents.append({"role": "model", "parts": [{"text": "了解，我會以祈星‧優卡洛（洛洛）的身分與大家交流，嗷嗷嗷～"}]})
+            
+            for msg in history:
+                role = "user" if msg["role"] == "user" else "model"
+                contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+            
+            prompt_content = f"User({user_name}, ID:{user_id}): {user_input}"
+            contents.append({"role": "user", "parts": [{"text": prompt_content}]})
+            
+            payload = {"contents": contents, "generationConfig": {"maxOutputTokens": 200, "temperature": 0.8}}
+            headers = {"Content-Type": "application/json"}
+        else:
+            # --- OpenAI / Ollama 格式 ---
+            url = self.api_url
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            for msg in history:
+                messages.append(msg)
+            prompt_content = f"User({user_name}, ID:{user_id}): {user_input}"
+            messages.append({"role": "user", "content": prompt_content})
+            
+            payload = {"model": self.model, "messages": messages, "max_tokens": 200, "temperature": 0.8}
+            headers = {"Authorization": f"Bearer {self.active_key}", "Content-Type": "application/json"}
         
         try:
-            headers = {
-                "Authorization": f"Bearer {self.active_key}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "model": self.model,
-                "messages": messages,
-                "max_tokens": 200,
-                "temperature": 0.8
-            }
-            
             async with aiohttp.ClientSession() as session:
-                async with session.post(self.api_url, headers=headers, json=payload) as response:
+                async with session.post(url, headers=headers, json=payload) as response:
                     if response.status == 200:
                         data = await response.json()
-                        reply = data['choices'][0]['message']['content'].strip()
+                        if is_gemini:
+                            reply = data['candidates'][0]['content']['parts'][0]['text'].strip()
+                        else:
+                            reply = data['choices'][0]['message']['content'].strip()
+                            
                         history.append({"role": "user", "content": prompt_content})
-                        history.append({"role": "assistant", "content": reply})
+                        history.append({"role": "assistant" if not is_gemini else "model", "content": reply})
                         return reply
                     else:
                         error_data = await response.text()
-                        print(f"OpenAI API Error: {error_data}")
-                        return f"嗷嗷嗷～OpenAI 說他的狀態碼是 {response.status}..."
+                        print(f"AI API Error ({response.status}): {error_data}")
+                        return f"嗷嗷嗷～AI 伺服器回傳了錯誤碼 {response.status}..."
         except Exception as e:
             print(f"AI Error: {e}")
-            return "嗷嗷嗷～手機訊號不好，或是 OpenAI 伺服器怪怪的？"
+            return "嗷嗷嗷～洛洛的小腦袋現在連不上線，可能是網路塞車了..."
 
     def load_ai_channels(self):
         if os.path.exists('ai_channels.json'):
