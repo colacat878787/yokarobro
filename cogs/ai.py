@@ -30,17 +30,26 @@ class AICog(commands.Cog):
         self.ai_channels = set()
         self.load_ai_channels() # 讀取紀錄的 AI 頻道
         
-        # 優先使用 API Key
+        # 讀取金鑰與模型
+        self.gemini_key = os.getenv("GEMINI_API_KEY")
         self.openai_key = os.getenv("OPENAI_API_KEY")
-        self.model = os.getenv("AI_MODEL", "gpt-4o-mini")
         
-        # 判斷連線模式
-        if self.openai_key and len(self.openai_key) > 20 and not self.openai_key.startswith("YOUR_"):
+        # 判斷連線模式與設定 URL
+        if self.gemini_key and not self.gemini_key.startswith("YOUR_"):
+            self.api_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+            self.model = os.getenv("AI_MODEL", "gemini-1.5-flash")
+            self.active_key = self.gemini_key
+            print(f"✨ [AI] 偵測到 Gemini API Key，使用 Google 雲端模式: {self.model}")
+        elif self.openai_key and len(self.openai_key) > 20 and not self.openai_key.startswith("YOUR_"):
             self.api_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1/chat/completions")
-            print(f"✅ [AI] 偵測到 OpenAI API Key，使用雲端模式: {self.model}")
+            self.model = os.getenv("AI_MODEL", "gpt-4o-mini")
+            self.active_key = self.openai_key
+            print(f"✅ [AI] 偵測到 OpenAI API Key，使用 OpenAI 雲端模式: {self.model}")
         else:
             self.api_url = f"{os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')}/v1/chat/completions"
-            print("⚠️ [AI] 未偵測到有效的 OpenAI Key，切換至 Ollama 本地模式 (localhost:11434)")
+            self.model = os.getenv("AI_MODEL", "llama3")
+            self.active_key = "ollama"
+            print("⚠️ [AI] 未偵測到有效雲端金鑰，切換至 Ollama 本地模式 (localhost:11434)")
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -105,7 +114,7 @@ class AICog(commands.Cog):
         
         try:
             headers = {
-                "Authorization": f"Bearer {self.openai_key}",
+                "Authorization": f"Bearer {self.active_key}",
                 "Content-Type": "application/json"
             }
             payload = {
