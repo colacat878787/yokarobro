@@ -92,5 +92,27 @@ class FunCog(commands.Cog):
             print(f"抽獎發送失敗: {e}")
             await ctx.send("嗷～抽獎結算時發生了錯誤！")
 
+    @commands.hybrid_command(name='對話框', description='隨機傳送一個超好笑的對話框影片')
+    async def duihuakuang(self, ctx):
+        """隨機傳送對話框影片"""
+        import os
+        video_dir = "/home/container/duihuakuang"
+        
+        if not os.path.exists(video_dir):
+            return await ctx.send(f"❌ 洛洛找不到路徑：`{video_dir}`，大總裁請檢查資料夾是否存在喔！", ephemeral=True)
+            
+        files = [f for f in os.listdir(video_dir) if os.path.isfile(os.path.join(video_dir, f))]
+        # 過濾常見影片格式
+        video_files = [f for f in files if f.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm'))]
+        
+        if not video_files:
+            return await ctx.send("❌ 該資料夾內沒有影片檔案喔！", ephemeral=True)
+            
+        target_video = random.choice(video_files)
+        video_path = os.path.join(video_dir, target_video)
+        
+        await ctx.send(f"🎬 **隨機對話框影片：{target_video}**")
+        await ctx.send(file=discord.File(video_path))
+
 async def setup(bot):
     await bot.add_cog(FunCog(bot))
