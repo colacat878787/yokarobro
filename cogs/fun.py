@@ -111,7 +111,6 @@ class FunCog(commands.Cog):
         target_video = random.choice(video_files)
         video_path = os.path.join(video_dir, target_video)
         
-        await ctx.send(f"🎬 **隨機對話框影片：{target_video}**")
         await ctx.send(file=discord.File(video_path))
 
 async def setup(bot):

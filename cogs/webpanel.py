@@ -162,6 +162,7 @@ HTML_TEMPLATE = """
         <div class="sidebar-brand"><i class="fas fa-bolt"></i> Yokaro Dash</div>
         <div class="nav-item active" id="nav-comm" onclick="switchPage('comm')"><i class="fas fa-comments"></i> 控制中心</div>
         <div class="nav-item" id="nav-stats" onclick="switchPage('stats')"><i class="fas fa-microchip"></i> 系統日誌</div>
+        <div class="nav-item" id="nav-mgmt" onclick="switchPage('mgmt')"><i class="fas fa-tools"></i> 機器人管理</div>
         <div class="nav-item" style="margin-top: auto; color: var(--danger)" onclick="revoke()"><i class="fas fa-key"></i> 註銷連結</div>
     </div>
 
@@ -218,11 +219,23 @@ HTML_TEMPLATE = """
                     <div id="full-stats" style="line-height: 2">正在獲取數據...</div>
                 </div>
             </div>
+
+            <div id="mgmt-view" style="display:none">
+                <div class="card">
+                    <div class="card-label">系統管理</div>
+                    <button onclick="manageBot('sync')">同步全域指令</button>
+                    <button onclick="manageBot('restart')" class="danger">強制重啟機器人</button>
+                </div>
+                <div class="card">
+                    <div class="card-label">模組控制</div>
+                    <div id="cogs-list"></div>
+                </div>
+            </div>
         </main>
     </div>
 
     <script>
-        const token = new URLSearchParams(window.location.search).get('token');
+        const token = new URLSearchParams(window.location.search).get('token') || '';
         let mode = 'server', target = '', lastCount = 0;
 
         async function api(path, method='GET', body=null) {
@@ -243,9 +256,11 @@ HTML_TEMPLATE = """
         function switchPage(p) {
             document.getElementById('nav-comm').classList.toggle('active', p==='comm');
             document.getElementById('nav-stats').classList.toggle('active', p==='stats');
+            document.getElementById('nav-mgmt').classList.toggle('active', p==='mgmt');
             document.getElementById('comm-view').style.display = p==='comm' ? 'grid' : 'none';
             document.getElementById('stats-view').style.display = p==='stats' ? 'block' : 'none';
-            document.getElementById('page-title').innerText = p==='comm' ? '控制中心' : '系統日誌';
+            document.getElementById('mgmt-view').style.display = p==='mgmt' ? 'block' : 'none';
+            document.getElementById('page-title').innerText = p==='comm' ? '控制中心' : (p==='stats' ? '系統日誌' : '機器人管理');
         }
 
         function setMode(m) {
@@ -300,8 +315,30 @@ HTML_TEMPLATE = """
         async function leaveVoice() { const gid = document.getElementById('g-sel').value; if(gid) api('/api/voice/leave','POST',{guild_id:gid}); }
         function revoke() { if(confirm('確定註銷？')) window.location.href = `/api/revoke?token=${token}`; }
 
+        async function manageBot(action) {
+            if(action === 'restart' && !confirm('確定要重啟嗎？')) return;
+            const res = await api(`/api/system/${action}`, 'POST');
+            alert(res.message);
+            if(action === 'sync') location.reload();
+        }
+
+        async function loadCogs() {
+            const data = await api('/api/cogs/list');
+            const container = document.getElementById('cogs-list');
+            container.innerHTML = '';
+            data.cogs.forEach(cog => {
+                container.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px"><span>${cog.name}</span><button style="width:auto" onclick="toggleCog('${cog.name}')">重載</button></div>`;
+            });
+        }
+
+        async function toggleCog(name) {
+            const res = await api(`/api/cogs/reload?name=${name}`, 'POST');
+            alert(res.message);
+        }
+
         (async () => {
             updateStats(); setInterval(updateStats, 5000); setInterval(poll, 2000);
+            loadCogs();
             const gs = await api('/api/guilds');
             const gsel = document.getElementById('g-sel'); gsel.innerHTML = '<option>選擇伺服器...</option>';
             gs.forEach(g => gsel.innerHTML += `<option value="${g.id}">${g.name}</option>`);
@@ -327,6 +364,36 @@ def auth_required(f):
 def index():
     return render_template_string(HTML_TEMPLATE)
 
+@app.route('/api/system/sync', methods=['POST'])
+@auth_required
+def api_system_sync():
+    async def do_sync():
+        await bot_instance.tree.sync()
+    asyncio.run_coroutine_threadsafe(do_sync(), loop_instance)
+    return jsonify({"message": "同步完成"})
+
+@app.route('/api/system/restart', methods=['POST'])
+@auth_required
+def api_system_restart():
+    threading.Thread(target=lambda: os._exit(0)).start()
+    return jsonify({"message": "機器人已重啟"})
+
+@app.route('/api/cogs/list')
+@auth_required
+def api_cogs_list():
+    return jsonify({"cogs": [{"name": name} for name in bot_instance.cogs.keys()]})
+
+@app.route('/api/cogs/reload', methods=['POST'])
+@auth_required
+def api_cogs_reload():
+    name = request.args.get('name')
+    ext_name = f"cogs.{name.lower()}"
+    async def do_reload():
+        try: await bot_instance.reload_extension(ext_name)
+        except: pass
+    asyncio.run_coroutine_threadsafe(do_reload(), loop_instance)
+    return jsonify({"message": "重載請求已發送"})
+
 @app.route("/api/stats")
 @auth_required
 def api_stats():
@@ -349,19 +416,17 @@ def api_revoke():
     auth = request.args.get("token")
     if auth != panel_token: return "Unauthorized", 403
     
-    # 建立新 Token 並存檔 (讓舊的徹底失效)
     new_token = secrets.token_urlsafe(24)
     panel_token = new_token
     save_token(new_token)
     
-    # 建立一個異步任務來關閉隧道並重啟機器人
     def shutdown():
         import time, os
-        time.sleep(2) # 讓網頁有時間傳回響應
+        time.sleep(2)
         cog = bot_instance.get_cog('WebPanelCog')
         if cog and cog.tunnel_process:
             cog.tunnel_process.terminate()
-        os._exit(0) # 強制結束進程，觸發 Pterodactyl 自動重啟
+        os._exit(0)
 
     threading.Thread(target=shutdown).start()
 
@@ -503,7 +568,6 @@ def api_join():
 @app.route("/api/voice/leave", methods=['POST'])
 @auth_required
 def api_leave():
-    import json
     data = request.json
     guild = bot_instance.get_guild(int(data['guild_id']))
     if guild and guild.voice_client:
@@ -517,338 +581,31 @@ class WebPanelCog(commands.Cog):
         bot_instance = bot
         loop_instance = asyncio.get_event_loop()
         self.tunnel_process = None
-        self.cert_path = "/home/container/.cloudflared/cert.pem"
-        self.tunnel_url = "" # 初始值
+        self.tunnel_url = ""
         
-        # 啟動時自動嘗試開啟隧道 (延後執行確保 Cog 已加載)
-        self.bot.loop.create_task(self.delayed_start())
-        
-        # 啟動 Flask
         import random
         self.port = random.randint(6000, 9000)
         
-        if not os.path.exists("cert.pem") or not os.path.exists("key.pem"):
+        if not os.path.exists("cert.pem"):
             subprocess.run([
                 "openssl", "req", "-x509", "-newkey", "rsa:4096", 
                 "-keyout", "key.pem", "-out", "cert.pem", 
                 "-days", "36500", "-nodes", 
-                "-subj", "/C=TW/ST=Taipei/L=Yokaro/O=YokaroBot/OU=Security/CN=yokaro.bot"
+                "-subj", "/C=TW/CN=yokaro.bot"
             ], capture_output=True)
 
         def run_flask():
-            try:
-                print(f"📡 Flask (HTTPS 百年加密) 正在啟動於內部端口: {self.port}")
-                app.run(host="0.0.0.0", port=self.port, debug=False, use_reloader=False, ssl_context=('cert.pem', 'key.pem'))
-            except Exception as e: print(f"⚠️ Flask 啟動失敗: {e}")
+            app.run(host="0.0.0.0", port=self.port, debug=False, use_reloader=False, ssl_context=('cert.pem', 'key.pem'))
         threading.Thread(target=run_flask, daemon=True).start()
 
-    async def delayed_start(self):
-        await self.bot.wait_until_ready()
-        await self.auto_start_tunnel()
-
-    async def auto_start_tunnel(self):
-        # 優先從 .env 檔案讀取，最準確
-        domain = None
-        if os.path.exists(".env"):
-            with open(".env", "r") as f:
-                for line in f:
-                    if "CUSTOM_DOMAIN=" in line:
-                        domain = line.split("=")[1].strip()
-        
-        if not domain: domain = os.getenv("CUSTOM_DOMAIN")
-        
-        if domain:
-            self.tunnel_url = f"https://{domain}"
-            print(f"🚀 [自動化] 偵測到域名 {domain}，正在以 HTTPS 模式連線至內部端口 {self.port}...")
-            env = os.environ.copy()
-            env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
-            os.chmod("/home/container/cloudflared", 0o755)
-            try:
-                subprocess.run(["pkill", "-f", "cloudflared"], capture_output=True)
-                # 關鍵：使用 https 連結並加上 --no-tls-verify 繞過自簽名檢查
-                self.tunnel_process = subprocess.Popen(
-                    ["/home/container/cloudflared", "tunnel", "run", "--url", f"https://127.0.0.1:{self.port}", "--no-tls-verify", "yokaro-bot"],
-                    env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-                )
-                print(f"✅ [自動化] 百年加密隧道已成功連通！公網訪問地址: {self.tunnel_url}")
-            except Exception as e:
-                print(f"❌ 隧道自動啟動失敗: {e}")
-
-    @commands.group(name='tunnel')
-    async def tunnel_group(self, ctx):
-        allowed_ids = [467554275921494017] # 大總裁 ID
-        if ctx.author.id not in allowed_ids and not await self.bot.is_owner(ctx.author):
-            return
-        if ctx.invoked_subcommand is None:
-            await ctx.send("📡 **隧道管理中心**\n`!tunnel login` - 登入 Cloudflare\n`!tunnel setup <域名>` - 創建並綁定域名\n`!tunnel start` - 手動重啟隧道")
-
-    @tunnel_group.command(name='login')
-    async def tunnel_login(self, ctx):
-        await ctx.send("🔑 **正在獲取 Cloudflare 授權連結...**")
-        
-        proc = await asyncio.create_subprocess_shell(
-            "./cloudflared tunnel login",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT
-        )
-        
-        found_url = False
-        try:
-            while True:
-                line = await proc.stdout.readline()
-                if not line: break
-                text = line.decode().strip()
-                print(f"[Tunnel Login] {text}")
-                
-                match = re.search(r'https://dash\.cloudflare\.com/argotunnel\?callback=[^\s]+', text)
-                if match:
-                    url = match.group(0)
-                    embed = discord.Embed(title="🔑 Cloudflare 授權請求", color=0xf38020)
-                    embed.description = f"請點擊下方連結登入並授權：\n\n🔗 **[點此授權登入]({url})**\n\n授權後請回到這裡輸入 `!tunnel setup <您的域名>`"
-                    await ctx.send(embed=embed)
-                    found_url = True
-                    break
-            
-            if not found_url: await ctx.send("❌ 無法抓取到連結，請檢查控制台。")
-        except Exception as e: await ctx.send(f"❌ 錯誤: {e}")
-
-    @tunnel_group.command(name='setup')
-    async def tunnel_setup(self, ctx, domain: str):
-        # 徹底簡化：一切回歸主域名，不再處理子域名
-        main_domain = domain
-        
-        await ctx.send(f"🛠️ **正在為 {main_domain} 進行主域名守護綁定...**")
-        try:
-            os.chmod("/home/container/cloudflared", 0o755)
-            env = os.environ.copy()
-            env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
-            
-            # 1. 創建隧道
-            subprocess.run(["/home/container/cloudflared", "tunnel", "create", "yokaro-bot"], env=env, capture_output=True, text=True)
-            
-            # 2. 綁定主站
-            subprocess.run(["/home/container/cloudflared", "tunnel", "route", "dns", "yokaro-bot", main_domain], env=env, capture_output=True, text=True)
-            
-            # 更新 .env (追加模式)
-            with open(".env", "a") as f:
-                f.write(f"\nCUSTOM_DOMAIN={main_domain}\nNAMED_TUNNEL=yokaro-bot\n")
-            
-            self.tunnel_url = f"https://{main_domain}"
-                
-            await ctx.send(f"✅ **設置完成！**\n💎 儀表板: `https://{main_domain}/music/<id>`\n👑 狀態頁: `https://{main_domain}/api/status/<id>`\n\n主域名已就緒，洛洛正在為您開路！🐾✨")
-            await self.auto_start_tunnel()
-        except Exception as e:
-            await ctx.send(f"❌ 設置發生異常: {e}")
-
-# --- 狀態頁面 HTML 模板 (純金 Liquid Gold 旗艦版) ---
-STAT_HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{{ user.display_name }} | 純金身分</title>
-    <meta charset="utf-8">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;600;800&family=Noto+Sans+TC:wght@300;700&family=Noto+Sans+JP:wght@300;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --gold-primary: #bf953f;
-            --gold-light: #fcf6ba;
-            --gold-dark: #8a6d3b;
-            --bg-dark: #050505;
-        }
-        body {
-            margin: 0; background: var(--bg-dark); color: white;
-            font-family: 'Noto Sans TC', 'Noto Sans JP', 'Outfit', 'Segoe UI Symbol', 'Apple Color Emoji', sans-serif;
-            height: 100vh; display: flex; justify-content: center; align-items: center;
-            overflow: hidden; perspective: 1000px;
-        }
-        
-        .particles {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle at center, #1a150a 0%, #000 100%);
-            z-index: -1;
-        }
-        .particle {
-            position: absolute; background: var(--gold-primary);
-            border-radius: 50%; opacity: 0.3;
-            animation: float-up var(--d) linear infinite;
-        }
-        @keyframes float-up {
-            0% { transform: translateY(100vh) scale(0); opacity: 0; }
-            50% { opacity: 0.5; }
-            100% { transform: translateY(-10vh) scale(1); opacity: 0; }
-        }
-
-        .gold-card {
-            width: 380px; padding: 40px;
-            background: rgba(15, 15, 15, 0.9);
-            border-radius: 30px;
-            border: 1px solid rgba(191, 149, 63, 0.4);
-            box-shadow: 0 30px 60px rgba(0,0,0,0.8), inset 0 0 20px rgba(191,149,63,0.05);
-            text-align: center; position: relative;
-            animation: hover-sway 6s ease-in-out infinite;
-            backdrop-filter: blur(15px);
-            overflow: hidden;
-        }
-        @keyframes hover-sway {
-            0%, 100% { transform: translateY(0) rotateX(2deg); }
-            50% { transform: translateY(-10px) rotateX(-2deg); }
-        }
-
-        .gold-card::before {
-            content: ''; position: absolute; top: 0; left: -150%; width: 100%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(252, 246, 186, 0.1), transparent);
-            transform: skewX(-20deg); animation: sweep 4s infinite;
-        }
-        @keyframes sweep { 0% { left: -150%; } 50% { left: 150%; } 100% { left: 150%; } }
-
-        .avatar-box {
-            position: relative; width: 120px; height: 120px; margin: 0 auto 25px;
-        }
-        .avatar {
-            width: 100%; height: 100%; border-radius: 50%;
-            border: 3px solid var(--gold-primary); padding: 5px;
-            background: linear-gradient(135deg, #bf953f, #fcf6ba, #aa771c);
-            object-fit: cover;
-        }
-        .status-dot {
-            position: absolute; bottom: 5px; right: 5px; width: 22px; height: 22px;
-            border: 3px solid #111; border-radius: 50%;
-        }
-        .status-dot.online { background: #2ecc71; box-shadow: 0 0 15px #2ecc71; }
-        .status-dot.idle { background: #f1c40f; box-shadow: 0 0 15px #f1c40f; }
-        .status-dot.dnd { background: #e74c3c; box-shadow: 0 0 15px #e74c3c; }
-        .status-dot.offline { background: #95a5a6; }
-
-        .name-text {
-            font-size: 26px; font-weight: 800; margin-bottom: 5px;
-            background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            word-break: break-all;
-        }
-        .tag-text { color: #666; font-size: 14px; margin-bottom: 25px; letter-spacing: 1px; }
-
-        .activity-card {
-            background: rgba(255,255,255,0.03); border-radius: 18px; padding: 18px;
-            margin-top: 15px; text-align: left; border: 1px solid rgba(255,255,255,0.05);
-            display: flex; align-items: center; gap: 15px;
-        }
-        .activity-icon { width: 55px; height: 55px; border-radius: 10px; border: 1px solid rgba(191,149,63,0.3); }
-        .activity-info h2 { font-size: 10px; color: var(--gold-primary); font-weight: 800; letter-spacing: 2px; margin: 0 0 5px; }
-        .activity-info p { font-size: 13px; margin: 2px 0; color: #ccc; }
-        .activity-title { font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 3px; }
-
-        .footer-text { margin-top: 40px; font-size: 9px; color: #333; letter-spacing: 4px; text-transform: uppercase; }
-    </style>
-</head>
-<body>
-    <div class="particles" id="particles"></div>
-    <div class="gold-card">
-        <div class="avatar-box">
-            <img src="{{ user.display_avatar.url }}" class="avatar">
-            <div class="status-dot {{ status }}"></div>
-        </div>
-        <div class="name-text">{{ user.display_name }}</div>
-        <div class="tag-text">@{{ user.name }}</div>
-
-        {% if activity %}
-        <div class="activity-card">
-            <img src="{{ activity.large_image_url or 'https://cdn-icons-png.flaticon.com/512/681/681392.png' }}" class="activity-icon">
-            <div class="activity-info">
-                <h2>{% if activity.type.value == 1 %}現場直播中{% elif activity.type.value == 0 %}正在遊玩{% elif activity.type.value == 2 %}正在聆聽{% else %}正在行動{% endif %}</h2>
-                <div class="activity-title">{{ activity.name }}</div>
-                <p>{{ activity.details or '' }}</p>
-                <p>{{ activity.state or '' }}</p>
-            </div>
-        </div>
-        {% else %}
-        <div style="color:#444; font-size:12px; margin: 30px 0; letter-spacing: 2px;">RELAXING IN LUXURY 🍃</div>
-        {% endif %}
-
-        <div class="footer-text">STAT.WAYNA1015.CCWU.CC</div>
-    </div>
-    <script>
-        const container = document.getElementById('particles');
-        for(let i=0; i<40; i++) {
-            const p = document.createElement('div');
-            p.className = 'particle';
-            const size = Math.random() * 3 + 1 + 'px';
-            p.style.width = size; p.style.height = size;
-            p.style.left = Math.random() * 100 + '%';
-            p.style.setProperty('--d', Math.random() * 10 + 5 + 's');
-            p.style.animationDelay = Math.random() * 5 + 's';
-            container.appendChild(p);
-        }
-        setTimeout(() => location.reload(), 30000);
-    </script>
-</body>
-</html>
-"""
-
-@app.route("/api/status/<int:user_id>")
-def user_status_page(user_id):
-    from flask import render_template_string
-    # 找尋 Presence (需要伺服器成員)
-    member = None
-    for guild in bot_instance.guilds:
-        member = guild.get_member(user_id)
-        if member: break
-    
-    if not member: return "Member not found in any common guild", 404
-    
-    status = str(member.status)
-    activity = None
-    for act in member.activities:
-        if act.type in [discord.ActivityType.playing, discord.ActivityType.listening, discord.ActivityType.streaming]:
-            activity = act
-            break
-            
-    return render_template_string(STAT_HTML_TEMPLATE, user=member, status=status, activity=activity)
-
-    @tunnel_group.command(name='start')
-    async def tunnel_start(self, ctx):
-        if self.tunnel_process: 
-            self.tunnel_process.terminate()
-            await asyncio.sleep(2)
-        await ctx.send("🚀 **正在手動啟動具名隧道...**")
-        await self.auto_start_tunnel()
-
-    async def auto_start_tunnel(self):
-        # 優先從環境變數或 .env 讀取
-        domain = os.environ.get("CUSTOM_DOMAIN")
-        if not domain and os.path.exists(".env"):
-            with open(".env", "r") as f:
-                for line in f:
-                    if "CUSTOM_DOMAIN=" in line:
-                        domain = line.split("=")[1].strip()
-        
-        if not domain: return
-        
-        print(f"🚀 [自動化] 正在連線至您的專屬域名: {domain}...")
-        env = os.environ.copy()
-        env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
-        os.chmod("/home/container/cloudflared", 0o755)
-        try:
-            subprocess.run(["pkill", "-f", "cloudflared"], capture_output=True)
-            self.tunnel_process = subprocess.Popen(
-                ["/home/container/cloudflared", "tunnel", "run", "--url", f"https://127.0.0.1:{self.port}", "--no-tls-verify", "yokaro-bot"],
-                env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-            )
-            self.tunnel_url = f"https://{domain}"
-            print(f"✅ [自動化] 隧道已建立: {self.tunnel_url}")
-        except Exception as e:
-            print(f"❌ 隧道啟動失敗: {e}")
-
-    @commands.command(name='webpanel')
-    async def open_panel(self, ctx):
-        if ctx.author.id not in ADMIN_IDS: return await ctx.send("❌ 此為大總裁專屬儀表板。")
-        
+    @commands.command(name='webpanel', aliases=['wp'])
+    async def webpanel_cmd(self, ctx):
+        if ctx.author.id not in ADMIN_IDS: return await ctx.send("❌ 權限不足。")
         global panel_token
-        if not panel_token or panel_token == "":
+        if not panel_token:
             panel_token = secrets.token_urlsafe(24)
             save_token(panel_token)
         
-        # 強制重置隧道
-        if self.tunnel_url:
             if self.tunnel_process and self.tunnel_process.poll() is not None:
                 self.tunnel_url = ""
         
