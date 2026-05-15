@@ -627,46 +627,26 @@ class WebPanelCog(commands.Cog):
         except:
             await ctx.send(f"❌ 洛洛無法傳送私訊給您，請開啟「允許來自伺服器成員的私訊」後再試。")
 
-        # 若無自訂網域且尚未建立隧道，嘗試建立
+        # 隧道備援方案 (僅在沒有自訂域名時啟用)
         if not domain and not self.tunnel_url:
-            import platform
-            dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
-            if platform.system() == "Windows": dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
-            if not os.path.exists("./cloudflared"):
-                await ctx.send("📡 正在安裝隧道核心...")
-                subprocess.run(["curl", "-L", dl_url, "-o", "cloudflared"])
-                if platform.system() != "Windows": subprocess.run(["chmod", "+x", "cloudflared"])
-
             try:
-            await ctx.send("📡 正在安裝隧道核心...")
-            subprocess.run(["curl", "-L", dl_url, "-o", "cloudflared"])
-            if platform.system() != "Windows": subprocess.run(["chmod", "+x", "cloudflared"])
+                if self.tunnel_process: self.tunnel_process.terminate()
+                self.tunnel_process = subprocess.Popen(
+                    ["./cloudflared", "tunnel", "--url", f"http://localhost:{self.port}"],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+                )
+                
+                for _ in range(20):
+                    await asyncio.sleep(0.5)
+                    line = self.tunnel_process.stdout.readline()
+                    match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
+                    if match:
+                        self.tunnel_url = match.group(0)
+                        break
+            except: pass
 
-        try:
-            if self.tunnel_process: self.tunnel_process.terminate()
-            self.tunnel_process = subprocess.Popen(
-                ["./cloudflared", "tunnel", "--url", f"http://localhost:{self.port}"],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-            )
-            
-            for _ in range(30):
-                await asyncio.sleep(0.5)
-                line = self.tunnel_process.stdout.readline()
-                match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
-                if match:
-                    self.tunnel_url = match.group(0)
-                    break
-                    
-            if self.tunnel_url:
-                full_url = f"{self.tunnel_url}/?token={panel_token}"
-                revoke_url = f"{self.tunnel_url}/api/revoke?token={panel_token}"
-                embed = discord.Embed(title="🌌 Yokaro 系統中樞連線資訊", color=0xff0080)
-                embed.description = f"您的後台連結為永久有效，除非點擊註銷。\n\n🔗 **[點此進入管理面板]({full_url})**\n\n🚨 **[危急時點此註銷所有網址]({revoke_url})**"
-                await ctx.author.send(embed=embed)
-                await ctx.send("✅ **安全隧道已建立，永久密鑰已發送至您的私訊！**")
-            else: await ctx.send("❌ 無法獲取隧道網址。")
-        except Exception as e:
-            await ctx.send(f"❌ 隧道啟動失敗: {e}")
+async def setup(bot):
+    await bot.add_cog(WebPanelCog(bot))
 
 async def setup(bot):
     await bot.add_cog(WebPanelCog(bot))
