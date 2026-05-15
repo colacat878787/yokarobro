@@ -638,17 +638,6 @@ class WebPanelCog(commands.Cog):
                 if platform.system() != "Windows": subprocess.run(["chmod", "+x", "cloudflared"])
 
             try:
-                await ctx.author.send(embed=embed)
-                await ctx.send("✅ 連結已發送到您的私訊！")
-            except:
-                await ctx.send(f"❌ 無法私訊您，請開啟私訊功能。")
-            return
-
-        # 下載/檢查 cloudflared...
-        import platform
-        dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
-        if platform.system() == "Windows": dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
-        if not os.path.exists("./cloudflared"):
             await ctx.send("📡 正在安裝隧道核心...")
             subprocess.run(["curl", "-L", dl_url, "-o", "cloudflared"])
             if platform.system() != "Windows": subprocess.run(["chmod", "+x", "cloudflared"])
