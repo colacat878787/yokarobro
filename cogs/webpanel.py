@@ -600,22 +600,43 @@ class WebPanelCog(commands.Cog):
 
     @commands.command(name='webpanel', aliases=['wp'])
     async def webpanel_cmd(self, ctx):
+        """獲取管理面板連結"""
         if ctx.author.id not in ADMIN_IDS: return await ctx.send("❌ 權限不足。")
         global panel_token
         if not panel_token:
             panel_token = secrets.token_urlsafe(24)
             save_token(panel_token)
         
-            if self.tunnel_process and self.tunnel_process.poll() is not None:
-                self.tunnel_url = ""
+        # 優先獲取自訂網域
+        domain = os.getenv("CUSTOM_DOMAIN")
+        if domain:
+            base_url = f"https://{domain}"
+        else:
+            base_url = self.tunnel_url if self.tunnel_url else f"http://localhost:{self.port}"
+            
+        full_url = f"{base_url}/?token={panel_token}"
+        revoke_url = f"{base_url}/api/revoke?token={panel_token}"
         
-        await ctx.send(f"📡 正在建立安全隧道 (Port: {self.port})...")
+        embed = discord.Embed(title="🌌 Yokaro 系統管理中心", color=0x5865f2)
+        embed.description = f"大總裁，這是您的專屬管理連結：\n\n🔗 **[點此進入管理面板]({full_url})**\n\n🚨 **[安全註銷]({revoke_url})**"
+        embed.set_footer(text="提示：請勿將此連結分享給他人！")
         
-        if self.tunnel_url:
-            full_url = f"{self.tunnel_url}/?token={panel_token}"
-            revoke_url = f"{self.tunnel_url}/api/revoke?token={panel_token}"
-            embed = discord.Embed(title="🌌 Yokaro 系統中樞連線資訊", color=0xff0080)
-            embed.description = f"您的後台連結為永久有效，除非點擊註銷。\n\n🔗 **[點此進入管理面板]({full_url})**\n\n🚨 **[危急時點此註銷所有網址]({revoke_url})**"
+        try:
+            await ctx.author.send(embed=embed)
+            await ctx.send("✅ **管理面板連結已發送到您的私訊！**")
+        except:
+            await ctx.send(f"❌ 洛洛無法傳送私訊給您，請開啟「允許來自伺服器成員的私訊」後再試。")
+
+        # 若無自訂網域且尚未建立隧道，嘗試建立
+        if not domain and not self.tunnel_url:
+            import platform
+            dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+            if platform.system() == "Windows": dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+            if not os.path.exists("./cloudflared"):
+                await ctx.send("📡 正在安裝隧道核心...")
+                subprocess.run(["curl", "-L", dl_url, "-o", "cloudflared"])
+                if platform.system() != "Windows": subprocess.run(["chmod", "+x", "cloudflared"])
+
             try:
                 await ctx.author.send(embed=embed)
                 await ctx.send("✅ 連結已發送到您的私訊！")
