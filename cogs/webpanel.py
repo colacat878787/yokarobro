@@ -621,29 +621,48 @@ class WebPanelCog(commands.Cog):
         embed.description = f"大總裁，這是您的專屬管理連結：\n\n🔗 **[點此進入管理面板]({full_url})**\n\n🚨 **[安全註銷]({revoke_url})**"
         embed.set_footer(text="提示：請勿將此連結分享給他人！")
         
+    async def auto_start_tunnel(self):
+        # 讀取設定
+        domain = os.getenv("CUSTOM_DOMAIN")
+        tunnel_name = os.getenv("NAMED_TUNNEL", "yokaro-bot")
+        
+        # 即使有自訂網域，我們仍可能需要機器人幫忙啟動隧道進程
+        print(f"🚀 [系統] 正在準備啟動隧道: {tunnel_name} (對接至 {domain if domain else '隨機網址'})")
+        
+        env = os.environ.copy()
+        # Pterodactyl 專用路徑
+        env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
+        
+        # 嘗試啟動
         try:
-            await ctx.author.send(embed=embed)
-            await ctx.send("✅ **管理面板連結已發送到您的私訊！**")
-        except:
-            await ctx.send(f"❌ 洛洛無法傳送私訊給您，請開啟「允許來自伺服器成員的私訊」後再試。")
-
-        # 隧道備援方案 (僅在沒有自訂域名時啟用)
-        if not domain and not self.tunnel_url:
-            try:
-                if self.tunnel_process: self.tunnel_process.terminate()
-                self.tunnel_process = subprocess.Popen(
-                    ["./cloudflared", "tunnel", "--url", f"http://localhost:{self.port}"],
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-                )
-                
+            # 先嘗試停掉舊的，避免埠號衝突
+            subprocess.run(["pkill", "-f", "cloudflared"], capture_output=True)
+            await asyncio.sleep(1)
+            
+            # 建立 Popen 指令
+            cmd = ["/home/container/cloudflared", "tunnel", "--no-tls-verify", "run", "--url", f"https://127.0.0.1:{self.port}"]
+            if tunnel_name:
+                cmd.append(tunnel_name)
+            
+            self.tunnel_process = subprocess.Popen(
+                cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            )
+            
+            if domain:
+                self.tunnel_url = f"https://{domain}"
+                print(f"✅ [系統] 已嘗試啟動具名隧道 '{tunnel_name}'，請確認 Cloudflare 後台已指向 {domain}")
+            else:
+                # 如果是隨機隧道，需要從 Log 抓網址
                 for _ in range(20):
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(1)
                     line = self.tunnel_process.stdout.readline()
                     match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
                     if match:
                         self.tunnel_url = match.group(0)
+                        print(f"✅ [系統] 隨機隧道已建立: {self.tunnel_url}")
                         break
-            except: pass
+        except Exception as e:
+            print(f"❌ [系統] 隧道啟動失敗: {e}")
 
 async def setup(bot):
     await bot.add_cog(WebPanelCog(bot))
