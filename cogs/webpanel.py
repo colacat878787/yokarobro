@@ -10,569 +10,124 @@ import json
 from flask import Flask, render_template_string, request, jsonify
 import psutil
 
-ADMIN_IDS = [1113353915010920452, 501251225715474433]
+# 管理員名單
+ADMIN_IDS = [1113353915010920452, 501251225715474433, 467554275921494017]
 
 app = Flask(__name__)
 bot_instance = None
 loop_instance = None
 TOKEN_FILE = "webpanel_token.json"
+panel_token = ""
 
 def load_token():
+    global panel_token
     if os.path.exists(TOKEN_FILE):
         try:
             with open(TOKEN_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f).get("token", "")
+                panel_token = json.load(f).get("token", "")
         except: pass
-    return ""
+    if not panel_token:
+        panel_token = secrets.token_urlsafe(24)
+        save_token(panel_token)
 
 def save_token(token):
-    import json
     with open(TOKEN_FILE, 'w', encoding='utf-8') as f:
         json.dump({"token": token}, f)
 
-panel_token = load_token()
+load_token()
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Yokaro Dash | 系統控制中心</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root {
-            --sidebar-bg: #202225;
-            --main-bg: #36393f;
-            --header-bg: #2f3136;
-            --card-bg: #2f3136;
-            --accent: #5865f2;
-            --text-primary: #ffffff;
-            --text-secondary: #b9bbbe;
-            --danger: #ed4245;
-            --input-bg: #202225;
-        }
-        * { box-sizing: border-box; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--main-bg);
-            color: var(--text-primary);
-            margin: 0;
-            display: flex;
-            height: 100vh;
-            overflow: hidden;
-        }
-        .sidebar {
-            width: 260px;
-            background-color: var(--sidebar-bg);
-            display: flex;
-            flex-direction: column;
-            padding: 20px 0;
-            border-right: 1px solid rgba(0,0,0,0.2);
-        }
-        .sidebar-brand {
-            padding: 0 24px 24px;
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--accent);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .nav-item {
-            padding: 12px 24px;
-            color: var(--text-secondary);
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            transition: 0.2s;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .nav-item:hover, .nav-item.active {
-            background-color: rgba(255,255,255,0.05);
-            color: var(--text-primary);
-        }
-        .nav-item.active { border-left: 4px solid var(--accent); padding-left: 20px; background-color: rgba(88,101,242,0.1); }
-        
-        .content { flex: 1; display: flex; flex-direction: column; }
-        header {
-            height: 56px;
-            background-color: var(--header-bg);
-            display: flex;
-            align-items: center;
-            padding: 0 24px;
-            justify-content: space-between;
-            box-shadow: 0 1px 0 rgba(0,0,0,0.2);
-        }
-        .stats-bar { display: flex; gap: 24px; font-size: 13px; color: var(--text-secondary); }
-        .stats-bar b { color: var(--text-primary); font-weight: 600; }
-
-        main { flex: 1; padding: 24px; overflow-y: auto; }
-        .grid { display: grid; grid-template-columns: 320px 1fr; gap: 24px; height: 100%; }
-        .card { background-color: var(--card-bg); border-radius: 8px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px;}
-        .card-label { font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 12px; letter-spacing: 0.5px; }
-        
-        select, input, button {
-            width: 100%;
-            background-color: var(--input-bg);
-            border: 1px solid rgba(0,0,0,0.3);
-            color: #dcddde;
-            padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 16px;
-            outline: none;
-            font-family: inherit;
-            font-size: 14px;
-        }
-        button { background-color: var(--accent); color: white; border: none; cursor: pointer; font-weight: 600; transition: 0.2s; }
-        button:hover { background-color: #4752c4; }
-        button.secondary { background-color: #4f545c; }
-        button.danger { background-color: var(--danger); }
-
-        .chat-box {
-            flex: 1;
-            background-color: rgba(0,0,0,0.1);
-            border-radius: 4px;
-            overflow-y: auto;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin-bottom: 16px;
-            min-height: 400px;
-        }
-        .msg { font-size: 14px; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px; }
-        .msg-meta { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
-        .msg-author { font-weight: 600; color: #fff; margin-right: 6px; }
-        .msg.bot .msg-author { color: var(--accent); }
-
-        .mode-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
-        .mode-tabs button { margin-bottom: 0; padding: 8px; }
-
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-thumb { background: #202225; border-radius: 4px; }
+        body { font-family: sans-serif; background: #36393f; color: white; padding: 20px; }
+        .card { background: #2f3136; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        button { background: #5865f2; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px; }
+        button:hover { background: #4752c4; }
+        button.danger { background: #ed4245; }
+        .status-item { margin-bottom: 10px; font-size: 14px; color: #b9bbbe; }
+        b { color: #fff; }
     </style>
 </head>
 <body>
-    <div class="sidebar">
-        <div class="sidebar-brand"><i class="fas fa-bolt"></i> Yokaro Dash</div>
-        <div class="nav-item active" id="nav-comm" onclick="switchPage('comm')"><i class="fas fa-comments"></i> 控制中心</div>
-        <div class="nav-item" id="nav-stats" onclick="switchPage('stats')"><i class="fas fa-microchip"></i> 系統日誌</div>
-        <div class="nav-item" id="nav-mgmt" onclick="switchPage('mgmt')"><i class="fas fa-tools"></i> 機器人管理</div>
-        <div class="nav-item" style="margin-top: auto; color: var(--danger)" onclick="revoke()"><i class="fas fa-key"></i> 註銷連結</div>
+    <h1>Yokaro 系統控制中心</h1>
+    
+    <div class="card">
+        <h3>🚀 機器人管理</h3>
+        <button onclick="manage('sync')">同步全域指令 (Sync)</button>
+        <button onclick="manage('restart')" class="danger">強制重啟機器人</button>
     </div>
 
-    <div class="content">
-        <header>
-            <div id="page-title" style="font-weight: 600">控制中心</div>
-            <div class="stats-bar" id="top-stats">連線中...</div>
-        </header>
-
-        <main>
-            <div class="grid" id="comm-view">
-                <div class="card">
-                    <div class="card-label">目標選擇</div>
-                    <div class="mode-tabs">
-                        <button id="btn-server" onclick="setMode('server')">伺服器</button>
-                        <button id="btn-dm" onclick="setMode('dm')" class="secondary">私訊</button>
-                    </div>
-
-                    <div id="pane-server">
-                        <label class="card-label">伺服器</label>
-                        <select id="g-sel" onchange="loadChannels()"></select>
-                        <label class="card-label">頻道</label>
-                        <select id="c-sel" onchange="switchChat()"></select>
-                    </div>
-
-                    <div id="pane-dm" style="display:none">
-                        <label class="card-label">最近對話</label>
-                        <select id="d-sel" onchange="switchChat(true)"></select>
-                        <label class="card-label">手動 ID</label>
-                        <input type="text" id="d-id" onchange="switchChat()">
-                    </div>
-
-                    <div class="card-label" style="margin-top:20px">語音廣播</div>
-                    <select id="v-sel"></select>
-                    <div style="display:flex; gap:8px">
-                        <button onclick="joinVoice()">進入</button>
-                        <button onclick="leaveVoice()" class="danger">離開</button>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-label" id="chat-label">即時訊息串流</div>
-                    <div class="chat-box" id="chat-box">請選擇一個頻道開始通訊...</div>
-                    <div style="display:flex; gap:12px">
-                        <input type="text" id="m-in" placeholder="以此身分發送訊息..." onkeypress="if(event.key==='Enter') send()">
-                        <button style="width:100px" onclick="send()">發送</button>
-                    </div>
-                </div>
-            </div>
-
-            <div id="stats-view" style="display:none">
-                <div class="card">
-                    <div class="card-label">效能即時監控</div>
-                    <div id="full-stats" style="line-height: 2">正在獲取數據...</div>
-                </div>
-            </div>
-
-            <div id="mgmt-view" style="display:none">
-                <div class="card">
-                    <div class="card-label">系統管理</div>
-                    <button onclick="manageBot('sync')">同步全域指令</button>
-                    <button onclick="manageBot('restart')" class="danger">強制重啟機器人</button>
-                </div>
-                <div class="card">
-                    <div class="card-label">模組控制</div>
-                    <div id="cogs-list"></div>
-                </div>
-            </div>
-        </main>
+    <div class="card">
+        <h3>📊 系統狀態</h3>
+        <div id="stats-content">載入中...</div>
     </div>
 
     <script>
-        const token = new URLSearchParams(window.location.search).get('token') || '';
-        let mode = 'server', target = '', lastCount = 0;
-
-        async function api(path, method='GET', body=null) {
-            const h = { 'Authorization': token };
-            if(body) h['Content-Type']='application/json';
-            const r = await fetch(path, { method, headers: h, body: body?JSON.stringify(body):null });
-            return r.json();
-        }
-
-        async function updateStats() {
-            const d = await api('/api/stats');
-            document.getElementById('top-stats').innerHTML = `<span>CPU: <b>${d.cpu_temp}°C</b></span><span>RAM: <b>${d.ram_mb}MB</b></span><span>Ping: <b>${d.latency}ms</b></span>`;
-            if(document.getElementById('stats-view').style.display !== 'none') {
-                document.getElementById('full-stats').innerHTML = `<p>CPU 使用率: <b>${d.cpu_percent}%</b></p><p>CPU 溫度: <b>${d.cpu_temp}°C</b></p><p>記憶體佔用: <b>${d.ram_mb} MB</b></p><p>API 延遲: <b>${d.latency} ms</b></p><p>所在伺服器: <b>${d.guilds}</b></p>`;
-            }
-        }
-
-        function switchPage(p) {
-            document.getElementById('nav-comm').classList.toggle('active', p==='comm');
-            document.getElementById('nav-stats').classList.toggle('active', p==='stats');
-            document.getElementById('nav-mgmt').classList.toggle('active', p==='mgmt');
-            document.getElementById('comm-view').style.display = p==='comm' ? 'grid' : 'none';
-            document.getElementById('stats-view').style.display = p==='stats' ? 'block' : 'none';
-            document.getElementById('mgmt-view').style.display = p==='mgmt' ? 'block' : 'none';
-            document.getElementById('page-title').innerText = p==='comm' ? '控制中心' : (p==='stats' ? '系統日誌' : '機器人管理');
-        }
-
-        function setMode(m) {
-            mode = m;
-            document.getElementById('pane-server').style.display = m==='server' ? 'block' : 'none';
-            document.getElementById('pane-dm').style.display = m==='dm' ? 'block' : 'none';
-            document.getElementById('btn-server').className = m==='server' ? '' : 'secondary';
-            document.getElementById('btn-dm').className = m==='dm' ? '' : 'secondary';
-            target = '';
-        }
-
-        async function loadChannels() {
-            const gid = document.getElementById('g-sel').value;
-            const d = await api(`/api/channels/${gid}`);
-            const cs = document.getElementById('c-sel'); cs.innerHTML = '<option value="">選擇頻道...</option>';
-            d.text.forEach(c => cs.innerHTML += `<option value="${c.id}">#${c.name}</option>`);
-            const vs = document.getElementById('v-sel'); vs.innerHTML = '<option value="">選擇語音...</option>';
-            d.voice.forEach(c => vs.innerHTML += `<option value="${c.id}">${c.name}</option>`);
-        }
-
-        function switchChat(isDMSel = false) {
-            if(mode==='server') target = document.getElementById('c-sel').value;
-            else {
-                if(isDMSel) { target = document.getElementById('d-sel').value; document.getElementById('d-id').value = target; }
-                else target = document.getElementById('d-id').value;
-            }
-            lastCount = 0;
-            document.getElementById('chat-box').innerHTML = '載入訊息串...';
-            poll();
-        }
-
-        async function poll() {
-            if(!target) return;
-            const ms = await api(mode === 'server' ? `/api/chat/${target}` : `/api/dm/${target}`);
-            if(ms.length !== lastCount) {
-                const box = document.getElementById('chat-box'); box.innerHTML = '';
-                ms.reverse().forEach(m => {
-                    box.innerHTML += `<div class="msg ${m.is_bot?'bot':''}"><div class="msg-meta">${m.time}</div><span class="msg-author">${m.author}:</span>${m.content}</div>`;
-                });
-                box.scrollTop = box.scrollHeight; lastCount = ms.length;
-            }
-        }
-
-        async function send() {
-            const i = document.getElementById('m-in'), t = i.value;
-            if(!t || !target) return; i.value = '';
-            await api(mode==='server'?'/api/send':'/api/dm/send', 'POST', mode==='server'?{channel_id:target,content:t}:{user_id:target,content:t});
-            setTimeout(poll, 500);
-        }
-
-        async function joinVoice() { const cid = document.getElementById('v-sel').value; if(cid) api('/api/voice/join','POST',{channel_id:cid}); }
-        async function leaveVoice() { const gid = document.getElementById('g-sel').value; if(gid) api('/api/voice/leave','POST',{guild_id:gid}); }
-        function revoke() { if(confirm('確定註銷？')) window.location.href = `/api/revoke?token=${token}`; }
-
-        async function manageBot(action) {
+        const token = new URLSearchParams(window.location.search).get('token');
+        async function manage(action) {
             if(action === 'restart' && !confirm('確定要重啟嗎？')) return;
-            const res = await api(`/api/system/${action}`, 'POST');
-            alert(res.message);
+            const res = await fetch(`/api/system/${action}?token=${token}`, { method: 'POST' });
+            const data = await res.json();
+            alert(data.message || '執行成功');
             if(action === 'sync') location.reload();
         }
 
-        async function loadCogs() {
-            const data = await api('/api/cogs/list');
-            const container = document.getElementById('cogs-list');
-            container.innerHTML = '';
-            data.cogs.forEach(cog => {
-                container.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px"><span>${cog.name}</span><button style="width:auto" onclick="toggleCog('${cog.name}')">重載</button></div>`;
-            });
+        async function updateStats() {
+            try {
+                const res = await fetch(`/api/stats?token=${token}`);
+                const data = await res.json();
+                document.getElementById('stats-content').innerHTML = `
+                    <div class="status-item">CPU 使用率: <b>${data.cpu}%</b></div>
+                    <div class="status-item">記憶體使用率: <b>${data.memory}%</b></div>
+                    <div class="status-item">伺服器數量: <b>${data.guilds}</b></div>
+                    <div class="status-item">已註冊模組: <b>${data.cogs.join(', ')}</b></div>
+                `;
+            } catch(e) { console.error(e); }
         }
-
-        async function toggleCog(name) {
-            const res = await api(`/api/cogs/reload?name=${name}`, 'POST');
-            alert(res.message);
-        }
-
-        (async () => {
-            updateStats(); setInterval(updateStats, 5000); setInterval(poll, 2000);
-            loadCogs();
-            const gs = await api('/api/guilds');
-            const gsel = document.getElementById('g-sel'); gsel.innerHTML = '<option>選擇伺服器...</option>';
-            gs.forEach(g => gsel.innerHTML += `<option value="${g.id}">${g.name}</option>`);
-            const ds = await api('/api/dm_list');
-            const dsel = document.getElementById('d-sel'); dsel.innerHTML = '<option>選擇私訊...</option>';
-            ds.forEach(d => dsel.innerHTML += `<option value="${d.id}">${d.name}</option>`);
-        })();
+        setInterval(updateStats, 5000);
+        updateStats();
     </script>
 </body>
 </html>
 """
 
-def auth_required(f):
-    def wrapper(*args, **kwargs):
-        if request.headers.get('Authorization') != panel_token and request.args.get('token') != panel_token:
-            return jsonify({"error": "Unauthorized"}), 403
-        return f(*args, **kwargs)
-    wrapper.__name__ = f.__name__
-    return wrapper
-
-@app.route("/")
-@auth_required
+@app.route('/')
 def index():
-    return render_template_string(HTML_TEMPLATE)
-
-@app.route('/api/system/sync', methods=['POST'])
-@auth_required
-def api_system_sync():
-    async def do_sync():
-        await bot_instance.tree.sync()
-    asyncio.run_coroutine_threadsafe(do_sync(), loop_instance)
-    return jsonify({"message": "同步完成"})
-
-@app.route('/api/system/restart', methods=['POST'])
-@auth_required
-def api_system_restart():
-    threading.Thread(target=lambda: os._exit(0)).start()
-    return jsonify({"message": "機器人已重啟"})
-
-@app.route('/api/cogs/list')
-@auth_required
-def api_cogs_list():
-    return jsonify({"cogs": [{"name": name} for name in bot_instance.cogs.keys()]})
-
-@app.route('/api/cogs/reload', methods=['POST'])
-@auth_required
-def api_cogs_reload():
-    name = request.args.get('name')
-    ext_name = f"cogs.{name.lower()}"
-    async def do_reload():
-        try: await bot_instance.reload_extension(ext_name)
-        except: pass
-    asyncio.run_coroutine_threadsafe(do_reload(), loop_instance)
-    return jsonify({"message": "重載請求已發送"})
-
-@app.route("/api/stats")
-@auth_required
-def api_stats():
-    temps = psutil.sensors_temperatures() if hasattr(psutil, "sensors_temperatures") else {}
-    temp = 0
-    if temps and 'coretemp' in temps: temp = temps['coretemp'][0].current
-    
-    return jsonify({
-        "cpu_temp": temp,
-        "cpu_percent": psutil.cpu_percent(),
-        "ram_mb": int(psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024),
-        "latency": round(bot_instance.latency * 1000),
-        "guilds": len(bot_instance.guilds)
-    })
-
-@app.route("/api/revoke")
-def api_revoke():
-    import json
-    global panel_token
     auth = request.args.get("token")
     if auth != panel_token: return "Unauthorized", 403
-    
-    new_token = secrets.token_urlsafe(24)
-    panel_token = new_token
-    save_token(new_token)
-    
-    def shutdown():
-        import time, os
-        time.sleep(2)
-        cog = bot_instance.get_cog('WebPanelCog')
-        if cog and cog.tunnel_process:
-            cog.tunnel_process.terminate()
-        os._exit(0)
+    return render_template_string(HTML_TEMPLATE)
 
-    threading.Thread(target=shutdown).start()
-
-    return """
-    <body style="background:#202225; color:white; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; text-align:center;">
-        <div>
-            <h1 style="color:#ed4245; font-size:48px;">🔒 系統已註銷</h1>
-            <p style="font-size:20px;">安全隧道已關閉，端口已釋放。</p>
-            <p style="color:#b9bbbe;">機器人正在執行安全重啟... 請稍後在 Discord 重新獲取連結。</p>
-            <script>setTimeout(() => { window.close(); }, 5000);</script>
-        </div>
-    </body>
-    """
-
-@app.route("/api/guilds")
-@auth_required
-def api_guilds():
-    return jsonify([{"id": str(g.id), "name": g.name} for g in bot_instance.guilds])
-
-@app.route("/api/channels/<guild_id>")
-@auth_required
-def api_channels(guild_id):
-    guild = bot_instance.get_guild(int(guild_id))
-    if not guild: return jsonify({"error": "Guild not found"}), 404
+@app.route('/api/stats')
+def api_stats():
+    auth = request.args.get("token")
+    if auth != panel_token: return "Unauthorized", 403
     return jsonify({
-        "text": [{"id": str(c.id), "name": c.name} for c in guild.text_channels],
-        "voice": [{"id": str(c.id), "name": c.name} for c in guild.voice_channels]
+        "cpu": psutil.cpu_percent(),
+        "memory": psutil.virtual_memory().percent,
+        "guilds": len(bot_instance.guilds),
+        "cogs": list(bot_instance.cogs.keys())
     })
 
-@app.route("/api/chat/<channel_id>")
-@auth_required
-def api_chat(channel_id):
-    channel = bot_instance.get_channel(int(channel_id))
-    if not channel: return jsonify([])
-    
-    async def fetch_history():
-        msgs = []
-        async for m in channel.history(limit=50):
-            content = m.clean_content
-            if not content and m.embeds:
-                if m.embeds[0].description:
-                    content = f"[卡片] {m.embeds[0].description}"
-                elif m.embeds[0].title:
-                    content = f"[卡片] {m.embeds[0].title}"
-                else:
-                    content = "[卡片訊息]"
-            elif not content:
-                content = "[附件/圖片]"
-                
-            msgs.append({
-                "author": m.author.display_name,
-                "content": content,
-                "time": m.created_at.strftime("%H:%M:%S"),
-                "is_bot": m.author.id == bot_instance.user.id
-            })
-        return msgs
+@app.route('/api/system/sync', methods=['POST'])
+def api_sync():
+    auth = request.args.get("token")
+    if auth != panel_token: return "Unauthorized", 403
+    async def do_sync():
+        await bot_instance.tree.sync()
+        print("🚀 [WebPanel] 全域指令同步完成")
+    asyncio.run_coroutine_threadsafe(do_sync(), loop_instance)
+    return jsonify({"message": "同步指令請求已發送"})
 
-    future = asyncio.run_coroutine_threadsafe(fetch_history(), loop_instance)
-    return jsonify(future.result())
-
-@app.route("/api/dm_list")
-@auth_required
-def api_dm_list():
-    dms = []
-    for user in bot_instance.users:
-        if user.dm_channel:
-            dms.append({"id": str(user.id), "name": user.display_name})
-    return jsonify(dms[:50])
-
-@app.route("/api/dm/<user_id>")
-@auth_required
-def api_dm(user_id):
-    async def fetch_dm():
-        try:
-            user = await bot_instance.fetch_user(int(user_id))
-            if not user.dm_channel:
-                await user.create_dm()
-            
-            msgs = []
-            async for m in user.dm_channel.history(limit=50):
-                content = m.clean_content
-                if not content and m.embeds:
-                    if m.embeds[0].description:
-                        content = f"[卡片] {m.embeds[0].description}"
-                    elif m.embeds[0].title:
-                        content = f"[卡片] {m.embeds[0].title}"
-                    else:
-                        content = "[卡片訊息]"
-                elif not content:
-                    content = "[附件/圖片]"
-
-                msgs.append({
-                    "author": m.author.display_name,
-                    "content": content,
-                    "time": m.created_at.strftime("%H:%M:%S"),
-                    "is_bot": m.author.id == bot_instance.user.id
-                })
-            return msgs
-        except Exception as e:
-            return {"error": f"無法載入私訊紀錄: {str(e)}"}
-
-    future = asyncio.run_coroutine_threadsafe(fetch_dm(), loop_instance)
-    return jsonify(future.result())
-
-@app.route("/api/send", methods=['POST'])
-@auth_required
-def api_send():
-    data = request.json
-    channel = bot_instance.get_channel(int(data['channel_id']))
-    if channel:
-        asyncio.run_coroutine_threadsafe(channel.send(data['content']), loop_instance)
-    return jsonify({"status": "ok"})
-
-@app.route("/api/dm/send", methods=['POST'])
-@auth_required
-def api_dm_send():
-    data = request.json
-    async def send_dm():
-        user = await bot_instance.fetch_user(int(data['user_id']))
-        if user:
-            await user.send(data['content'])
-    asyncio.run_coroutine_threadsafe(send_dm(), loop_instance)
-    return jsonify({"status": "ok"})
-
-@app.route("/api/voice/join", methods=['POST'])
-@auth_required
-def api_join():
-    data = request.json
-    channel = bot_instance.get_channel(int(data['channel_id']))
-    if channel:
-        async def join():
-            if channel.guild.voice_client:
-                await channel.guild.voice_client.move_to(channel)
-            else:
-                await channel.connect()
-        asyncio.run_coroutine_threadsafe(join(), loop_instance)
-    return jsonify({"status": "ok"})
-
-@app.route("/api/voice/leave", methods=['POST'])
-@auth_required
-def api_leave():
-    data = request.json
-    guild = bot_instance.get_guild(int(data['guild_id']))
-    if guild and guild.voice_client:
-        asyncio.run_coroutine_threadsafe(guild.voice_client.disconnect(), loop_instance)
-    return jsonify({"status": "ok"})
+@app.route('/api/system/restart', methods=['POST'])
+def api_restart():
+    auth = request.args.get("token")
+    if auth != panel_token: return "Unauthorized", 403
+    threading.Thread(target=lambda: os._exit(0)).start()
+    return jsonify({"message": "機器人正在重啟..."})
 
 class WebPanelCog(commands.Cog):
     def __init__(self, bot):
@@ -582,90 +137,64 @@ class WebPanelCog(commands.Cog):
         loop_instance = asyncio.get_event_loop()
         self.tunnel_process = None
         self.tunnel_url = ""
+        self.port = 8848
         
-        import random
-        self.port = random.randint(6000, 9000)
-        
-        if not os.path.exists("cert.pem"):
-            subprocess.run([
-                "openssl", "req", "-x509", "-newkey", "rsa:4096", 
-                "-keyout", "key.pem", "-out", "cert.pem", 
-                "-days", "36500", "-nodes", 
-                "-subj", "/C=TW/CN=yokaro.bot"
-            ], capture_output=True)
+        # 啟動 Flask (使用 HTTP，由外部隧道處理 HTTPS)
+        threading.Thread(target=lambda: app.run(host="0.0.0.0", port=self.port, debug=False, use_reloader=False), daemon=True).start()
+        # 啟動隧道
+        self.bot.loop.create_task(self.auto_start_tunnel())
 
-        def run_flask():
-            app.run(host="0.0.0.0", port=self.port, debug=False, use_reloader=False, ssl_context=('cert.pem', 'key.pem'))
-        threading.Thread(target=run_flask, daemon=True).start()
-
-    @commands.command(name='webpanel', aliases=['wp'])
-    async def webpanel_cmd(self, ctx):
-        """獲取管理面板連結"""
-        if ctx.author.id not in ADMIN_IDS: return await ctx.send("❌ 權限不足。")
-        global panel_token
-        if not panel_token:
-            panel_token = secrets.token_urlsafe(24)
-            save_token(panel_token)
-        
-        # 優先獲取自訂網域
-        domain = os.getenv("CUSTOM_DOMAIN")
-        if domain:
-            base_url = f"https://{domain}"
-        else:
-            base_url = self.tunnel_url if self.tunnel_url else f"http://localhost:{self.port}"
-            
-        full_url = f"{base_url}/?token={panel_token}"
-        revoke_url = f"{base_url}/api/revoke?token={panel_token}"
-        
-        embed = discord.Embed(title="🌌 Yokaro 系統管理中心", color=0x5865f2)
-        embed.description = f"大總裁，這是您的專屬管理連結：\n\n🔗 **[點此進入管理面板]({full_url})**\n\n🚨 **[安全註銷]({revoke_url})**"
-        embed.set_footer(text="提示：請勿將此連結分享給他人！")
-        
     async def auto_start_tunnel(self):
-        # 讀取設定
         domain = os.getenv("CUSTOM_DOMAIN")
         tunnel_name = os.getenv("NAMED_TUNNEL", "yokaro-bot")
         
-        # 即使有自訂網域，我們仍可能需要機器人幫忙啟動隧道進程
-        print(f"🚀 [系統] 正在準備啟動隧道: {tunnel_name} (對接至 {domain if domain else '隨機網址'})")
-        
         env = os.environ.copy()
-        # Pterodactyl 專用路徑
         env["CLOUDFLARED_HOME"] = "/home/container/.cloudflared"
         
-        # 嘗試啟動
         try:
-            # 先嘗試停掉舊的，避免埠號衝突
+            # 停掉舊的 cloudflared
             subprocess.run(["pkill", "-f", "cloudflared"], capture_output=True)
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
             
-            # 建立 Popen 指令
-            cmd = ["/home/container/cloudflared", "tunnel", "--no-tls-verify", "run", "--url", f"https://127.0.0.1:{self.port}"]
-            if tunnel_name:
-                cmd.append(tunnel_name)
+            # 對接至本地 Flask 埠號
+            cmd = ["/home/container/cloudflared", "tunnel", "--no-tls-verify", "run", "--url", f"http://127.0.0.1:{self.port}"]
+            if tunnel_name: cmd.append(tunnel_name)
             
-            self.tunnel_process = subprocess.Popen(
-                cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-            )
+            self.tunnel_process = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             
             if domain:
                 self.tunnel_url = f"https://{domain}"
-                print(f"✅ [系統] 已嘗試啟動具名隧道 '{tunnel_name}'，請確認 Cloudflare 後台已指向 {domain}")
+                print(f"✅ [WebPanel] 具名隧道啟動: {self.tunnel_url}")
             else:
-                # 如果是隨機隧道，需要從 Log 抓網址
                 for _ in range(20):
                     await asyncio.sleep(1)
                     line = self.tunnel_process.stdout.readline()
                     match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
                     if match:
                         self.tunnel_url = match.group(0)
-                        print(f"✅ [系統] 隨機隧道已建立: {self.tunnel_url}")
+                        print(f"✅ [WebPanel] 隨機隧道連通: {self.tunnel_url}")
                         break
         except Exception as e:
-            print(f"❌ [系統] 隧道啟動失敗: {e}")
+            print(f"❌ [WebPanel] 隧道啟動失敗: {e}")
 
-async def setup(bot):
-    await bot.add_cog(WebPanelCog(bot))
+    @commands.command(name='webpanel', aliases=['wp'])
+    async def webpanel_cmd(self, ctx):
+        """獲取管理面板連結"""
+        if ctx.author.id not in ADMIN_IDS:
+            return await ctx.send("❌ 此為大總裁專屬功能。")
+        
+        domain = os.getenv("CUSTOM_DOMAIN")
+        base_url = f"https://{domain}" if domain else self.tunnel_url
+        if not base_url: base_url = f"http://localhost:{self.port}"
+        
+        url = f"{base_url}/?token={panel_token}"
+        embed = discord.Embed(title="🌌 Yokaro 系統中樞", color=0x5865f2)
+        embed.description = f"大總裁，這是您的管理連結：\n\n🔗 **[點此進入後台介面]({url})**"
+        try:
+            await ctx.author.send(embed=embed)
+            await ctx.send("✅ 連結已發送到您的私訊！")
+        except:
+            await ctx.send(f"❌ 無法私訊您，請開啟私訊功能。")
 
 async def setup(bot):
     await bot.add_cog(WebPanelCog(bot))
