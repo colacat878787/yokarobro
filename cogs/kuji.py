@@ -244,6 +244,9 @@ class KujiCog(commands.Cog):
     def _load_premium(self):
         return self._load_json(PREMIUM_FILE, [])
 
+    def is_premium(self, user_id):
+        return user_id in self.premium_users
+
     def _default_pool(self):
         return (["💎 A賞: Yokaro Premium 永久會員"] * 1 +
                 ["💰 B賞: 5,000 卡洛幣"] * 3 +
