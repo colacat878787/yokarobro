@@ -126,7 +126,7 @@ class AICog(commands.Cog):
                 "contents": contents,
                 "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
                 "generationConfig": {
-                    "maxOutputTokens": 600,
+                    "maxOutputTokens": 1024,
                     "temperature": 0.9,
                     "topP": 0.8,
                     "topK": 40
@@ -148,7 +148,7 @@ class AICog(commands.Cog):
             prompt_content = f"User({user_name}, ID:{user_id}): {user_input}"
             messages.append({"role": "user", "content": prompt_content})
             
-            payload = {"model": self.model, "messages": messages, "max_tokens": 200, "temperature": 0.8}
+            payload = {"model": self.model, "messages": messages, "max_tokens": 800, "temperature": 0.8}
             headers = {"Authorization": f"Bearer {self.active_key}", "Content-Type": "application/json"}
         
         try:
