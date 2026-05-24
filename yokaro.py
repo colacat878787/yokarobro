@@ -106,8 +106,25 @@ class YokaroBot(commands.Bot):
         print(f"📦 版本狀態: 2026-05-10 核心升級 (Gemini 驅動)")
         print("====================================")
         
-        # 設定簡單的狀態
-        activity = discord.Game(name="!help | 嗷嗷嗷～")
+        # 設定原神 Rich Presence 狀態
+        activity = discord.Activity(
+            type=discord.ActivityType.playing,
+            application_id=1403927875819671572,
+            name="原神",
+            details="培根",
+            state="Lv.60 | TW, HK, MO",
+            assets={
+                "large_image": "https://i.ibb.co/ycqVB0qq/1269863",
+                "large_text": "",
+            },
+            timestamps={
+                "start": 91090711,
+            },
+            buttons=[
+                {"label": "Play Now", "url": "https://hoyo.link/2YJkFBAL"},
+                {"label": "Connect Now", "url": "https://act.hoyoverse.com/puzzle/hk4e/pz_O8pNvKBZ8v/index.html?utm_source=sns&utm_medium=discord&utm_campaign=bot"}
+            ]
+        )
         await self.change_presence(status=discord.Status.online, activity=activity)
 
     async def on_command_error(self, ctx, error):
