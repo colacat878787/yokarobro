@@ -617,25 +617,6 @@ class MusicCog(commands.Cog):
         else:
             await ctx.send("隊列是空的喔！")
 
-    async def play_next(self, guild):
-        if guild.id not in self.queue or len(self.queue[guild.id]) == 0:
-            print("📭 [Music] 播放清單已空。")
-            return
-
-        source_data = self.queue[guild.id].pop(0)
-        vc = guild.voice_client
-        if not vc: return
-
-        try:
-            print(f"🎵 [Music] 正在提取並播放: {source_data.get('title')}")
-            # 傳遞請求者資訊，讓 UI 能顯示是誰點的
-            source = await YTDLSource.from_url(source_data['webpage_url'], loop=self.bot.loop, stream=True, requester=source_data.get('requester'))
-            vc.play(source, after=lambda e: self.bot.loop.create_task(self.play_next(guild)))
-            print(f"✅ [Music] '{source.title}' 播放啟動成功！")
-        except Exception as e:
-            print(f"❌ [Music] 播放啟動失敗: {e}")
-            # 如果失敗，嘗試跳到下一首
-            self.bot.loop.create_task(self.play_next(guild))
 
     @commands.command(name='bass', aliases=['重低音'])
     async def set_bass(self, ctx):
