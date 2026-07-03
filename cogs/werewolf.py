@@ -4,6 +4,7 @@ import random
 import os
 import uuid
 import asyncio
+import urllib.request
 from gtts import gTTS
 
 class CombatInviteView(discord.ui.View):
@@ -23,6 +24,166 @@ class CombatInviteView(discord.ui.View):
         await interaction.response.send_message("您已拒絕了戰鬥邀請。", ephemeral=True)
         await self.text_channel.send(f"🔴 **{self.member.mention} 拒絕了戰鬥邀請！**")
         self.stop()
+
+class VotingView(discord.ui.View):
+    def __init__(self, cog, living_players, timeout):
+        super().__init__(timeout=timeout)
+        self.cog = cog
+        self.living_players = living_players
+        self.votes = {}  # voter_member -> target_player_data or "棄票"
+        self.voting_message = None
+        self.tallied = False
+        self._add_buttons()
+
+    def _add_buttons(self):
+        sorted_players = sorted(self.living_players, key=lambda x: x['number'])
+        for p in sorted_players:
+            button = discord.ui.Button(
+                label=f"{p['number']}號",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"vote_{p['number']}"
+            )
+            button.callback = self.make_callback(p)
+            self.add_item(button)
+            
+        skip_button = discord.ui.Button(
+            label="棄票",
+            style=discord.ButtonStyle.danger,
+            custom_id="vote_skip"
+        )
+        skip_button.callback = self.make_skip_callback()
+        self.add_item(skip_button)
+        
+        end_button = discord.ui.Button(
+            label="⚖️ 提前結束投票",
+            style=discord.ButtonStyle.primary,
+            custom_id="vote_end"
+        )
+        end_button.callback = self.end_vote_callback
+        self.add_item(end_button)
+
+    def make_callback(self, target_player):
+        async def callback(interaction: discord.Interaction):
+            voter_id = interaction.user.id
+            if voter_id not in self.cog.players:
+                return await interaction.response.send_message("❌ 您非參賽玩家，無法參與投票！", ephemeral=True)
+            if not self.cog.players[voter_id]['alive']:
+                return await interaction.response.send_message("❌ 您已出局，無法參與投票！", ephemeral=True)
+                
+            self.votes[interaction.user] = target_player
+            await interaction.response.send_message(f"✅ 您已投給 {target_player['number']} 號玩家！", ephemeral=True)
+            
+            if len(self.votes) == len(self.living_players):
+                await self.tally_votes()
+                self.stop()
+        return callback
+
+    def make_skip_callback(self):
+        async def callback(interaction: discord.Interaction):
+            voter_id = interaction.user.id
+            if voter_id not in self.cog.players:
+                return await interaction.response.send_message("❌ 您非參賽玩家，無法參與投票！", ephemeral=True)
+            if not self.cog.players[voter_id]['alive']:
+                return await interaction.response.send_message("❌ 您已出局，無法參與投票！", ephemeral=True)
+                
+            self.votes[interaction.user] = "棄票"
+            await interaction.response.send_message("✅ 您已選擇棄票！", ephemeral=True)
+            
+            if len(self.votes) == len(self.living_players):
+                await self.tally_votes()
+                self.stop()
+        return callback
+
+    async def end_vote_callback(self, interaction: discord.Interaction):
+        is_judge = interaction.user.guild_permissions.administrator or interaction.user.id == interaction.guild.owner_id
+        if not is_judge:
+            return await interaction.response.send_message("❌ 只有法官或管理員可以提前結束投票！", ephemeral=True)
+            
+        await interaction.response.send_message("⚖️ 法官已提前結束投票！", ephemeral=True)
+        await self.tally_votes()
+        self.stop()
+
+    async def on_timeout(self):
+        await self.tally_votes()
+
+    async def tally_votes(self):
+        if self.tallied:
+            return
+        self.tallied = True
+        
+        if not self.voting_message:
+            return
+            
+        for item in self.children:
+            item.disabled = True
+        try:
+            await self.voting_message.edit(view=self)
+        except Exception as e:
+            print(f"無法禁用投票按鈕: {e}")
+            
+        tally = {}
+        for voter, target in self.votes.items():
+            if target == "棄票":
+                tally["棄票"] = tally.get("棄票", []) + [voter]
+            else:
+                num = target['number']
+                tally[num] = tally.get(num, []) + [voter]
+                
+        result_desc = []
+        for target, voters in tally.items():
+            voter_mentions = ", ".join([v.mention for v in voters])
+            if target == "棄票":
+                result_desc.append(f"• **棄票**：{len(voters)} 票 ({voter_mentions})")
+            else:
+                result_desc.append(f"• **{target}號**：{len(voters)} 票 ({voter_mentions})")
+                
+        exiled_msg = ""
+        highest_vote_count = 0
+        highest_targets = []
+        
+        for target, voters in tally.items():
+            if target == "棄票":
+                continue
+            count = len(voters)
+            if count > highest_vote_count:
+                highest_vote_count = count
+                highest_targets = [target]
+            elif count == highest_vote_count:
+                highest_targets.append(target)
+                
+        if highest_vote_count == 0:
+            exiled_msg = "⚖️ **最終決定**：本次無人投票或全員棄票，無人被放逐！"
+        elif len(highest_targets) > 1:
+            targets_str = "、".join([f"{t}號" for t in highest_targets])
+            exiled_msg = f"⚖️ **最終決定**：{targets_str} 平票 (均為 {highest_vote_count} 票)，無人被放逐！"
+        else:
+            exiled_player_num = highest_targets[0]
+            exiled_msg = f"⚖️ **最終決定**：**{exiled_player_num}號** 獲得最高票 ({highest_vote_count} 票)，被投票放逐！"
+            
+            for p_id, p_data in self.cog.players.items():
+                if p_data['number'] == exiled_player_num:
+                    p_data['alive'] = False
+                    name = p_data['original_nick'] or p_data['member'].name
+                    await self.cog.set_member_nick(p_data['member'], f"💀 {exiled_player_num}號 {name}")
+                    try:
+                        await self.cog.voice_channel.set_permissions(p_data['member'], send_messages=False)
+                    except:
+                        pass
+                    await self.cog.set_member_mute(p_data['member'], True)
+                    break
+                    
+        embed = discord.Embed(
+            title="🗳️ 狼人殺投票結果公佈",
+            description="\n".join(result_desc) if result_desc else "無人投票。",
+            color=0x2ecc71
+        )
+        embed.add_field(name="決議", value=exiled_msg, inline=False)
+        embed.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手")
+        
+        await self.voting_message.channel.send(embed=embed)
+        
+        if highest_vote_count > 0 and len(highest_targets) == 1:
+            self.cog.queue_kill_sound(self.voting_message.guild)
 
 class WerewolfCog(commands.Cog):
     def __init__(self, bot):
@@ -135,6 +296,36 @@ class WerewolfCog(commands.Cog):
         except Exception as e:
             print(f"修改暱稱錯誤: {e}")
 
+    async def set_member_mute(self, member, mute_state):
+        try:
+            if member.voice and member.voice.channel:
+                await member.edit(mute=mute_state)
+        except discord.Forbidden:
+            print(f"無法設定 {member.name} 的靜音狀態 (權限不足)")
+        except Exception as e:
+            print(f"設定靜音狀態錯誤: {e}")
+
+    async def ensure_kill_sound(self):
+        url = "https://www.soundjay.com/mechanical/gunshot-01.mp3"
+        filepath = os.path.join(os.getcwd(), "kill_sound.mp3")
+        if not os.path.exists(filepath):
+            try:
+                await self.bot.loop.run_in_executor(None, urllib.request.urlretrieve, url, filepath)
+                print("🔊 殺手音效下載成功！")
+            except Exception as e:
+                print(f"下載殺手音效失敗: {e}")
+
+    def queue_kill_sound(self, guild):
+        filepath = os.path.join(os.getcwd(), "kill_sound.mp3")
+        if os.path.exists(filepath):
+            guild_id = guild.id
+            if guild_id not in self.tts_queues:
+                self.tts_queues[guild_id] = []
+            self.tts_queues[guild_id].append(filepath)
+            self.play_next_tts(guild)
+        else:
+            self.queue_tts("槍聲響起！啊！玩家出局。", guild)
+
     def queue_tts(self, text, guild):
         guild_id = guild.id
         if guild_id not in self.tts_queues:
@@ -164,7 +355,7 @@ class WerewolfCog(commands.Cog):
         filepath = self.tts_queues[guild.id].pop(0)
         
         def after_playing(error):
-            if os.path.exists(filepath):
+            if os.path.exists(filepath) and filepath != os.path.join(os.getcwd(), "kill_sound.mp3"):
                 try: os.remove(filepath)
                 except: pass
             if guild.id in self.tts_queues and self.tts_queues[guild.id]:
@@ -175,7 +366,7 @@ class WerewolfCog(commands.Cog):
             vc.play(audio_source, after=after_playing)
         except Exception as e:
             print(f"WW TTS 播放錯誤: {e}")
-            if os.path.exists(filepath):
+            if os.path.exists(filepath) and filepath != os.path.join(os.getcwd(), "kill_sound.mp3"):
                 try: os.remove(filepath)
                 except: pass
             self.bot.loop.call_soon_threadsafe(self.play_next_tts, guild)
@@ -184,25 +375,26 @@ class WerewolfCog(commands.Cog):
     async def ww(self, ctx):
         """狼人殺遊戲管理系統"""
         embed = discord.Embed(
-            title="🐺 優卡洛 ⚖️ 庫拉吉法官助手",
-            description="本助手協助管理 Discord 語音狼人殺遊戲，自動管理暱稱、權限，並支援文字發言 TTS 自動朗讀！",
+            title="🐺 👑 優卡洛 ⚖️ 庫拉吉法官助手",
+            description="本助手協助管理 Discord 語音狼人殺遊戲，自動管理暱稱、語音房禁言、權限，並支援文字發言 TTS 自動朗讀！",
             color=0x9b59b6
         )
         embed.add_field(
             name="🎮 遊戲準備指令",
             value="🔹 `!lssha` - 在專屬文字頻道初始化遊戲並登記語音房玩家。\n"
                   "🔹 `!ww setup [角色配置]` - 初始化遊戲，登記您當用語音房內的所有人。\n"
-                  "🔹 `!ww start` - 發放身份牌（私訊），更新玩家暱稱及頻道禁言權限。\n"
+                  "🔹 `!ww start` - 發放身份牌（私訊），更新玩家暱稱及頻道禁言權限，**並將所有人預先靜音**。\n"
                   "🔹 `!ww status` - 顯示當前玩家名單及存活狀況。",
             inline=False
         )
         embed.add_field(
             name="⚖️ 法官控制指令",
-            value="🔹 `!ww kill [號碼]` - 判定該號碼玩家出局（骷髏頭 + 禁言）。\n"
-                  "🔹 `!ww revive [號碼]` - 判定該號碼玩家復活（還原 + 發言）。\n"
-                  "🔹 `!ww speak [號碼]` - 點名該號碼玩家發言（播放 TTS 提示）。\n"
-                  "🔹 `!ww phase [day/night]` - 切換白天/黑夜（播放 TTS 階段提示）。\n"
-                  "🔹 `!ww end` - 結束遊戲，還原所有人暱稱並重設頻道權限。\n"
+            value="🔹 `!ww kill [編號]` - 判定該號碼玩家出局（播放槍殺音效、骷髏頭 + 永久靜音）。\n"
+                  "🔹 `!ww revive [編號]` - 判定該號碼玩家復活（還原 + 取消靜音）。\n"
+                  "🔹 `!ww speak [編號]` - 點名該號碼玩家發言（解除該玩家靜音，並鎖定其他所有人靜音）。\n"
+                  "🔹 `!ww vote [秒數]` - 發起高互動式投票，附帶號碼選擇按鈕（可提前结束）。\n"
+                  "🔹 `!ww phase [day/night]` - 切換白天/黑夜（黑夜時所有人強制靜音）。\n"
+                  "🔹 `!ww end` - 結束遊戲，還原所有人暱稱並重設頻道與麥克風狀態。\n"
                   "🔹 `!go` - (管理員專用) 手動向當前語音房內的所有人發出戰鬥邀請私訊。",
             inline=False
         )
@@ -230,12 +422,14 @@ class WerewolfCog(commands.Cog):
         self.text_channel = ctx.channel
         self.game_active = False
         
+        # 確保殺手音效已下載
+        self.bot.loop.create_task(self.ensure_kill_sound())
+        
         # 取得語音房內非機器人的成員
         members = [m for m in self.voice_channel.members if not m.bot]
         if not members:
             return await ctx.send("❌ 語音頻道中沒有其他人類玩家喔！")
             
-        # 嘗試將 bot 連接或移動至語音房
         try:
             if ctx.voice_client:
                 if ctx.voice_client.channel != self.voice_channel:
@@ -282,7 +476,7 @@ class WerewolfCog(commands.Cog):
 
     @ww.command(name='start')
     async def start_cmd(self, ctx):
-        """正式開始遊戲，發放身份、設定暱稱與權限"""
+        """正式開始遊戲，發放身份、設定暱稱與權限，且全體伺服器靜音"""
         if not self.players:
             return await ctx.send("❌ 尚未初始化遊戲，請先使用 `!ww setup`！")
         if self.game_active:
@@ -293,7 +487,7 @@ class WerewolfCog(commands.Cog):
         self.phase = "白天發言"
         self.speaking_player = None
         
-        await ctx.send("🚀 **遊戲開始！正在發送身份牌，並調整頻道權限與暱稱...**")
+        await ctx.send("🚀 **遊戲開始！正在發送身份牌，設定發言權限，並將所有人麥克風進行伺服器端靜音...**")
         
         dm_warnings = []
         for p_id, p_data in self.players.items():
@@ -304,6 +498,9 @@ class WerewolfCog(commands.Cog):
             # 更新暱稱
             name = p_data['original_nick'] or member.name
             await self.set_member_nick(member, f"{number}號 {name}")
+            
+            # 預設全體伺服器靜音
+            await self.set_member_mute(member, True)
             
             # 發送私訊
             try:
@@ -323,7 +520,7 @@ class WerewolfCog(commands.Cog):
         if dm_warnings:
             await ctx.send(f"⚠️ 以下玩家因未開啟私訊，無法發送身份牌，請法官手動告知：\n" + "、".join(dm_warnings))
             
-        # 設定發言權限：禁止 @everyone，僅允許存活玩家在語音房文字聊天
+        # 設定發言權限
         try:
             await self.voice_channel.set_permissions(ctx.guild.default_role, send_messages=False)
             for p_id, p_data in self.players.items():
@@ -367,17 +564,18 @@ class WerewolfCog(commands.Cog):
         name = player['original_nick'] or member.name
         await self.set_member_nick(member, f"💀 {number}號 {name}")
         
-        # 移除發言權限
+        # 移除發言權限，並強制伺服器靜音
         try:
             await self.voice_channel.set_permissions(member, send_messages=False)
         except Exception as e:
             print(f"無法移除出局玩家的打字權限: {e}")
+        await self.set_member_mute(member, True)
             
         if self.speaking_player == number:
             self.speaking_player = None
             
         await ctx.send(f"💀 **{number}號 {member.mention} 已被法官判定出局！**")
-        self.queue_tts(f"{number}號玩家已出局。", ctx.guild)
+        self.queue_kill_sound(ctx.guild)
         
         embed = self.create_status_embed()
         await ctx.send(embed=embed)
@@ -406,11 +604,16 @@ class WerewolfCog(commands.Cog):
         name = player['original_nick'] or member.name
         await self.set_member_nick(member, f"{number}號 {name}")
         
-        # 恢復發言權限
+        # 恢復發言權限與麥克風狀態（若非當前發言人則保持靜音）
         try:
             await self.voice_channel.set_permissions(member, send_messages=True)
         except Exception as e:
             print(f"無法恢復復活玩家的打字權限: {e}")
+            
+        should_mute = True
+        if self.speaking_player == number:
+            should_mute = False
+        await self.set_member_mute(member, should_mute)
             
         await ctx.send(f"🟢 **{number}號 {member.mention} 已被法官判定復活！**")
         self.queue_tts(f"{number}號玩家已復活。", ctx.guild)
@@ -420,7 +623,7 @@ class WerewolfCog(commands.Cog):
 
     @ww.command(name='speak')
     async def speak_cmd(self, ctx, number: int):
-        """指派發言"""
+        """指派發言（僅解除該玩家靜音，其他玩家全部靜音）"""
         if not self.game_active:
             return await ctx.send("❌ 目前沒有進行中的遊戲！")
             
@@ -435,8 +638,18 @@ class WerewolfCog(commands.Cog):
         if not player['alive']:
             return await ctx.send(f"❌ {number} 號玩家已出局，無法發言！")
             
+        # 靜音前一個說話的人
+        if self.speaking_player:
+            for p_id, p_data in self.players.items():
+                if p_data['number'] == self.speaking_player:
+                    await self.set_member_mute(p_data['member'], True)
+                    break
+                    
         self.speaking_player = number
         member = player['member']
+        
+        # 解除該發言人的靜音
+        await self.set_member_mute(member, False)
         
         await ctx.send(f"📢 **法官：輪到 {number} 號 {member.mention} 發言。**")
         self.queue_tts(f"請{number}號玩家開始發言。", ctx.guild)
@@ -451,7 +664,7 @@ class WerewolfCog(commands.Cog):
 
     @commands.command(name='pass', aliases=['過', 'ww_pass'])
     async def pass_cmd(self, ctx):
-        """結束當前玩家發言，自動將發言權交給下一個存活者"""
+        """結束當前玩家發言，自動將發言權與麥克風移交給下一位存活者"""
         if not self.game_active:
             return
             
@@ -464,6 +677,13 @@ class WerewolfCog(commands.Cog):
             if self.speaking_player != author_player['number']:
                 return
                 
+        # 靜音當前發言玩家
+        if self.speaking_player:
+            for p_id, p_data in self.players.items():
+                if p_data['number'] == self.speaking_player:
+                    await self.set_member_mute(p_data['member'], True)
+                    break
+                    
         sorted_players = sorted(self.players.items(), key=lambda x: x[1]['number'])
         p_count = len(sorted_players)
         
@@ -481,6 +701,8 @@ class WerewolfCog(commands.Cog):
                 
         if next_speaker and next_speaker['number'] != current_num:
             self.speaking_player = next_speaker['number']
+            # 解除下一位發言人的靜音
+            await self.set_member_mute(next_speaker['member'], False)
             await ctx.send(f"📢 **法官：{current_num} 號發言結束。輪到 {next_speaker['number']} 號 {next_speaker['member'].mention} 發言。**")
             self.queue_tts(f"{current_num}號發言結束。請{next_speaker['number']}號玩家開始發言。", ctx.guild)
         else:
@@ -493,7 +715,7 @@ class WerewolfCog(commands.Cog):
 
     @ww.command(name='phase')
     async def phase_cmd(self, ctx, target_phase: str):
-        """切換白天/黑夜"""
+        """切換白天/黑夜（黑夜時所有人強制靜音）"""
         if not self.game_active:
             return await ctx.send("❌ 目前沒有進行中的遊戲！")
             
@@ -502,11 +724,21 @@ class WerewolfCog(commands.Cog):
             self.phase = "白天發言"
             self.day += 1
             self.speaking_player = None
+            
+            # 白天時全體先保持靜音，等待點名
+            for p_id, p_data in self.players.items():
+                await self.set_member_mute(p_data['member'], True)
+                
             await ctx.send(f"🌞 **天亮了！進入第 {self.day} 天白天發言階段。**")
             self.queue_tts(f"天亮請睜眼。進入第{self.day}天白天發言。", ctx.guild)
         elif target_phase in ['night', '黑夜', '天黑', '夜']:
             self.phase = "黑夜閉眼"
             self.speaking_player = None
+            
+            # 黑夜時全體伺服器靜音
+            for p_id, p_data in self.players.items():
+                await self.set_member_mute(p_data['member'], True)
+                
             await ctx.send(f"🌙 **天黑請閉眼！進入第 {self.day} 天黑夜階段。**")
             self.queue_tts("天黑請閉眼。狼人請睜眼。", ctx.guild)
         else:
@@ -515,22 +747,54 @@ class WerewolfCog(commands.Cog):
         embed = self.create_status_embed()
         await ctx.send(embed=embed)
 
+    @ww.command(name='vote')
+    async def vote_cmd(self, ctx, timeout: int = 30):
+        """發起投票放逐"""
+        if not self.game_active:
+            return await ctx.send("❌ 目前沒有進行中的遊戲！")
+            
+        living_players = [p for p in self.players.values() if p['alive']]
+        if not living_players:
+            return await ctx.send("❌ 沒有存活的玩家可以進行投票！")
+            
+        embed = discord.Embed(
+            title="🗳️ 狼人殺投票",
+            description=f"請選擇要放逐的玩家。\n投票截止：**{timeout}** 秒內",
+            color=0xf39c12
+        )
+        
+        players_list = []
+        sorted_players = sorted(living_players, key=lambda x: x['number'])
+        for p in sorted_players:
+            players_list.append(f"{p['number']}. {p['member'].mention}")
+            
+        embed.add_field(
+            name="存活玩家",
+            value="\n".join(players_list),
+            inline=False
+        )
+        embed.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手")
+        
+        view = VotingView(self, living_players, timeout)
+        msg = await ctx.send(embed=embed, view=view)
+        view.voting_message = msg
+
     @ww.command(name='end')
     async def end_cmd(self, ctx):
-        """結束遊戲並還原所有權限與暱稱，並自動向語音房成員發出戰鬥邀請"""
+        """結束遊戲並還原所有麥克風狀態、權限與暱稱，並自動向語音房成員發出戰鬥邀請"""
         if not self.game_active and not self.players:
             return await ctx.send("❌ 目前沒有進行中或準備中的遊戲！")
             
-        await ctx.send("🛑 **正在結束遊戲，正在還原所有人暱稱並重設頻道權限...**")
+        await ctx.send("🛑 **正在結束遊戲，還原全體玩家靜音狀態、暱稱並重設頻道權限...**")
         
-        # 備份玩家名單，用於發送戰鬥邀請
         voice_channel_backup = self.voice_channel
         
-        # 還原暱稱
+        # 還原暱稱與麥克風靜音狀態
         for p_id, p_data in self.players.items():
             member = p_data['member']
             orig_nick = p_data['original_nick']
             await self.set_member_nick(member, orig_nick)
+            await self.set_member_mute(member, False)
             
         # 還原頻道覆寫權限
         if self.voice_channel:
@@ -541,7 +805,6 @@ class WerewolfCog(commands.Cog):
             except Exception as e:
                 await ctx.send(f"⚠️ 還原頻道權限失敗：{e}")
                 
-        # 暫存要發送邀請的文字頻道
         text_channel_backup = self.text_channel or ctx.channel
         
         self.game_active = False
@@ -554,7 +817,6 @@ class WerewolfCog(commands.Cog):
         
         await ctx.send("✅ **遊戲已結束，法官下班！**")
         
-        # 自動發起戰鬥邀請（如果有語音頻道成員且呼叫者是管理員/法官）
         if voice_channel_backup:
             members = [m for m in voice_channel_backup.members if not m.bot]
             if members:
@@ -632,6 +894,7 @@ class WerewolfCog(commands.Cog):
             return
             
         if self.voice_channel:
+            # 玩家中途加入本局語音房 -> 自動幫他加上編號暱稱並預設靜音
             if after.channel == self.voice_channel and before.channel != self.voice_channel:
                 if member.id in self.players:
                     p_data = self.players[member.id]
@@ -640,11 +903,19 @@ class WerewolfCog(commands.Cog):
                     alive = p_data['alive']
                     prefix = "" if alive else "💀 "
                     await self.set_member_nick(member, f"{prefix}{num}號 {name}")
+                    
+                    # 決定是否麥克風靜音（非發言人則保持靜音）
+                    should_mute = True
+                    if self.speaking_player == num:
+                        should_mute = False
+                    await self.set_member_mute(member, should_mute)
             
+            # 玩家中途離開本局語音房 -> 自動幫他還原回原本的暱稱與靜音狀態
             elif before.channel == self.voice_channel and after.channel != self.voice_channel:
                 if member.id in self.players:
                     p_data = self.players[member.id]
                     await self.set_member_nick(member, p_data['original_nick'])
+                    await self.set_member_mute(member, False)
 
 async def setup(bot):
     await bot.add_cog(WerewolfCog(bot))
