@@ -97,7 +97,7 @@ class VotingView(discord.ui.View):
         return callback
 
     async def end_vote_callback(self, interaction: discord.Interaction):
-        is_judge = interaction.user.guild.permissions.administrator or interaction.user.id == interaction.guild.owner_id
+        is_judge = interaction.user.guild_permissions.administrator or interaction.user.id == interaction.guild.owner_id
         if not is_judge:
             return await interaction.response.send_message("❌ 只有法官或管理員可以提前結束投票！", ephemeral=True)
             
@@ -729,7 +729,7 @@ class WerewolfCog(commands.Cog):
         if not self.game_active:
             return
             
-        is_judge = ctx.author.guild.permissions.administrator or ctx.author.id == ctx.guild.owner_id
+        is_judge = ctx.author.guild_permissions.administrator or ctx.author.id == ctx.guild.owner_id
         author_player = self.players.get(ctx.author.id)
         
         if not is_judge:
@@ -1202,7 +1202,7 @@ class WerewolfCog(commands.Cog):
 
         # 1. Setup and Start (using the collected numbers)
         # Re-initialize players with collected numbers
-        members_in_vc = [m for m m in self.voice_channel.members if not m.bot]
+        members_in_vc = [m for m in self.voice_channel.members if not m.bot]
         players_with_numbers = []
         for member in members_in_vc:
             if member.id in self.reported_numbers:
