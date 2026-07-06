@@ -285,7 +285,7 @@ class WidgetCog(commands.Cog):
                 app_id = 1465175036938948732
 
         # 組合 OAuth2 授權網址
-        oauth_url = f"https://discord.com/oauth2/authorize?client_id={app_id}&response_type=token&scope=openid+sdk.social_layer"
+        oauth_url = f"https://discord.com/oauth2/authorize?client_id={app_id}&redirect_uri=https%3A%2F%2Fyokaro520.colacat878787.workers.dev&response_type=token&scope=openid+sdk.social_layer"
         
         embed = discord.Embed(
             title="🥓 培根的 Widget v2 控制中樞",
