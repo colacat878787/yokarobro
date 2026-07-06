@@ -918,7 +918,7 @@ class WerewolfCog(commands.Cog):
     @lssha_cmd.command(name='ai_help')
     async def ai_help_cmd(self, ctx, *, question: str):
         """詢問優卡洛狼人殺相關問題或尋求協助"""
-        await ctx.send(f"您好，我就是優卡洛助手。您可以直接向我提出您的狼人殺問題：\n\n"{question}"\n\n我會盡力為您提供幫助。")
+        await ctx.send(f"您好，我就是優卡洛助手。您可以直接向我提出您的狼人殺問題：\n\n{question}\n\n我會盡力為您提供幫助。")
 
 async def setup(bot):
     await bot.add_cog(WerewolfCog(bot))
