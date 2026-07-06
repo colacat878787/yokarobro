@@ -7,8 +7,13 @@ import secrets
 import threading
 import re
 import json
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template_string, request, jsonify, send_from_directory
 import psutil
+
+@app.route('/image/<path:filename>')
+def serve_image(filename):
+    return send_from_directory(os.path.join(os.getcwd(), 'image'), filename)
+
 
 # 管理員名單
 ADMIN_IDS = [1113353915010920452, 501251225715474433, 467554275921494017]
