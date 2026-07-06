@@ -371,6 +371,7 @@ class WerewolfCog(commands.Cog):
                 except: pass
             self.bot.loop.call_soon_threadsafe(self.play_next_tts, guild)
 
+    @commands.has_permissions(administrator=True)
     @commands.group(name="lssha", aliases=["狼人殺", "werewolf"], invoke_without_command=True)
     async def lssha_cmd(self, ctx):
         """狼人殺遊戲管理系統"""
@@ -494,7 +495,7 @@ class WerewolfCog(commands.Cog):
             
             # 更新暱稱
             name = p_data['original_nick'] or member.name
-            await self.set_member_nick(member, f"{number}號 {name}")
+            await self.set_member_nick(member, f"⭐{number}號 {name}")
             
             # 預設全體伺服器靜音
             await self.set_member_mute(member, True)
@@ -559,7 +560,7 @@ class WerewolfCog(commands.Cog):
         
         # 改為骷髏暱稱
         name = player['original_nick'] or member.name
-        await self.set_member_nick(member, f"💀 {number}號 {name}")
+        await self.set_member_nick(member, f"💀⭐{number}號 {name}")
         
         # 移除發言權限，並強制伺服器靜音
         try:
@@ -599,7 +600,7 @@ class WerewolfCog(commands.Cog):
         
         # 還原暱稱
         name = player['original_nick'] or member.name
-        await self.set_member_nick(member, f"{number}號 {name}")
+        await self.set_member_nick(member, f"⭐{number}號 {name}")
         
         # 恢復發言權限與麥克風狀態（若非當前發言人則保持靜音）
         try:
@@ -899,7 +900,7 @@ class WerewolfCog(commands.Cog):
                     num = p_data['number']
                     alive = p_data['alive']
                     prefix = "" if alive else "💀 "
-                    await self.set_member_nick(member, f"{prefix}{num}號 {name}")
+                    await self.set_member_nick(member, f"{prefix}⭐{num}號 {name}")
                     
                     # 決定是否麥克風靜音（非發言人則保持靜音）
                     should_mute = True
@@ -913,6 +914,11 @@ class WerewolfCog(commands.Cog):
                     p_data = self.players[member.id]
                     await self.set_member_nick(member, p_data['original_nick'])
                     await self.set_member_mute(member, False)
+
+    @lssha_cmd.command(name='ai_help')
+    async def ai_help_cmd(self, ctx, *, question: str):
+        """詢問優卡洛狼人殺相關問題或尋求協助"""
+        await ctx.send(f"您好，我就是優卡洛助手。您可以直接向我提出您的狼人殺問題：\n\n"{question}"\n\n我會盡力為您提供幫助。")
 
 async def setup(bot):
     await bot.add_cog(WerewolfCog(bot))
