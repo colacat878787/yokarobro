@@ -10,6 +10,8 @@ import json
 from flask import Flask, render_template_string, request, jsonify, send_from_directory
 import psutil
 
+app = Flask(__name__)
+
 @app.route('/image/<path:filename>')
 def serve_image(filename):
     return send_from_directory(os.path.join(os.getcwd(), 'image'), filename)

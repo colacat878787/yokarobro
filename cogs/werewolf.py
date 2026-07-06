@@ -372,7 +372,6 @@ class WerewolfCog(commands.Cog):
             self.bot.loop.call_soon_threadsafe(self.play_next_tts, guild)
 
     @commands.group(name="lssha", aliases=["狼人殺", "werewolf"], invoke_without_command=True)
-    @commands.command(name="lssha", aliases=["狼人殺", "werewolf"])
     async def lssha_cmd(self, ctx, *, roles_str: str = None):
         """狼人殺遊戲管理系統"""
         embed = discord.Embed(
