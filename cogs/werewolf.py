@@ -1251,13 +1251,10 @@ class WerewolfCog(commands.Cog):
         # The actual game loop will start only after all numbers are collected and validated.
 
     async def _start_auto_game_flow(self):
-        ctx = None # This will be the context from the auto_cmd caller
-
         # Retrieve the context from the initial auto_cmd call
-        # I need a way to store the ctx object from auto_cmd to be used here.
-        # Let's add self.auto_game_ctx = None to __init__ and set it in auto_cmd.
+        # self.auto_game_ctx is set in `auto_cmd`
         if self.auto_game_ctx is None:
-            await ctx.send("自動狼人殺啟動失敗：未找到上下文。")
+            # No context available; abort silently
             return
 
         ctx = self.auto_game_ctx
@@ -1312,6 +1309,13 @@ class WerewolfCog(commands.Cog):
                 await self.voice_channel.connect(timeout=60.0, reconnect=True)
         except Exception as e:
             await ctx.send(f"⚠️ 連接語音房失敗: {e}")
+
+        # Play auto BGM for auto games if available
+        try:
+            await self.bgm_cmd(ctx)
+        except Exception:
+            # Non-fatal if BGM fails
+            pass
 
         self.game_active = True
         self.day = 1

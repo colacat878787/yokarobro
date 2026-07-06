@@ -356,6 +356,26 @@ class MusicCog(commands.Cog):
                     if detail and detail.get("success") and detail.get("data"):
                         return detail["data"]
 
+        # As a fallback, try searching YouTube for the query and then query Unison by videoId
+        try:
+            if query:
+                loop = asyncio.get_event_loop()
+                data = await loop.run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch1:{query}", download=False))
+                if data and 'entries' in data and data['entries']:
+                    entry = data['entries'][0]
+                    vid = None
+                    # yt-dlp may provide id or webpage_url
+                    if entry.get('id'):
+                        vid = entry.get('id')
+                    else:
+                        vid = self.extract_youtube_video_id(entry.get('webpage_url', '') or entry.get('url', ''))
+                    if vid:
+                        result = await self.unison_request("GET", "/lyrics", params={"v": vid})
+                        if result and result.get("success") and result.get("data"):
+                            return result["data"]
+        except Exception:
+            pass
+
         return None
 
     def format_lyrics_result(self, data):
