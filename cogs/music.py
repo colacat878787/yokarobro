@@ -6,6 +6,7 @@ import os
 import time
 import json
 import re
+import io
 from datetime import timedelta
 import aiohttp
 import random
@@ -280,6 +281,119 @@ class MusicCog(commands.Cog):
         if guild_id not in self.states:
             self.states[guild_id] = {'volume': 0.5, 'pitch': 1.0, 'theater': True, 'exciter': True, 'bass': True, 'current_url': None, 'elapsed': 0, '247': False}
         return self.states[guild_id]
+
+    async def unison_request(self, method, path, params=None, json_data=None):
+        base = "https://unison.boidu.dev"
+        url = f"{base}{path}"
+        try:
+            async with aiohttp.ClientSession() as session:
+                if method == "GET":
+                    async with session.get(url, params=params, timeout=15) as resp:
+                        if resp.status != 200:
+                            return None
+                        return await resp.json()
+                elif method == "POST":
+                    async with session.post(url, json=json_data, timeout=15) as resp:
+                        if resp.status != 200:
+                            return None
+                        return await resp.json()
+        except Exception:
+            return None
+
+    def extract_youtube_video_id(self, text):
+        if not text:
+            return None
+        match = re.search(r"(?:v=|youtu\.be/|youtube\.com/watch\?v=)([A-Za-z0-9_-]{11})", text)
+        if match:
+            return match.group(1)
+        return None
+
+    def parse_song_artist(self, text):
+        if not text:
+            return None, None
+        text = text.strip()
+        if " - " in text:
+            left, right = text.split(" - ", 1)
+            return left.strip(), right.strip()
+        if " by " in text.lower():
+            parts = re.split(r" by ", text, flags=re.IGNORECASE)
+            if len(parts) >= 2:
+                return parts[0].strip(), parts[1].strip()
+        return None, text
+
+    async def fetch_unison_lyrics(self, query=None, video_id=None):
+        if video_id:
+            result = await self.unison_request("GET", "/lyrics", params={"v": video_id})
+            if result and result.get("success") and result.get("data"):
+                return result["data"]
+
+        if query:
+            result = await self.unison_request("GET", "/lyrics/search", params={"q": query})
+            if result and result.get("success") and isinstance(result.get("data"), list) and result["data"]:
+                entry = result["data"][0]
+                if entry.get("lyrics"):
+                    return entry
+                lyric_id = entry.get("id")
+                if lyric_id is not None:
+                    detail = await self.unison_request("GET", f"/lyrics/{lyric_id}")
+                    if detail and detail.get("success") and detail.get("data"):
+                        return detail["data"]
+
+        song, artist = self.parse_song_artist(query)
+        if song and artist:
+            result = await self.unison_request("GET", "/lyrics", params={"song": song, "artist": artist})
+            if result and result.get("success") and result.get("data"):
+                return result["data"]
+            result = await self.unison_request("GET", "/lyrics/search", params={"song": song, "artist": artist})
+            if result and result.get("success") and isinstance(result.get("data"), list) and result["data"]:
+                entry = result["data"][0]
+                if entry.get("lyrics"):
+                    return entry
+                lyric_id = entry.get("id")
+                if lyric_id is not None:
+                    detail = await self.unison_request("GET", f"/lyrics/{lyric_id}")
+                    if detail and detail.get("success") and detail.get("data"):
+                        return detail["data"]
+
+        return None
+
+    def format_lyrics_result(self, data):
+        title = data.get("song") or data.get("title") or "未知歌曲"
+        artist = data.get("artist") or "未知歌手"
+        album = data.get("album")
+        confidence = data.get("confidence") or "unknown"
+        language = data.get("language") or "unknown"
+        lyrics = data.get("lyrics") or ""
+        source_id = data.get("id")
+        video_id = data.get("videoId")
+
+        description = f"**{title}** — {artist}\n"
+        if album:
+            description += f"專輯：{album}\n"
+        if video_id:
+            description += f"來源影片：https://youtu.be/{video_id}\n"
+        if source_id is not None:
+            description += f"歌詞來源 ID：{source_id}\n"
+        description += f"語言：{language} | 可信度：{confidence}\n"
+        return description, lyrics
+
+    async def send_lyrics_response(self, ctx, data):
+        description, lyrics = self.format_lyrics_result(data)
+        embed = discord.Embed(title="🎵 歌詞查詢結果", description=description, color=0x1abc9c)
+
+        if not lyrics:
+            embed.add_field(name="結果", value="找到了歌曲資料，但歌詞內容為空。", inline=False)
+            return await ctx.send(embed=embed)
+
+        if len(lyrics) <= 1500:
+            embed.add_field(name="歌詞", value=f"```text\n{lyrics}\n```", inline=False)
+            await ctx.send(embed=embed)
+            return
+
+        file_obj = io.BytesIO(lyrics.encode("utf-8"))
+        file_obj.seek(0)
+        file_name = f"lyrics_{data.get('song','unknown')[:30].strip().replace(' ','_')}.txt"
+        await ctx.send(embed=embed, file=discord.File(file_obj, filename=file_name))
 
     def create_progress_bar(self, current, total):
         if total == 0: return "[▬▬▬▬▬▬▬▬▬🔘]"
@@ -678,6 +792,21 @@ class MusicCog(commands.Cog):
         embed = discord.Embed(title="📊 Yokaro 年度聽歌排行", description=desc, color=0x9b59b6)
         embed.set_footer(text=f"總點播次數: {len(songs)} 首", icon_url=target.display_avatar.url)
         await ctx.send(embed=embed)
+
+    @commands.command(name='lyrics', aliases=['歌詞', 'lyric'])
+    async def lyrics(self, ctx, *, query: str = None):
+        """查詢歌詞：可直接輸入 YouTube 連結、歌曲名稱，或「歌名 - 歌手」。"""
+        if not query:
+            return await ctx.send("❌ 請提供歌曲名稱、歌手或 YouTube 連結來查詢歌詞。")
+
+        await ctx.trigger_typing()
+        video_id = self.extract_youtube_video_id(query)
+        lyrics_data = await self.fetch_unison_lyrics(query=query if not video_id else None, video_id=video_id)
+
+        if not lyrics_data:
+            return await ctx.send("❌ 抱歉，找不到對應的歌詞。請嘗試更精準的歌名或歌手名稱。")
+
+        await self.send_lyrics_response(ctx, lyrics_data)
 
     @commands.command(name='radio', aliases=['廣播電台'])
     async def radio(self, ctx, *, station):
