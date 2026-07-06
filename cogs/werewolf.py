@@ -249,8 +249,8 @@ class WerewolfCog(commands.Cog):
         
         embed.add_field(
             name="指令提示",
-            value="💡 輸入 `!ww start` 開始分配身份並鎖定發言權限！\n"
-                  "💡 輸入 `!ww setup [自訂角色]` 可重新配置遊戲！",
+            value="💡 輸入 `!lssha start` 開始分配身份並鎖定發言權限！\n"
+                  "💡 輸入 `!lssha setup [自訂角色]` 可重新配置遊戲！",
             inline=False
         )
         embed.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手", icon_url=self.bot.user.display_avatar.url)
@@ -372,7 +372,8 @@ class WerewolfCog(commands.Cog):
             self.bot.loop.call_soon_threadsafe(self.play_next_tts, guild)
 
     @commands.group(name='ww', aliases=['狼人殺'], invoke_without_command=True)
-    async def ww(self, ctx):
+    @commands.command(name="lssha", aliases=["狼人殺", "werewolf"])
+    async def lssha_cmd(self, ctx, *, roles_str: str = None):
         """狼人殺遊戲管理系統"""
         embed = discord.Embed(
             title="🐺 👑 優卡洛 ⚖️ 庫拉吉法官助手",
@@ -382,25 +383,25 @@ class WerewolfCog(commands.Cog):
         embed.add_field(
             name="🎮 遊戲準備指令",
             value="🔹 `!lssha` - 在專屬文字頻道初始化遊戲並登記語音房玩家。\n"
-                  "🔹 `!ww setup [角色配置]` - 初始化遊戲，登記您當用語音房內的所有人。\n"
-                  "🔹 `!ww start` - 發放身份牌（私訊），更新玩家暱稱及頻道禁言權限，**並將所有人預先靜音**。\n"
-                  "🔹 `!ww status` - 顯示當前玩家名單及存活狀況。",
+                  "🔹 `!lssha setup [角色配置]` - 初始化遊戲，登記您當用語音房內的所有人。\n"
+                  "🔹 `!lssha start` - 發放身份牌（私訊），更新玩家暱稱及頻道禁言權限，**並將所有人預先靜音**。\n"
+                  "🔹 `!lssha status` - 顯示當前玩家名單及存活狀況。",
             inline=False
         )
         embed.add_field(
             name="⚖️ 法官控制指令",
-            value="🔹 `!ww kill [編號]` - 判定該號碼玩家出局（播放槍殺音效、骷髏頭 + 永久靜音）。\n"
-                  "🔹 `!ww revive [編號]` - 判定該號碼玩家復活（還原 + 取消靜音）。\n"
-                  "🔹 `!ww speak [編號]` - 點名該號碼玩家發言（解除該玩家靜音，並鎖定其他所有人靜音）。\n"
-                  "🔹 `!ww vote [秒數]` - 發起高互動式投票，附帶號碼選擇按鈕（可提前结束）。\n"
-                  "🔹 `!ww phase [day/night]` - 切換白天/黑夜（黑夜時所有人強制靜音）。\n"
-                  "🔹 `!ww end` - 結束遊戲，還原所有人暱稱並重設頻道與麥克風狀態。\n"
+            value="🔹 `!lssha kill [編號]` - 判定該號碼玩家出局（播放槍殺音效、骷髏頭 + 永久靜音）。\n"
+                  "🔹 `!lssha revive [編號]` - 判定該號碼玩家復活（還原 + 取消靜音）。\n"
+                  "🔹 `!lssha speak [編號]` - 點名該號碼玩家發言（解除該玩家靜音，並鎖定其他所有人靜音）。\n"
+                  "🔹 `!lssha vote [秒數]` - 發起高互動式投票，附帶號碼選擇按鈕（可提前结束）。\n"
+                  "🔹 `!lssha phase [day/night]` - 切換白天/黑夜（黑夜時所有人強制靜音）。\n"
+                  "🔹 `!lssha end` - 結束遊戲，還原所有人暱稱並重設頻道與麥克風狀態。\n"
                   "🔹 `!go` - (管理員專用) 手動向當前語音房內的所有人發出戰鬥邀請私訊。",
             inline=False
         )
         embed.add_field(
             name="🎤 玩家指令",
-            value="🔹 `!pass` (或 `!過`、`!ww pass`) - 正在發言的玩家結束發言，自動交給下一位存活者。",
+            value="🔹 `!pass` (或 `!過`、`!lssha pass`) - 正在發言的玩家結束發言，自動交給下一位存活者。",
             inline=False
         )
         embed.set_footer(text="優卡洛 | Werewolf Judge Assistant")
@@ -478,7 +479,7 @@ class WerewolfCog(commands.Cog):
     async def start_cmd(self, ctx):
         """正式開始遊戲，發放身份、設定暱稱與權限，且全體伺服器靜音"""
         if not self.players:
-            return await ctx.send("❌ 尚未初始化遊戲，請先使用 `!ww setup`！")
+            return await ctx.send("❌ 尚未初始化遊戲，請先使用 `!lssha setup`！")
         if self.game_active:
             return await ctx.send("❌ 遊戲已經在進行中囉！")
             
