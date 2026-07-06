@@ -134,24 +134,80 @@ def api_restart():
     threading.Thread(target=lambda: os._exit(0)).start()
     return jsonify({"message": "機器人正在重啟..."})
 
-@app.route('/api/widget/callback', methods=['POST', 'OPTIONS'])
-def api_widget_callback():
+@app.route('/api/widget/exchange', methods=['POST', 'OPTIONS'])
+def api_widget_exchange():
+    """接收 Worker 傳來的 authorization code，換成 access_token 並儲存"""
     if request.method == 'OPTIONS':
         resp = jsonify({"status": "ok"})
         resp.headers.add("Access-Control-Allow-Origin", "*")
-        resp.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        resp.headers.add("Access-Control-Allow-Headers", "Content-Type")
         resp.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
         return resp
 
+    import requests as http_requests
     try:
         data = request.json
-        user_id = str(data.get("user_id"))
-        access_token = data.get("access_token")
-        if not user_id or not access_token:
-            resp = jsonify({"status": "error", "message": "Missing parameters"})
+        code = data.get("code")
+        if not code:
+            resp = jsonify({"status": "error", "message": "Missing code"})
             resp.headers.add("Access-Control-Allow-Origin", "*")
             return resp, 400
-            
+
+        # 從 .env 讀取必要的 OAuth2 資訊
+        client_id = None
+        if bot_instance and bot_instance.application_id:
+            client_id = str(bot_instance.application_id)
+        if not client_id:
+            # 從 token 解碼
+            import base64
+            token = os.getenv("DISCORD_TOKEN", "")
+            first_part = token.split(".")[0]
+            first_part += "=" * ((4 - len(first_part) % 4) % 4)
+            client_id = base64.b64decode(first_part).decode("utf-8")
+
+        client_secret = os.getenv("DISCORD_CLIENT_SECRET", "")
+        if not client_secret:
+            resp = jsonify({"status": "error", "message": "DISCORD_CLIENT_SECRET not set in .env"})
+            resp.headers.add("Access-Control-Allow-Origin", "*")
+            return resp, 500
+
+        redirect_uri = "https://yokaro520.colacat878787.workers.dev"
+
+        # 1. 用 code 換 access_token
+        token_resp = http_requests.post("https://discord.com/api/v9/oauth2/token", data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "client_id": client_id,
+            "client_secret": client_secret,
+        }, headers={
+            "Content-Type": "application/x-www-form-urlencoded"
+        })
+
+        if token_resp.status_code != 200:
+            print(f"❌ [Widget] Token 交換失敗: {token_resp.text}")
+            resp = jsonify({"status": "error", "message": f"Token exchange failed: {token_resp.text}"})
+            resp.headers.add("Access-Control-Allow-Origin", "*")
+            return resp, 400
+
+        token_data = token_resp.json()
+        access_token = token_data.get("access_token")
+
+        # 2. 用 access_token 取得 user ID
+        user_resp = http_requests.get("https://discord.com/api/v9/users/@me", headers={
+            "Authorization": f"Bearer {access_token}"
+        })
+
+        if user_resp.status_code != 200:
+            print(f"❌ [Widget] 無法辨識用戶: {user_resp.text}")
+            resp = jsonify({"status": "error", "message": "Failed to identify user"})
+            resp.headers.add("Access-Control-Allow-Origin", "*")
+            return resp, 400
+
+        user_id = str(user_resp.json().get("id"))
+        username = user_resp.json().get("username", "Unknown")
+
+        # 3. 儲存 access_token
         db_path = "widget_users.json"
         db = {}
         if os.path.exists(db_path):
@@ -159,20 +215,23 @@ def api_widget_callback():
                 with open(db_path, "r", encoding="utf-8") as f:
                     db = json.load(f)
             except: pass
-            
+
         if user_id not in db:
             db[user_id] = {}
         db[user_id]["access_token"] = access_token
-        
+
         with open(db_path, "w", encoding="utf-8") as f:
             json.dump(db, f, indent=4, ensure_ascii=False)
-            
-        print(f"✅ [Widget] 收到用戶 {user_id} 的 OAuth2 Access Token 並已儲存。")
-        resp = jsonify({"status": "success"})
+
+        print(f"✅ [Widget] 用戶 {username} ({user_id}) 的 OAuth2 Token 已成功儲存！")
+        resp = jsonify({"status": "success", "username": username, "user_id": user_id})
         resp.headers.add("Access-Control-Allow-Origin", "*")
         return resp
+
     except Exception as e:
-        print(f"❌ [Widget] 處理 OAuth2 回傳失敗: {e}")
+        print(f"❌ [Widget] Code Exchange 失敗: {e}")
+        import traceback
+        traceback.print_exc()
         resp = jsonify({"status": "error", "message": str(e)})
         resp.headers.add("Access-Control-Allow-Origin", "*")
         return resp, 500

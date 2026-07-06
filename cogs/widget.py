@@ -321,8 +321,8 @@ class WidgetCog(commands.Cog):
         import urllib.parse
         state_encoded = urllib.parse.quote(base_url)
 
-        # 組合 OAuth2 授權網址，以 %20 區隔 scope，並攜帶 state
-        oauth_url = f"https://discord.com/oauth2/authorize?client_id={app_id}&redirect_uri=https%3A%2F%2Fyokaro520.colacat878787.workers.dev&response_type=token&scope=openid%20sdk.social_layer&state={state_encoded}"
+        # 組合 OAuth2 授權網址 (Authorization Code Flow)
+        oauth_url = f"https://discord.com/oauth2/authorize?client_id={app_id}&redirect_uri=https%3A%2F%2Fyokaro520.colacat878787.workers.dev&response_type=code&scope=openid%20sdk.social_layer&state={state_encoded}"
         
         embed = discord.Embed(
             title="🥓 培根的 Widget v2 控制中樞",
