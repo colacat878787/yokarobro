@@ -2,8 +2,11 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import os
+import sys
 import asyncio
 import difflib
+import importlib
+import subprocess
 from dotenv import load_dotenv
 
 # 載入設定
@@ -287,6 +290,18 @@ async def help(ctx):
     embed.set_footer(text="提示：所有指令皆支援中英雙語通用喔！")
     
     await ctx.send(embed=embed, view=HelpView())
+
+def ensure_packages(packages):
+    import importlib.util
+    import subprocess
+    import sys
+    to_install = []
+    for pkg in packages:
+        if importlib.util.find_spec(pkg) is None:
+            to_install.append(pkg)
+    if to_install:
+        print(f"📦 正在安裝缺少套件: {', '.join(to_install)}")
+        subprocess.run([sys.executable, '-m', 'pip', 'install', *to_install], check=False)
 
 if __name__ == "__main__":
     import subprocess
