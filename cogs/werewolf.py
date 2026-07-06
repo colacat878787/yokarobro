@@ -371,7 +371,7 @@ class WerewolfCog(commands.Cog):
                 except: pass
             self.bot.loop.call_soon_threadsafe(self.play_next_tts, guild)
 
-    @commands.group(name='ww', aliases=['狼人殺'], invoke_without_command=True)
+    @commands.group(name="lssha", aliases=["狼人殺", "werewolf"], invoke_without_command=True)
     @commands.command(name="lssha", aliases=["狼人殺", "werewolf"])
     async def lssha_cmd(self, ctx, *, roles_str: str = None):
         """狼人殺遊戲管理系統"""
@@ -413,7 +413,7 @@ class WerewolfCog(commands.Cog):
         await ctx.send("📢 **優卡洛法官已被喚醒！本頻道已設定為本局【狼人殺專屬文字頻道】。**")
         await self.setup_cmd(ctx, roles_str=roles_str)
 
-    @ww.command(name='setup')
+    @lssha_cmd.command(name='setup')
     async def setup_cmd(self, ctx, *, roles_str: str = None):
         """登記語音房所有玩家並配置角色"""
         if not ctx.author.voice or not ctx.author.voice.channel:
@@ -475,7 +475,7 @@ class WerewolfCog(commands.Cog):
         embed = self.create_setup_embed()
         await ctx.send(embed=embed)
 
-    @ww.command(name='start')
+    @lssha_cmd.command(name='start')
     async def start_cmd(self, ctx):
         """正式開始遊戲，發放身份、設定暱稱與權限，且全體伺服器靜音"""
         if not self.players:
@@ -533,7 +533,7 @@ class WerewolfCog(commands.Cog):
         await ctx.send(embed=embed)
         self.queue_tts("狼人殺遊戲開始。天黑請閉眼。", ctx.guild)
 
-    @ww.command(name='status')
+    @lssha_cmd.command(name='status')
     async def status_cmd(self, ctx):
         """顯示當前存活狀況"""
         if not self.game_active:
@@ -541,7 +541,7 @@ class WerewolfCog(commands.Cog):
         embed = self.create_status_embed()
         await ctx.send(embed=embed)
 
-    @ww.command(name='kill')
+    @lssha_cmd.command(name='kill')
     async def kill_cmd(self, ctx, number: int):
         """擊殺/出局指定玩家"""
         if not self.game_active:
@@ -581,7 +581,7 @@ class WerewolfCog(commands.Cog):
         embed = self.create_status_embed()
         await ctx.send(embed=embed)
 
-    @ww.command(name='revive')
+    @lssha_cmd.command(name='revive')
     async def revive_cmd(self, ctx, number: int):
         """復活指定玩家"""
         if not self.game_active:
@@ -622,7 +622,7 @@ class WerewolfCog(commands.Cog):
         embed = self.create_status_embed()
         await ctx.send(embed=embed)
 
-    @ww.command(name='speak')
+    @lssha_cmd.command(name='speak')
     async def speak_cmd(self, ctx, number: int):
         """指派發言（僅解除該玩家靜音，其他玩家全部靜音）"""
         if not self.game_active:
@@ -658,7 +658,7 @@ class WerewolfCog(commands.Cog):
         embed = self.create_status_embed()
         await ctx.send(embed=embed)
 
-    @ww.command(name='pass')
+    @lssha_cmd.command(name='pass')
     async def ww_pass_cmd(self, ctx):
         """結束自己發言，切換到下一位"""
         await self.pass_cmd(ctx)
@@ -714,7 +714,7 @@ class WerewolfCog(commands.Cog):
         embed = self.create_status_embed()
         await ctx.send(embed=embed)
 
-    @ww.command(name='phase')
+    @lssha_cmd.command(name='phase')
     async def phase_cmd(self, ctx, target_phase: str):
         """切換白天/黑夜（黑夜時所有人強制靜音）"""
         if not self.game_active:
@@ -748,7 +748,7 @@ class WerewolfCog(commands.Cog):
         embed = self.create_status_embed()
         await ctx.send(embed=embed)
 
-    @ww.command(name='vote')
+    @lssha_cmd.command(name='vote')
     async def vote_cmd(self, ctx, timeout: int = 30):
         """發起投票放逐"""
         if not self.game_active:
@@ -780,7 +780,7 @@ class WerewolfCog(commands.Cog):
         msg = await ctx.send(embed=embed, view=view)
         view.voting_message = msg
 
-    @ww.command(name='end')
+    @lssha_cmd.command(name='end')
     async def end_cmd(self, ctx):
         """結束遊戲並還原所有麥克風狀態、權限與暱稱，並自動向語音房成員發出戰鬥邀請"""
         if not self.game_active and not self.players:
