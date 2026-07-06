@@ -197,6 +197,13 @@ class WidgetCog(commands.Cog):
         self.user_db[user_key]["icon"] = icon_filename
         self.save_db()
 
+    def get_user_token(self, user_id):
+        user_key = str(user_id)
+        if user_key not in self.user_db:
+            return None
+        return self.user_db[user_key].get("access_token")
+
+
     def get_image_url(self, filename):
         domain = os.getenv("CUSTOM_DOMAIN")
         if domain:
@@ -260,12 +267,28 @@ class WidgetCog(commands.Cog):
             payload["data"]["dynamic"].append({"type": 3, "name": "image", "value": {"url": icon_url}})
             payload["data"]["dynamic"].append({"type": 3, "name": "bacon_icon", "value": {"url": icon_url}})
 
+        # 1. 嘗試使用 User Bearer Token (推薦，直接使用 OAuth2 授權範圍)
+        access_token = self.get_user_token(user_id)
+        if access_token:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {access_token}",
+                "User-Agent": "DiscordBot (https://github.com/discord/discord-api-docs, 1.0.0)"
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.patch(url, json=payload, headers=headers) as resp:
+                    status = resp.status
+                    text = await resp.text()
+                    if status == 200:
+                        return status, text
+                    print(f"⚠️ Bearer Token 同步失敗 ({status})，改用 Bot Token 備援。錯誤: {text}")
+
+        # 2. 備援：使用 Bot Token
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bot {self.bot.http.token}",
             "User-Agent": "DiscordBot (https://github.com/discord/discord-api-docs, 1.0.0)"
         }
-        
         async with aiohttp.ClientSession() as session:
             async with session.patch(url, json=payload, headers=headers) as resp:
                 return resp.status, await resp.text()
@@ -284,8 +307,22 @@ class WidgetCog(commands.Cog):
             except:
                 app_id = 1465175036938948732
 
-        # 組合 OAuth2 授權網址
-        oauth_url = f"https://discord.com/oauth2/authorize?client_id={app_id}&redirect_uri=https%3A%2F%2Fyokaro520.colacat878787.workers.dev&response_type=token&scope=openid+sdk.social_layer"
+        # 獲取 Bot 的網頁後台 Base URL 以傳遞給 Worker state 參數
+        domain = os.getenv("CUSTOM_DOMAIN")
+        if domain:
+            base_url = f"https://{domain}"
+        else:
+            webpanel = self.bot.get_cog('WebPanelCog')
+            if webpanel and webpanel.tunnel_url:
+                base_url = webpanel.tunnel_url
+            else:
+                base_url = "http://localhost:8848"
+
+        import urllib.parse
+        state_encoded = urllib.parse.quote(base_url)
+
+        # 組合 OAuth2 授權網址，以 %20 區隔 scope，並攜帶 state
+        oauth_url = f"https://discord.com/oauth2/authorize?client_id={app_id}&redirect_uri=https%3A%2F%2Fyokaro520.colacat878787.workers.dev&response_type=token&scope=openid%20sdk.social_layer&state={state_encoded}"
         
         embed = discord.Embed(
             title="🥓 培根的 Widget v2 控制中樞",
@@ -304,6 +341,7 @@ class WidgetCog(commands.Cog):
         
         view = WidgetControlView(self, ctx.author.id, oauth_url)
         await ctx.send(embed=embed, view=view)
+
 
 async def setup(bot):
     await bot.add_cog(WidgetCog(bot))

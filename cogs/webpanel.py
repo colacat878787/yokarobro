@@ -134,6 +134,51 @@ def api_restart():
     threading.Thread(target=lambda: os._exit(0)).start()
     return jsonify({"message": "機器人正在重啟..."})
 
+@app.route('/api/widget/callback', methods=['POST', 'OPTIONS'])
+def api_widget_callback():
+    if request.method == 'OPTIONS':
+        resp = jsonify({"status": "ok"})
+        resp.headers.add("Access-Control-Allow-Origin", "*")
+        resp.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        resp.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        return resp
+
+    try:
+        data = request.json
+        user_id = str(data.get("user_id"))
+        access_token = data.get("access_token")
+        if not user_id or not access_token:
+            resp = jsonify({"status": "error", "message": "Missing parameters"})
+            resp.headers.add("Access-Control-Allow-Origin", "*")
+            return resp, 400
+            
+        db_path = "widget_users.json"
+        db = {}
+        if os.path.exists(db_path):
+            try:
+                with open(db_path, "r", encoding="utf-8") as f:
+                    db = json.load(f)
+            except: pass
+            
+        if user_id not in db:
+            db[user_id] = {}
+        db[user_id]["access_token"] = access_token
+        
+        with open(db_path, "w", encoding="utf-8") as f:
+            json.dump(db, f, indent=4, ensure_ascii=False)
+            
+        print(f"✅ [Widget] 收到用戶 {user_id} 的 OAuth2 Access Token 並已儲存。")
+        resp = jsonify({"status": "success"})
+        resp.headers.add("Access-Control-Allow-Origin", "*")
+        return resp
+    except Exception as e:
+        print(f"❌ [Widget] 處理 OAuth2 回傳失敗: {e}")
+        resp = jsonify({"status": "error", "message": str(e)})
+        resp.headers.add("Access-Control-Allow-Origin", "*")
+        return resp, 500
+
+
+
 class WebPanelCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot

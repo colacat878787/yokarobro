@@ -51,16 +51,97 @@ export default {
             font-size: 12px;
             color: #72767d;
         }
+        .status-msg {
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 14px;
+            color: #ffaa00;
+            padding: 10px;
+            background: #202225;
+            border-radius: 6px;
+            border-left: 4px solid #ffaa00;
+        }
     </style>
 </head>
 <body>
     <div class="card">
         <div class="bacon">🥓</div>
         <h1>授權成功啦！(喜</h1>
-        <p>您已成功對此應用程式進行 Widget 授權。</p>
-        <p>現在您可以安全地<strong>關閉此視窗</strong>，回到 Discord 點選 <strong>「一鍵同步到 Discord ⚡」</strong> 完成同步！</p>
-        <div class="footer">© 2026 Yokaro Widget v2 培根特製版</div>
+        <p>已成功取得 Discord Widget 授權。</p>
+        <div id="status" class="status-msg">正在與 Yokaro 機器人進行同步，請稍候...</div>
+        <p class="footer">© 2026 Yokaro Widget v2 培根特製版</p>
     </div>
+
+    <script>
+        async function runSync() {
+            const statusDiv = document.getElementById("status");
+            try {
+                // 1. 從網址 hash 提取 access_token 與 state (bot 後台網址)
+                const hash = window.location.hash.substring(1);
+                const params = new URLSearchParams(hash);
+                const accessToken = params.get("access_token");
+                const state = params.get("state"); // bot's base URL
+
+                if (!accessToken) {
+                    statusDiv.style.color = "#f04747";
+                    statusDiv.style.borderLeftColor = "#f04747";
+                    statusDiv.innerText = "❌ 錯誤：未取得 access_token，請重新授權！";
+                    return;
+                }
+
+                if (!state) {
+                    statusDiv.style.color = "#f04747";
+                    statusDiv.style.borderLeftColor = "#f04747";
+                    statusDiv.innerText = "❌ 錯誤：未取得 Bot 後台位址！";
+                    return;
+                }
+
+                // 2. 向 Discord API 請求當前用戶的資料以獲取 User ID
+                statusDiv.innerText = "正在向 Discord 查詢您的身份...";
+                const userResp = await fetch("https://discord.com/api/v9/users/@me", {
+                    headers: {
+                        "Authorization": "Bearer " + accessToken
+                    }
+                });
+
+                if (!userResp.ok) {
+                    throw new Error("無法獲取 Discord 使用者資訊");
+                }
+
+                const userData = await userResp.json();
+                const userId = userData.id;
+
+                // 3. 將 Token 回傳給 Yokaro Bot 後台
+                statusDiv.innerText = "正在儲存 Token 到 Yokaro 機器人伺服器...";
+                const botResp = await fetch(state + "/api/widget/callback", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        access_token: accessToken
+                    })
+                });
+
+                if (!botResp.ok) {
+                    throw new Error("Bot 伺服器連線失敗或拒絕連線");
+                }
+
+                statusDiv.style.color = "#43b581";
+                statusDiv.style.borderLeftColor = "#43b581";
+                statusDiv.innerHTML = "🎉 同步完成！您現在可以安全地<strong>關閉此視窗</strong>，回到 Discord 點選 <strong>「一鍵同步到 Discord ⚡」</strong>！";
+
+            } catch (e) {
+                console.error(e);
+                statusDiv.style.color = "#f04747";
+                statusDiv.style.borderLeftColor = "#f04747";
+                statusDiv.innerText = "❌ 發生錯誤：" + e.message + "\\n請確認您的 Bot 網頁後台/隧道是否正常開啟！";
+            }
+        }
+
+        window.onload = runSync;
+    </script>
 </body>
 </html>
 `, {
