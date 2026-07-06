@@ -234,6 +234,7 @@ class MusicCog(commands.Cog):
         self.panels = {} # guild_id: message
         self.settings_file = "music_settings.json"
         self.states = self.load_settings()
+        self.lyrics = {} # guild_id -> lyrics metadata
         self.bot.add_view(MusicControlView(self))
         self.history_file = "music_history.json"
         self.history = self._load_history()
@@ -395,6 +396,89 @@ class MusicCog(commands.Cog):
         file_name = f"lyrics_{data.get('song','unknown')[:30].strip().replace(' ','_')}.txt"
         await ctx.send(embed=embed, file=discord.File(file_obj, filename=file_name))
 
+    def parse_lyrics_text(self, lyrics_text):
+        lines = []
+        if not lyrics_text:
+            return lines
+
+        for raw_line in lyrics_text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            time_match = re.match(r"^\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\](.*)$", line)
+            if time_match:
+                minutes = int(time_match.group(1))
+                seconds = int(time_match.group(2))
+                millis = int((time_match.group(3) or "0").ljust(3, "0"))
+                timestamp = minutes * 60 + seconds + millis / 1000.0
+                text_line = time_match.group(4).strip()
+                if text_line:
+                    lines.append((timestamp, text_line))
+            else:
+                lines.append((None, line))
+        return lines
+
+    def build_lyrics_display(self, guild_id, elapsed):
+        lyrics_info = self.lyrics.get(guild_id)
+        if not lyrics_info or not lyrics_info.get("lines"):
+            return "*尚未載入歌詞。播放時即時顯示歌詞。*"
+
+        lines = lyrics_info["lines"]
+        current_index = 0
+        if any(ts is not None for ts, _ in lines):
+            for idx, (ts, _) in enumerate(lines):
+                if ts is not None and ts <= elapsed:
+                    current_index = idx
+                elif ts is not None and ts > elapsed:
+                    break
+        else:
+            total = lyrics_info.get("duration") or 1
+            if total > 0:
+                current_index = min(len(lines) - 1, int(elapsed / max(total, 1) * len(lines)))
+
+        display_lines = []
+        start = max(0, current_index - 2)
+        end = min(len(lines), current_index + 3)
+        for idx in range(start, end):
+            _, text = lines[idx]
+            text = text[:60]
+            if idx == current_index:
+                display_lines.append(f"**{text}**")
+            else:
+                display_lines.append(text)
+
+        if start > 0:
+            display_lines.insert(0, "...")
+        if end < len(lines):
+            display_lines.append("...")
+
+        return "\n".join(display_lines)
+
+    async def load_lyrics_for_song(self, guild_id, source, duration=None):
+        if not source or not source.title:
+            self.lyrics.pop(guild_id, None)
+            return
+
+        video_id = self.extract_youtube_video_id(getattr(source, 'original_url', '') or getattr(source, 'url', ''))
+        query = source.title
+        lyrics_data = await self.fetch_unison_lyrics(query=query, video_id=video_id)
+        if not lyrics_data:
+            self.lyrics.pop(guild_id, None)
+            return
+
+        description, lyrics = self.format_lyrics_result(lyrics_data)
+        parsed_lines = self.parse_lyrics_text(lyrics)
+        if not parsed_lines and lyrics:
+            parsed_lines = [(None, line.strip()) for line in lyrics.splitlines() if line.strip()]
+
+        self.lyrics[guild_id] = {
+            "song": lyrics_data.get("song"),
+            "artist": lyrics_data.get("artist"),
+            "id": lyrics_data.get("id"),
+            "lines": parsed_lines,
+            "duration": duration or source.duration,
+        }
+
     def create_progress_bar(self, current, total):
         if total == 0: return "[▬▬▬▬▬▬▬▬▬🔘]"
         percent = current / total
@@ -438,7 +522,8 @@ class MusicCog(commands.Cog):
         bar = self.create_progress_bar(elapsed, total)
         time_str = f"`{str(timedelta(seconds=elapsed)).split('.')[0]} / {str(timedelta(seconds=total)).split('.')[0]}`"
         
-        embed.description = f"{bar} {time_str}\n\n👤 **點歌者**：{source.requester.mention if source.requester else '未知'}"
+        lyrics_display = self.build_lyrics_display(guild_id, elapsed)
+        embed.description = f"{bar} {time_str}\n\n👤 **點歌者**：{source.requester.mention if source.requester else '未知'}\n\n🎤 **當前歌詞**\n{lyrics_display}"
         
         q = self.queue.get(guild_id, [])
         if q:
@@ -660,6 +745,11 @@ class MusicCog(commands.Cog):
         except:
             pass
 
+        async def _load_lyrics():
+            await self.load_lyrics_for_song(ctx.guild.id, player, duration=player.duration)
+
+        asyncio.run_coroutine_threadsafe(_load_lyrics(), self.bot.loop)
+
         def after_playing(error):
             if error: print(f"播放錯誤: {error}")
             try:
@@ -799,9 +889,9 @@ class MusicCog(commands.Cog):
         if not query:
             return await ctx.send("❌ 請提供歌曲名稱、歌手或 YouTube 連結來查詢歌詞。")
 
-        await ctx.trigger_typing()
-        video_id = self.extract_youtube_video_id(query)
-        lyrics_data = await self.fetch_unison_lyrics(query=query if not video_id else None, video_id=video_id)
+        async with ctx.typing():
+            video_id = self.extract_youtube_video_id(query)
+            lyrics_data = await self.fetch_unison_lyrics(query=query if not video_id else None, video_id=video_id)
 
         if not lyrics_data:
             return await ctx.send("❌ 抱歉，找不到對應的歌詞。請嘗試更精準的歌名或歌手名稱。")
