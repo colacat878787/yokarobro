@@ -217,7 +217,7 @@ class HelpView(discord.ui.View):
         embed.add_field(name="!panel / !後台", value="💡 開啟管理員專用圖形控制面板 (V2)", inline=False)
         embed.add_field(name="!webpanel", value="🔐 **黑科技：生成 TryCloudflare 遠端管理後台**", inline=False)
         embed.add_field(name="!ticket / !開單", value="💡 發送票單啟動儀表板", inline=False)
-        embed.add_field(name="!更新紀錄 [set]", value="查看 GitHub 同步紀錄或設定通知頻道", inline=False)
+        embed.add_field(name="!更新紀錄 [set] / !更新速遞 [set]", value="查看 GitHub 同步紀錄或設定通知頻道", inline=False)
         embed.add_field(name="!reboot / !重啟", value="💡 強制重啟並拉取最新的 GitHub 代碼", inline=False)
         await interaction.edit_original_response(embed=embed)
 

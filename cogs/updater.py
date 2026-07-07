@@ -155,7 +155,7 @@ class AutoUpdaterCog(commands.Cog):
         self._save_channels(self.changelog_channel_ids)
         await ctx.send(f"✅ 已新增 **#{ctx.channel.name}** 為更新通知頻道！\n以後洛洛每次自動更新，都會在這裡發布更新內容喔。嗷嗷嗷～")
 
-    @commands.command(name='changelog', aliases=['更新紀錄', '版本紀錄'])
+    @commands.command(name='changelog', aliases=['更新紀錄', '版本紀錄', '更新速遞'])
     async def changelog(self, ctx, arg: str = "5"):
         """查看最近的更新紀錄，或使用 !更新紀錄 set 設定當前頻道為更新頻道"""
         # 如果使用者輸入 set 或 頻道 相關字眼，跳轉到設定功能
