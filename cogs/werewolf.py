@@ -1221,15 +1221,15 @@ class WerewolfCog(commands.Cog):
         self.guild_id = ctx.guild.id
 
         members_in_vc = [m for m in self.voice_channel.members if not m.bot]
-        if len(members_in_vc) < 3:
+        if len(members_in_vc) < 2:
             self.auto_game_active = False
-            return await ctx.send("❌ 自動模式至少需要 3 位玩家才能開始。請邀請更多玩家後再試。")
+            return await ctx.send("❌ 自動模式至少需要 2 位玩家才能開始。請邀請更多玩家後再試。")
 
         self.pending_players = {member.id: member for member in members_in_vc}
         self.reported_numbers = {member.id: idx + 1 for idx, member in enumerate(members_in_vc)}
 
         await ctx.send("優卡洛法官已啟動自動狼人殺模式，10 秒後將直接以語音房玩家開局。")
-        self.queue_tts("優卡洛法官已啟動自動狼人殺模式，十分鐘後將直接以語音房玩家開局。", ctx.guild)
+        self.queue_tts("優卡洛法官已啟動自動狼人殺模式，10 秒後將直接以語音房玩家開局。", ctx.guild)
 
         self.auto_game_task = self.bot.loop.create_task(self._delayed_auto_start(ctx, members_in_vc))
 
@@ -1308,6 +1308,7 @@ class WerewolfCog(commands.Cog):
             pass
 
         self.game_active = True
+        self.auto_game_started = False
         self.day = 1
         self.phase = "白天發言"
         self.speaking_player = None
@@ -1360,9 +1361,10 @@ class WerewolfCog(commands.Cog):
 
         # 2. Main Game Loop
         while self.game_active and len([p for p in self.players.values() if p['alive']]) > 1:
-            # Check win condition at the start of each day/night cycle
-            if self._check_win_condition():
+            # Skip immediate win check on first cycle so small局不會直接結束
+            if self.auto_game_started and self._check_win_condition():
                 break
+            self.auto_game_started = True
 
             # --- Night Phase ---
             if self.phase == "黑夜閉眼":

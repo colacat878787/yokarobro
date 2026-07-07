@@ -5,28 +5,35 @@ import os
 import asyncio
 import json
 
-CHANGELOG_FILE = "changelog_channel.json"
+CHANGELOG_FILE = "changelog_channels.json"
 
 class AutoUpdaterCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.changelog_channel_id = self._load_channel()
+        self.changelog_channel_ids = self._load_channels()
         self.check_update.start()
 
     def cog_unload(self):
         self.check_update.cancel()
 
-    def _load_channel(self):
+    def _load_channels(self):
         if os.path.exists(CHANGELOG_FILE):
             try:
                 with open(CHANGELOG_FILE, "r") as f:
-                    return json.load(f).get("channel_id")
+                    payload = json.load(f)
+                    if isinstance(payload, dict):
+                        if "channel_ids" in payload:
+                            return payload.get("channel_ids", []) or []
+                        if "channel_id" in payload:
+                            return [payload.get("channel_id")]
+                    if isinstance(payload, list):
+                        return payload
             except: pass
-        return None
+        return []
 
-    def _save_channel(self, channel_id):
+    def _save_channels(self, channel_ids):
         with open(CHANGELOG_FILE, "w") as f:
-            json.dump({"channel_id": channel_id}, f)
+            json.dump({"channel_ids": channel_ids}, f)
 
     def _get_git_log(self, from_hash, to_hash="HEAD"):
         """取得兩個 commit 之間的更新紀錄"""
@@ -41,28 +48,31 @@ class AutoUpdaterCog(commands.Cog):
 
     async def _notify_changelog(self, old_hash, new_hash):
         """在更新頻道發布更新通知"""
-        if not self.changelog_channel_id:
+        if not self.changelog_channel_ids:
             return
-        channel = self.bot.get_channel(self.changelog_channel_id)
-        if not channel:
-            return
-        try:
-            log = self._get_git_log(old_hash, new_hash)
-            embed = discord.Embed(
-                title="🔄 優卡洛 自動更新完成！",
-                description="洛洛剛剛更新完了喔！以下是本次的更新內容：",
-                color=0x2ecc71
-            )
-            embed.add_field(name="📦 版本變化", value=f"`{old_hash[:7]}` → `{new_hash[:7]}`", inline=False)
-            embed.add_field(
-                name="📝 更新內容",
-                value=f"```\n{log[:1000]}\n```" if log else "無詳細紀錄",
-                inline=False
-            )
-            embed.set_footer(text="洛洛更新完畢後已自動重啟！嗷嗷嗷～")
-            await channel.send(embed=embed)
-        except Exception as e:
-            print(f"⚠️ [更新通知] 無法發送更新訊息: {e}")
+
+        log = self._get_git_log(old_hash, new_hash)
+        embed = discord.Embed(
+            title="🔄 優卡洛 自動更新完成！",
+            description="洛洛剛剛更新完了喔！以下是本次的更新內容：",
+            color=0x2ecc71
+        )
+        embed.add_field(name="📦 版本變化", value=f"`{old_hash[:7]}` → `{new_hash[:7]}`", inline=False)
+        embed.add_field(
+            name="📝 更新內容",
+            value=f"```\n{log[:1000]}\n```" if log else "無詳細紀錄",
+            inline=False
+        )
+        embed.set_footer(text="洛洛更新完畢後已自動重啟！嗷嗷嗷～")
+
+        for channel_id in list(self.changelog_channel_ids):
+            channel = self.bot.get_channel(channel_id)
+            if not channel:
+                continue
+            try:
+                await channel.send(embed=embed)
+            except Exception as e:
+                print(f"⚠️ [更新通知] 無法發送更新訊息到 {channel_id}: {e}")
 
     @tasks.loop(seconds=3)
     async def check_update(self):
@@ -137,10 +147,13 @@ class AutoUpdaterCog(commands.Cog):
     @commands.command(name='set_changelog', aliases=['更新頻道', '設定更新頻道'])
     @commands.has_permissions(administrator=True)
     async def set_changelog(self, ctx):
-        """將當前頻道設定為自動更新通知頻道"""
-        self.changelog_channel_id = ctx.channel.id
-        self._save_channel(ctx.channel.id)
-        await ctx.send(f"✅ 已將 **#{ctx.channel.name}** 設為更新通知頻道！\n以後洛洛每次自動更新，都會在這裡發布更新內容喔。嗷嗷嗷～")
+        """新增當前頻道為自動更新通知頻道"""
+        channel_id = ctx.channel.id
+        if channel_id in self.changelog_channel_ids:
+            return await ctx.send(f"✅ **#{ctx.channel.name}** 已經是更新通知頻道之一，無需重複新增。")
+        self.changelog_channel_ids.append(channel_id)
+        self._save_channels(self.changelog_channel_ids)
+        await ctx.send(f"✅ 已新增 **#{ctx.channel.name}** 為更新通知頻道！\n以後洛洛每次自動更新，都會在這裡發布更新內容喔。嗷嗷嗷～")
 
     @commands.command(name='changelog', aliases=['更新紀錄', '版本紀錄'])
     async def changelog(self, ctx, arg: str = "5"):
