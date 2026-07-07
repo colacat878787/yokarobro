@@ -936,7 +936,7 @@ class WerewolfCog(commands.Cog):
 
     @lssha_cmd.command(name='結束', aliases=['end'])
     async def end_cmd(self, ctx):
-        """結束遊戲並還原所有麥克風狀態、權限與暱稱，並自動向語音房成員發出戰鬥邀請"""
+        """結束遊戲並還原所有麥克風狀態、權限與暱稱，不再自動發送邀請。"""
         if not self.game_active and not self.players:
             return await ctx.send("❌ 目前沒有進行中或準備中的遊戲！")
             
@@ -960,8 +960,6 @@ class WerewolfCog(commands.Cog):
             except Exception as e:
                 await ctx.send(f"⚠️ 還原頻道權限失敗：{e}")
                 
-        text_channel_backup = self.text_channel or ctx.channel
-        
         self.game_active = False
         self.players = {}
         self.speaking_player = None
@@ -969,26 +967,13 @@ class WerewolfCog(commands.Cog):
         self.phase = "白天發言"
         self.voice_channel = None
         self.text_channel = None
+        self.auto_game_active = False
+        self.auto_game_task = None
+        self.pending_players = {}
+        self.reported_numbers = {}
+        self.auto_game_ctx = None
         
         await ctx.send("✅ **遊戲已結束，法官下班！**")
-        
-        if voice_channel_backup:
-            members = [m for m in voice_channel_backup.members if not m.bot]
-            if members:
-                await text_channel_backup.send("⚔️ **偵測到狼人殺局已結束！正在自動向語音房內的所有人發送新戰鬥邀請...**")
-                for member in members:
-                    try:
-                        embed_invite = discord.Embed(
-                            title="⚔️ 戰鬥召集令 ⚔️",
-                            description=f"狼人殺已結束！**{ctx.author.display_name}** 已在語音房 **🔊 {voice_channel_backup.name}** 發起新對決！\n"
-                                        f"請點選下方按鈕回覆您的參戰意願！",
-                            color=0xc0392b
-                        )
-                        embed_invite.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手")
-                        view = CombatInviteView(member, text_channel_backup)
-                        await member.send(embed=embed_invite, view=view)
-                    except discord.Forbidden:
-                        await text_channel_backup.send(f"⚠️ 無法私訊 {member.mention} 戰鬥邀請 (未開啟私訊)。")
 
     @commands.command(name='go')
     @commands.has_permissions(administrator=True)
@@ -1196,83 +1181,62 @@ class WerewolfCog(commands.Cog):
 
     @lssha_cmd.command(name='自動', aliases=['auto'])
     async def auto_cmd(self, ctx, *, roles_str: str = None):
-        """自動開始狼人殺遊戲，包含報號、發言、投票、日夜循環"""
+        """10 秒後直接以語音房中的玩家開局，不需要等待報名或私訊回覆。"""
         if not ctx.author.voice or not ctx.author.voice.channel:
             return await ctx.send("❌ 嗷～你必須先加入語音頻道，我才能自動化遊戲喔！")
 
         if self.auto_game_active:
             return await ctx.send("❌ 自動狼人殺遊戲已經在進行中囉！")
 
-        self.auto_game_ctx = ctx # Store context for auto game flow
-        self.auto_game_active = True # Set auto game flag
+        self.auto_game_ctx = ctx
+        self.auto_game_active = True
 
         self.voice_channel = ctx.author.voice.channel
         self.text_channel = ctx.channel
-        self.guild_id = ctx.guild.id # Store guild ID
-
-        await ctx.send("優卡洛法官已啟動自動狼人殺模式，正在向語音房成員發送報名邀請。")
-        self.queue_tts("優卡洛法官已啟動自動狼人殺模式，正在向語音房成員發送報名邀請。", ctx.guild)
+        self.guild_id = ctx.guild.id
 
         members_in_vc = [m for m in self.voice_channel.members if not m.bot]
         if not members_in_vc:
             return await ctx.send("❌ 語音頻道中沒有其他人類玩家喔！")
 
-        # Temporary storage for players accepting and reporting numbers
-        self.pending_players = {member.id: member for member in members_in_vc} # member_id -> member object
-        self.reported_numbers = {} # member_id -> number
+        self.pending_players = {member.id: member for member in members_in_vc}
+        self.reported_numbers = {member.id: idx + 1 for idx, member in enumerate(members_in_vc)}
 
-        dm_warnings = []
-        for member in members_in_vc:
-            try:
-                embed_invite = discord.Embed(
-                    title="🐺 狼人殺自動模式報名 🐺",
-                    description=f"優卡洛法官正在 **🔊 {self.voice_channel.name}** 語音頻道啟動自動狼人殺遊戲！\n"
-                                f"點擊下方按鈕【報名參加】，並請於私訊中回覆您的【報號數字】。",
-                    color=0x7289DA
-                )
-                embed_invite.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手")
-                view = WerewolfJoinView(self, member, self.text_channel)
-                await member.send(embed=embed_invite, view=view)
-                self.pending_players[member.id] = member # Track who received an invite
-            except discord.Forbidden:
-                dm_warnings.append(member.mention)
+        await ctx.send("優卡洛法官已啟動自動狼人殺模式，10 秒後將直接以語音房玩家開局。")
+        self.queue_tts("優卡洛法官已啟動自動狼人殺模式，十分鐘後將直接以語音房玩家開局。", ctx.guild)
 
-        if dm_warnings:
-            self.auto_game_active = False
-            self.pending_players = {}
-            self.reported_numbers = {}
-            await ctx.send(f"❌ 自動模式啟動失敗：以下玩家未開啟私訊，無法完成 DM 報號。請玩家開啟私訊或改用手動模式：\n" + "、".join(dm_warnings))
+        self.auto_game_task = self.bot.loop.create_task(self._delayed_auto_start(ctx, members_in_vc))
+
+    async def _delayed_auto_start(self, ctx, members_in_vc):
+        await asyncio.sleep(10)
+        if not self.auto_game_active or self.game_active:
             return
+        self.reported_numbers = {member.id: idx + 1 for idx, member in enumerate(members_in_vc)}
+        await self._start_auto_game_flow(members_in_vc=members_in_vc)
 
-        await ctx.send("⏳ **所有報名邀請已發送。請玩家們檢查私訊並回覆報號數字。法官正在等待所有玩家報號...**")
-        self.queue_tts("所有報名邀請已發送。請玩家們檢查私訊並回覆報號數字。法官正在等待所有玩家報號。", ctx.guild)
-
-        # Now, wait for players to report their numbers via DM. This requires modifying on_message.
-        # The actual game loop will start only after all numbers are collected and validated.
-
-    async def _start_auto_game_flow(self):
-        # Retrieve the context from the initial auto_cmd call
-        # self.auto_game_ctx is set in `auto_cmd`
+    async def _start_auto_game_flow(self, members_in_vc=None):
         if self.auto_game_ctx is None:
-            # No context available; abort silently
             return
 
         ctx = self.auto_game_ctx
-        guild = self.bot.get_guild(self.guild_id) # Ensure guild object is available
+        guild = self.bot.get_guild(self.guild_id)
 
         if guild is None:
             await ctx.send("❌ 無法找到伺服器，自動遊戲中止。")
             return
 
-        # 1. Setup and Start (using the collected numbers)
-        # Re-initialize players with collected numbers
-        members_in_vc = [m for m in self.voice_channel.members if not m.bot]
-        players_with_numbers = []
-        for member in members_in_vc:
-            if member.id in self.reported_numbers:
-                players_with_numbers.append({'member': member, 'number': self.reported_numbers[member.id]})
+        if members_in_vc is None:
+            members_in_vc = [m for m in self.voice_channel.members if not m.bot]
 
-        # Sort players by their reported numbers
+        players_with_numbers = []
+        if self.reported_numbers:
+            for member in members_in_vc:
+                if member.id in self.reported_numbers:
+                    players_with_numbers.append({'member': member, 'number': self.reported_numbers[member.id]})
+
+        if not players_with_numbers:
+            players_with_numbers = [{'member': member, 'number': idx + 1} for idx, member in enumerate(members_in_vc)]
+
         players_with_numbers.sort(key=lambda x: x['number'])
 
         count = len(players_with_numbers)

@@ -10,6 +10,7 @@ import io
 from datetime import timedelta
 import aiohttp
 import random
+from html import unescape
 
 # --- YTDL 設定 ---
 YTDL_OPTIONS = {
@@ -227,6 +228,57 @@ class MusicSelectView(discord.ui.View):
         
         await interaction.delete_original_response()
 
+class LyricsView(discord.ui.View):
+    def __init__(self, cog, guild_id, pages):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.guild_id = guild_id
+        self.pages = pages
+        self.current = 0
+
+    async def update_message(self, interaction):
+        page = self.pages[self.current]
+        embed = discord.Embed(title=f"🎵 歌詞查詢結果", description=page['header'], color=0x1abc9c)
+        embed.add_field(name=f"歌詞（第 {self.current+1} / {len(self.pages)} 頁）", value=f"```text\n{page['text']}\n```", inline=False)
+        try:
+            await interaction.message.edit(embed=embed, view=self)
+        except Exception:
+            try:
+                await interaction.response.edit_message(embed=embed, view=self)
+            except Exception:
+                pass
+
+    @discord.ui.button(label='上一頁', style=discord.ButtonStyle.secondary)
+    async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current > 0:
+            self.current -= 1
+            await self.update_message(interaction)
+        await interaction.response.defer()
+
+    @discord.ui.button(label='下一頁', style=discord.ButtonStyle.secondary)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current < len(self.pages) - 1:
+            self.current += 1
+            await self.update_message(interaction)
+        await interaction.response.defer()
+
+    @discord.ui.button(label='完整歌詞', style=discord.ButtonStyle.success)
+    async def full(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # send full lyrics as txt file
+        full = "\n\n".join([p['text'] for p in self.pages])
+        file_obj = io.BytesIO(full.encode('utf-8'))
+        file_obj.seek(0)
+        filename = f"lyrics_full_{self.guild_id}.txt"
+        await interaction.response.send_message("📄 已輸出完整歌詞：", file=discord.File(file_obj, filename=filename), ephemeral=True)
+
+    @discord.ui.button(label='關閉', style=discord.ButtonStyle.danger)
+    async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            await interaction.message.edit(view=None)
+        except Exception:
+            pass
+        await interaction.response.defer()
+
 class MusicCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -378,6 +430,122 @@ class MusicCog(commands.Cog):
 
         return None
 
+    async def fetch_lyrics_ovh(self, song=None, artist=None):
+        """Try lyrics.ovh when we have song and artist."""
+        if not song or not artist:
+            return None
+        # lyrics.ovh expects /v1/artist/title
+        url = f"https://api.lyrics.ovh/v1/{artist}/{song}"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=10) as resp:
+                    if resp.status != 200:
+                        return None
+                    data = await resp.json()
+                    text = data.get('lyrics')
+                    if text:
+                        return {"song": song, "artist": artist, "lyrics": text, "format": "plain", "confidence": "unknown"}
+        except Exception:
+            return None
+        return None
+
+    async def fetch_yt_captions(self, video_id: str):
+        """Try to extract automatic captions from YouTube via yt_dlp info dict and fetch the vtt/ttml text."""
+        if not video_id:
+            return None
+        try:
+            info = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False))
+        except Exception:
+            return None
+
+        subs = {}
+        for key in ('subtitles', 'automatic_captions'):
+            if info.get(key):
+                subs = info.get(key)
+                break
+
+        if not subs:
+            return None
+
+        # prefer 'en' then any language
+        for lang in (video_id and ['en'] or []) + list(subs.keys()):
+            if lang not in subs:
+                continue
+            formats = subs.get(lang)
+            if not formats:
+                continue
+            # pick first vtt/ttml
+            for f in formats:
+                ext = f.get('ext') or ''
+                url = f.get('url')
+                if not url:
+                    continue
+                if ext in ('vtt', 'ttml', 'srv3') or True:
+                    try:
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(url, timeout=15) as resp:
+                                if resp.status != 200:
+                                    continue
+                                raw = await resp.text()
+                                # strip VTT/TTML timestamps
+                                lines = []
+                                for line in raw.splitlines():
+                                    line = line.strip()
+                                    if not line:
+                                        continue
+                                    # skip WEBVTT or timing lines
+                                    if line.startswith('WEBVTT') or line.startswith('NOTE'):
+                                        continue
+                                    if re.match(r"^\d{2}:\d{2}:|^\d{1,2}:\d{2}\.\d{3}|^\d{2}:\d{2}\.\d{3}", line):
+                                        continue
+                                    if re.match(r"^\d+$", line):
+                                        continue
+                                    lines.append(unescape(re.sub(r"<[^>]+>", "", line)))
+                                text = "\n".join(lines).strip()
+                                if text:
+                                    return {"song": info.get('title'), "artist": info.get('uploader'), "lyrics": text, "format": 'captions', 'confidence': 'low', 'videoId': video_id}
+                    except Exception:
+                        continue
+        return None
+
+    async def fetch_all_lyrics(self, query=None, video_id=None):
+        """Try multiple lyric sources in order and return the first match.
+        Order: Unison -> lyrics.ovh -> YouTube auto-captions
+        """
+        # 1. Unison
+        data = await self.fetch_unison_lyrics(query=query, video_id=video_id)
+        if data:
+            return data
+
+        # 2. lyrics.ovh (requires song and artist)
+        song, artist = self.parse_song_artist(query)
+        if not song and query and video_id is None:
+            # try to parse from query by splitting on ' - '
+            if ' - ' in query:
+                song, artist = query.split(' - ', 1)
+        if song and artist:
+            ovh = await self.fetch_lyrics_ovh(song=song, artist=artist)
+            if ovh:
+                return ovh
+
+        # 3. Try YouTube captions if we have video id or can search YouTube for video id
+        vid = video_id
+        if not vid and query:
+            try:
+                info = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch1:{query}", download=False))
+                if info and 'entries' in info and info['entries']:
+                    e = info['entries'][0]
+                    vid = e.get('id')
+            except Exception:
+                vid = None
+
+        if vid:
+            captions = await self.fetch_yt_captions(vid)
+            if captions:
+                return captions
+
+        return None
+
     def format_lyrics_result(self, data):
         title = data.get("song") or data.get("title") or "未知歌曲"
         artist = data.get("artist") or "未知歌手"
@@ -400,21 +568,45 @@ class MusicCog(commands.Cog):
 
     async def send_lyrics_response(self, ctx, data):
         description, lyrics = self.format_lyrics_result(data)
-        embed = discord.Embed(title="🎵 歌詞查詢結果", description=description, color=0x1abc9c)
 
         if not lyrics:
+            embed = discord.Embed(title="🎵 歌詞查詢結果", description=description, color=0x1abc9c)
             embed.add_field(name="結果", value="找到了歌曲資料，但歌詞內容為空。", inline=False)
             return await ctx.send(embed=embed)
 
-        if len(lyrics) <= 1500:
-            embed.add_field(name="歌詞", value=f"```text\n{lyrics}\n```", inline=False)
+        # split into pages by lines, keeping page char limits
+        lines = [l for l in lyrics.splitlines() if l.strip()]
+        pages = []
+        current = []
+        cur_len = 0
+        max_chars = 900
+        for line in lines:
+            add_len = len(line) + 1
+            if cur_len + add_len > max_chars and current:
+                pages.append({'header': description, 'text': '\n'.join(current)})
+                current = [line]
+                cur_len = add_len
+            else:
+                current.append(line)
+                cur_len += add_len
+        if current:
+            pages.append({'header': description, 'text': '\n'.join(current)})
+
+        # If only one small page, just send embed
+        if len(pages) == 1:
+            embed = discord.Embed(title="🎵 歌詞查詢結果", description=description, color=0x1abc9c)
+            embed.add_field(name="歌詞", value=f"```text\n{pages[0]['text']}\n```", inline=False)
             await ctx.send(embed=embed)
             return
 
-        file_obj = io.BytesIO(lyrics.encode("utf-8"))
-        file_obj.seek(0)
-        file_name = f"lyrics_{data.get('song','unknown')[:30].strip().replace(' ','_')}.txt"
-        await ctx.send(embed=embed, file=discord.File(file_obj, filename=file_name))
+        # Multiple pages -> interactive view
+        view = LyricsView(self, ctx.guild.id, pages)
+        first = pages[0]
+        embed = discord.Embed(title="🎵 歌詞查詢結果", description=first['header'], color=0x1abc9c)
+        embed.add_field(name=f"歌詞（第 1 / {len(pages)} 頁）", value=f"```text\n{first['text']}\n```", inline=False)
+        msg = await ctx.send(embed=embed, view=view)
+        # store panels mapping so update loop keeps message alive
+        self.panels[ctx.guild.id] = msg
 
     def parse_lyrics_text(self, lyrics_text):
         lines = []
@@ -481,7 +673,7 @@ class MusicCog(commands.Cog):
 
         video_id = self.extract_youtube_video_id(getattr(source, 'original_url', '') or getattr(source, 'url', ''))
         query = source.title
-        lyrics_data = await self.fetch_unison_lyrics(query=query, video_id=video_id)
+        lyrics_data = await self.fetch_all_lyrics(query=query, video_id=video_id)
         if not lyrics_data:
             self.lyrics.pop(guild_id, None)
             return
@@ -514,21 +706,33 @@ class MusicCog(commands.Cog):
     async def update_panel_task(self):
         for guild_id, message in list(self.panels.items()):
             guild = self.bot.get_guild(guild_id)
-            if not guild or not guild.voice_client or not guild.voice_client.source:
+            if not guild or not guild.voice_client:
                 continue
-            
+
+            vc = guild.voice_client
+            state = self.get_state(guild_id)
+
+            if not vc.source:
+                if vc.is_connected() and self.queue.get(guild_id) and not self._play_transition.get(guild_id, False):
+                    ctx = self.current_ctxs.get(guild_id)
+                    if ctx:
+                        self._play_transition[guild_id] = True
+                        try:
+                            self.play_next(ctx)
+                        finally:
+                            self._play_transition[guild_id] = False
+                continue
+
             try:
-                vc = guild.voice_client
                 source = vc.source
-                state = self.get_state(guild_id)
-                
                 elapsed = int(time.time() - source.start_time + state.get('elapsed', 0))
-                if vc.is_paused(): elapsed = int(state.get('last_elapsed', elapsed))
+                if vc.is_paused():
+                    elapsed = int(state.get('last_elapsed', elapsed))
                 state['last_elapsed'] = elapsed
 
                 embed = self.create_music_embed(guild_id, source, elapsed)
                 await message.edit(embed=embed, view=MusicControlView(self))
-            except Exception as e:
+            except Exception:
                 pass
 
     def create_music_embed(self, guild_id, source, elapsed):
@@ -744,6 +948,7 @@ class MusicCog(commands.Cog):
         await ctx.send(embed=embed)
 
     def _play_song(self, ctx, player):
+        self.current_ctxs[ctx.guild.id] = ctx
         state = self.get_state(ctx.guild.id)
         state['current_url'] = player.original_url or player.url
         state['elapsed'] = 0
@@ -792,6 +997,8 @@ class MusicCog(commands.Cog):
 
     def play_next(self, ctx):
         gid = ctx.guild.id
+        if self._play_transition.get(gid, False):
+            return
         if gid in self.queue and self.queue[gid] and ctx.voice_client:
             player = self.queue[gid].pop(0)
             
@@ -911,7 +1118,7 @@ class MusicCog(commands.Cog):
 
         async with ctx.typing():
             video_id = self.extract_youtube_video_id(query)
-            lyrics_data = await self.fetch_unison_lyrics(query=query if not video_id else None, video_id=video_id)
+            lyrics_data = await self.fetch_all_lyrics(query=query if not video_id else None, video_id=video_id)
 
         if not lyrics_data:
             return await ctx.send("❌ 抱歉，找不到對應的歌詞。請嘗試更精準的歌名或歌手名稱。")
