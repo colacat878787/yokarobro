@@ -252,6 +252,7 @@ class WerewolfCog(commands.Cog):
         self.phase = "白天發言"
         self.roles_setup = ""
         self.tts_queues = {}  # guild_id -> list of file paths
+        self.paused_bgm = {}  # guild_id -> paused bgm source
         self.FFMPEG_OPTIONS = {'options': '-vn'}
         self.pending_players = {} # member_id -> member object for auto mode registration
         self.reported_numbers = {} # member_id -> number for auto mode registration
@@ -466,18 +467,41 @@ class WerewolfCog(commands.Cog):
         vc = guild.voice_client
         if not vc or not vc.is_connected():
             return
-        if vc.is_playing() or not self.tts_queues.get(guild.id):
+        if not self.tts_queues.get(guild.id):
+            # If TTS queue is empty, resume paused BGM if any
+            if guild.id in self.paused_bgm and vc.source is None:
+                bgm_source = self.paused_bgm.pop(guild.id)
+                try:
+                    vc.play(bgm_source)
+                except Exception:
+                    pass
             return
-            
+
+        if vc.is_playing():
+            if hasattr(vc.source, 'is_bgm') and vc.source.is_bgm:
+                vc.pause()
+                self.paused_bgm[guild.id] = vc.source
+            else:
+                return
+
         filepath = self.tts_queues[guild.id].pop(0)
         
         def after_playing(error):
             if os.path.exists(filepath) and filepath != os.path.join(os.getcwd(), "kill_sound.mp3"):
                 try: os.remove(filepath)
                 except: pass
-            if guild.id in self.tts_queues and self.tts_queues[guild.id]:
+
+            if self.tts_queues.get(guild.id):
                 self.bot.loop.call_soon_threadsafe(self.play_next_tts, guild)
-                
+                return
+
+            if guild.id in self.paused_bgm:
+                bgm_source = self.paused_bgm.pop(guild.id)
+                try:
+                    vc.play(bgm_source)
+                except Exception:
+                    pass
+
         try:
             audio_source = discord.FFmpegPCMAudio(filepath, **self.FFMPEG_OPTIONS)
             vc.play(audio_source, after=after_playing)
@@ -1056,6 +1080,7 @@ class WerewolfCog(commands.Cog):
         try:
             audio_source = discord.FFmpegPCMAudio(stream_url, **self.FFMPEG_OPTIONS)
             player = discord.PCMVolumeTransformer(audio_source, volume=self.bgm_volume)
+            player.is_bgm = True
             if vc.is_playing():
                 vc.stop()
             vc.play(player)
@@ -1196,8 +1221,9 @@ class WerewolfCog(commands.Cog):
         self.guild_id = ctx.guild.id
 
         members_in_vc = [m for m in self.voice_channel.members if not m.bot]
-        if not members_in_vc:
-            return await ctx.send("❌ 語音頻道中沒有其他人類玩家喔！")
+        if len(members_in_vc) < 3:
+            self.auto_game_active = False
+            return await ctx.send("❌ 自動模式至少需要 3 位玩家才能開始。請邀請更多玩家後再試。")
 
         self.pending_players = {member.id: member for member in members_in_vc}
         self.reported_numbers = {member.id: idx + 1 for idx, member in enumerate(members_in_vc)}
