@@ -984,6 +984,15 @@ class WerewolfCog(commands.Cog):
             except Exception as e:
                 await ctx.send(f"⚠️ 還原頻道權限失敗：{e}")
                 
+        vc = ctx.guild.voice_client
+        if vc:
+            try:
+                if vc.is_playing():
+                    vc.stop()
+                await vc.disconnect()
+            except Exception:
+                pass
+
         self.game_active = False
         self.players = {}
         self.speaking_player = None
@@ -1397,7 +1406,10 @@ class WerewolfCog(commands.Cog):
             if self.phase == "白天發言":
                 await ctx.send(f"🌞 **天亮了！進入第 {self.day} 天白天發言階段。**")
                 self.queue_tts(f"天亮請睜眼。進入第{self.day}天白天發言。", guild)
-                await self.phase_cmd(ctx, "day") # Set phase and handle initial mutes
+                self.phase = "白天發言"
+                self.speaking_player = None
+                for p_id, p_data in self.players.items():
+                    await self.set_member_mute(p_data['member'], True)
 
                 # Speaking rounds
                 alive_players = [p for p in self.players.values() if p['alive']]
@@ -1542,7 +1554,7 @@ class WerewolfCog(commands.Cog):
         )
         embed.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手")
 
-        view = VotingView(self, living_players, timeout=0.2) # Set 0.2 second timeout
+        view = VotingView(self, living_players, timeout=30)
         msg = await ctx.send(embed=embed, view=view)
         view.voting_message = msg
 
