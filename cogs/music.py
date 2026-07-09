@@ -412,6 +412,60 @@ class MusicCog(commands.Cog):
         text = re.sub(r"\n{3,}", "\n\n", text)
         return text.strip()
 
+    # --- Genius (lyricsgenius) integration ---
+    try:
+        import lyricsgenius as _lyricsgenius
+        LYRICSGENIUS_AVAILABLE = True
+    except Exception:
+        _lyricsgenius = None
+        LYRICSGENIUS_AVAILABLE = False
+
+    def get_genius_client(self):
+        """Return a lyricsgenius.Genius client or None if not configured.
+        The token is read from environment variable `GENIUS_ACCESS_TOKEN` or
+        `utils.config.GENIUS_ACCESS_TOKEN` if present. Do NOT hardcode tokens in repo.
+        """
+        token = os.getenv('GENIUS_ACCESS_TOKEN')
+        if not token:
+            # try utils.config
+            try:
+                from utils import config as _config
+                token = getattr(_config, 'GENIUS_ACCESS_TOKEN', None)
+            except Exception:
+                token = None
+        if not token or not LYRICSGENIUS_AVAILABLE:
+            return None
+        try:
+            client = _lyricsgenius.Genius(token, timeout=15, skip_non_songs=True, excluded_terms=["(Remix)", "(Live)"])
+            return client
+        except Exception:
+            return None
+
+    async def fetch_genius_lyrics(self, query=None, video_id=None):
+        """Fetch lyrics from Genius using lyricsgenius. Runs blocking calls in executor.
+        Returns dict like other sources or None.
+        """
+        client = self.get_genius_client()
+        if not client:
+            return None
+        # prefer exact song - artist parse
+        song_title, artist = self.parse_song_artist(query)
+        try:
+            if song_title and artist:
+                song = await asyncio.get_event_loop().run_in_executor(None, lambda: client.search_song(song_title, artist))
+            else:
+                song = await asyncio.get_event_loop().run_in_executor(None, lambda: client.search_song(query))
+            if not song:
+                return None
+            lyrics = getattr(song, 'lyrics', None)
+            if not lyrics:
+                return None
+            text = self.sanitize_lyrics(lyrics)
+            return {"song": getattr(song, 'title', None) or song_title or query, "artist": getattr(song, 'artist', None) or artist, "lyrics": text, "format": 'genius', 'confidence': 'high'}
+        except Exception:
+            logging.exception("Genius fetch error")
+            return None
+
     async def fetch_unison_lyrics(self, query=None, video_id=None):
         if video_id:
             result = await self.unison_request("GET", "/lyrics", params={"v": video_id})
@@ -596,12 +650,20 @@ class MusicCog(commands.Cog):
                 return example_result
         except Exception:
             pass
-        # 1. Unison
+        # 1. Genius (lyricsgenius) - prefer if configured
+        try:
+            genius = await self.fetch_genius_lyrics(query=query, video_id=video_id)
+            if genius:
+                return genius
+        except Exception:
+            pass
+
+        # 2. Unison
         data = await self.fetch_unison_lyrics(query=query, video_id=video_id)
         if data:
             return data
 
-        # 2. lyrics.ovh (requires song and artist)
+        # 3. lyrics.ovh (requires song and artist)
         song, artist = self.parse_song_artist(query)
         if not song and query and video_id is None:
             # try to parse from query by splitting on ' - '

@@ -18,3 +18,4 @@ moviepy
 spotify-dlp
 flask
 cloudflared
+lyricsgenius==4.2.0
