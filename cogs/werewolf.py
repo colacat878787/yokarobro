@@ -32,6 +32,32 @@ class CombatInviteView(discord.ui.View):
         await self.text_channel.send(f"🔴 **{self.member.mention} 拒絕了戰鬥邀請！**")
         self.stop()
 
+class VoiceInviteView(discord.ui.View):
+    def __init__(self, member, voice_channel, text_channel):
+        super().__init__(timeout=120)
+        self.member = member
+        self.voice_channel = voice_channel
+        self.text_channel = text_channel
+
+    @discord.ui.button(label="接受語音邀請 ✅", style=discord.ButtonStyle.success)
+    async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            f"您已接受語音邀請，請前往 {self.voice_channel.mention} 加入語音房。",
+            ephemeral=True
+        )
+        await self.text_channel.send(
+            f"🟢 **{self.member.mention} 已接受語音邀請，請前往 {self.voice_channel.mention}。**"
+        )
+        self.stop()
+
+    @discord.ui.button(label="拒絕邀請 ❌", style=discord.ButtonStyle.danger)
+    async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("您已拒絕語音邀請。", ephemeral=True)
+        await self.text_channel.send(
+            f"🔴 **{self.member.mention} 拒絕了語音邀請。**"
+        )
+        self.stop()
+
 class VotingView(discord.ui.View):
     def __init__(self, cog, living_players, timeout):
         super().__init__(timeout=timeout)
@@ -262,6 +288,21 @@ class WerewolfCog(commands.Cog):
         self.bgm_volume = 0.3  # default BGM volume (30%)
         self.speech_timer_task = None  # task for per-speaker timer
         self.ai_max_output_tokens = 1500
+
+    def _extract_ytdl_info(self, target, ytdl_opts):
+        with YoutubeDL(ytdl_opts) as ydl:
+            return ydl.extract_info(target, download=False)
+
+    async def fetch_ytdl_info(self, target):
+        ytdl_opts = {
+            'format': 'bestaudio/best',
+            'noplaylist': True,
+            'quiet': True,
+            'socket_timeout': 15,
+            'nocheckcertificate': True,
+            'default_search': 'ytsearch'
+        }
+        return await asyncio.to_thread(self._extract_ytdl_info, target, ytdl_opts)
 
     def get_default_roles(self, count):
         if count <= 3:
@@ -1040,6 +1081,51 @@ class WerewolfCog(commands.Cog):
             except discord.Forbidden:
                 await target_channel.send(f"⚠️ 無法私訊 {member.mention} 戰鬥邀請 (未開啟私訊)。")
 
+    @commands.command(name='邀請至語音', aliases=['invitevoice','invite_voice'])
+    @commands.has_permissions(administrator=True)
+    async def invite_to_voice(self, ctx, *, target: str):
+        """私訊指定玩家邀請加入目前語音頻道。"""
+        voice_channel = self.voice_channel or (ctx.author.voice.channel if ctx.author.voice else None)
+        if not voice_channel:
+            return await ctx.send("❌ 目前沒有可邀請的語音頻道，請先加入語音頻道或先建立狼人殺語音房。")
+
+        member = None
+        if ctx.message.mentions:
+            member = ctx.message.mentions[0]
+        else:
+            try:
+                member = await commands.MemberConverter().convert(ctx, target)
+            except Exception:
+                lowered = target.strip().lower()
+                if lowered.isdigit():
+                    member = ctx.guild.get_member(int(lowered))
+                if not member:
+                    for m in ctx.guild.members:
+                        if m.name.lower() == lowered or m.display_name.lower() == lowered:
+                            member = m
+                            break
+
+        if not member:
+            return await ctx.send("❌ 找不到該成員，請輸入 @他、ID 或完整使用者名稱。")
+        if member.bot:
+            return await ctx.send("❌ 不能邀請機器人加入語音房。")
+
+        target_channel = self.text_channel or ctx.channel
+        try:
+            embed_invite = discord.Embed(
+                title="🔔 語音房邀請",
+                description=(f"管理員 **{ctx.author.display_name}** 邀請您加入語音房 **🔊 {voice_channel.name}**！\n"
+                             f"請點選下方按鈕接受邀請，並前往語音頻道。"),
+                color=0x2ecc71
+            )
+            embed_invite.add_field(name="語音頻道", value=voice_channel.mention, inline=False)
+            embed_invite.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手")
+            view = VoiceInviteView(member, voice_channel, target_channel)
+            await member.send(embed=embed_invite, view=view)
+            await ctx.send(f"✅ 已向 {member.mention} 私訊語音邀請，請等待他回覆。")
+        except discord.Forbidden:
+            await ctx.send(f"⚠️ 無法私訊 {member.mention}，請確認對方已開啟私訊。")
+
     @lssha_cmd.command(name='背景音樂', aliases=['bgm','背景音'])
     async def bgm_cmd(self, ctx, *, query: str = None):
         """播放狼人殺 BGM（管理員指令）。若未提供歌名，會自動播預設清單之一。"""
@@ -1065,16 +1151,16 @@ class WerewolfCog(commands.Cog):
 
         target = query if query else random.choice(default_urls)
 
-        ytdl_opts = { 'format': 'bestaudio/best', 'noplaylist': True, 'quiet': True }
-        info = None
         try:
-            with YoutubeDL(ytdl_opts) as ydl:
-                info = ydl.extract_info(target, download=False)
+            info = await self.fetch_ytdl_info(target)
         except Exception as e:
             return await ctx.send(f"❌ 無法搜尋或擷取音訊：{e}")
 
         if not info:
             return await ctx.send("❌ 找不到符合的音樂。")
+
+        if 'entries' in info and info['entries']:
+            info = info['entries'][0]
 
         # If search result, take first entry
         if 'entries' in info:
