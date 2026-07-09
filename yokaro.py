@@ -312,6 +312,9 @@ if __name__ == "__main__":
     except:
         print("❌ 找不到 ffmpeg")
         
+    # Ensure required Python packages are installed before bot startup.
+    ensure_packages(['lyricsgenius'])
+
     if not DISCORD_TOKEN or DISCORD_TOKEN == "YOUR_TOKEN_HERE":
         print("❌ 錯誤: 請在 .env 檔案中設定 DISCORD_TOKEN！")
     else:
