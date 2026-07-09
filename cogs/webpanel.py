@@ -8,13 +8,16 @@ import threading
 import re
 import json
 from flask import Flask, render_template_string, request, jsonify, send_from_directory
+from werkzeug.utils import secure_filename
 import psutil
 
 app = Flask(__name__)
+UPLOAD_FOLDER = os.path.join(os.getcwd(), 'image')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.route('/image/<path:filename>')
 def serve_image(filename):
-    return send_from_directory(os.path.join(os.getcwd(), 'image'), filename)
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
 
 # 管理員名單
@@ -57,11 +60,16 @@ HTML_TEMPLATE = """
         button.danger { background: #ed4245; }
         .status-item { margin-bottom: 10px; font-size: 14px; color: #b9bbbe; }
         b { color: #fff; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input, select, textarea { width: 100%; margin-top: 6px; padding: 8px; border-radius: 4px; border: 1px solid #4f545c; background: #40444b; color: white; box-sizing: border-box; }
+        textarea { min-height: 100px; }
+        .hint { color: #b9bbbe; font-size: 13px; margin-top: 4px; }
+        #status { margin-top: 12px; color: #57f287; font-weight: bold; }
     </style>
 </head>
 <body>
     <h1>Yokaro 系統控制中心</h1>
-    
+
     <div class="card">
         <h3>🚀 機器人管理</h3>
         <button onclick="manage('sync')">同步全域指令 (Sync)</button>
@@ -73,8 +81,43 @@ HTML_TEMPLATE = """
         <div id="stats-content">載入中...</div>
     </div>
 
+    <div class="card">
+        <h3>📣 發送公告 / 私訊 / 圖片訊息</h3>
+        <form id="broadcast-form" enctype="multipart/form-data">
+            <label for="target-type">發送方式</label>
+            <select id="target-type" name="target_type">
+                <option value="server">進入伺服器說話（頻道廣播）</option>
+                <option value="dm">私訊所有成員</option>
+            </select>
+            <div class="hint">可用機器人身份直接發送訊息，支援圖片附件與文字內容。</div>
+
+            <label for="guild-select">選擇伺服器</label>
+            <select id="guild-select" name="guild_id"></select>
+
+            <label for="channel-select">選擇頻道</label>
+            <select id="channel-select" name="channel_id"></select>
+            <div class="hint">若是私訊模式，會對該伺服器所有可私訊成員發送。</div>
+
+            <label for="message">訊息內容</label>
+            <textarea id="message" name="message" placeholder="輸入要發送的文字..."></textarea>
+
+            <label for="file">上傳圖片（可選）</label>
+            <input id="file" name="file" type="file" accept="image/*">
+
+            <div style="margin-top: 12px;">
+                <button type="submit">🚀 立即發送</button>
+            </div>
+            <div id="status">等待發送...</div>
+        </form>
+    </div>
+
     <script>
         const token = new URLSearchParams(window.location.search).get('token');
+        const guildSelect = document.getElementById('guild-select');
+        const channelSelect = document.getElementById('channel-select');
+        const targetType = document.getElementById('target-type');
+        const statusBox = document.getElementById('status');
+
         async function manage(action) {
             if(action === 'restart' && !confirm('確定要重啟嗎？')) return;
             const res = await fetch(`/api/system/${action}?token=${token}`, { method: 'POST' });
@@ -95,8 +138,71 @@ HTML_TEMPLATE = """
                 `;
             } catch(e) { console.error(e); }
         }
+
+        async function loadGuilds() {
+            try {
+                const res = await fetch(`/api/discord/guilds?token=${token}`);
+                const data = await res.json();
+                guildSelect.innerHTML = '';
+                if (!data.guilds || !data.guilds.length) {
+                    guildSelect.innerHTML = '<option value="">無可用伺服器</option>';
+                    return;
+                }
+                data.guilds.forEach(g => {
+                    const opt = document.createElement('option');
+                    opt.value = g.id;
+                    opt.textContent = g.name;
+                    guildSelect.appendChild(opt);
+                });
+                await loadChannels(guildSelect.value);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadChannels(guildId) {
+            try {
+                const res = await fetch(`/api/discord/guilds/${guildId}/channels?token=${token}`);
+                const data = await res.json();
+                channelSelect.innerHTML = '';
+                if (!data.channels || !data.channels.length) {
+                    channelSelect.innerHTML = '<option value="">此伺服器沒有可發訊的文字頻道</option>';
+                    return;
+                }
+                data.channels.forEach(ch => {
+                    const opt = document.createElement('option');
+                    opt.value = ch.id;
+                    opt.textContent = ch.name;
+                    channelSelect.appendChild(opt);
+                });
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        guildSelect.addEventListener('change', () => loadChannels(guildSelect.value));
+        targetType.addEventListener('change', () => {
+            channelSelect.disabled = targetType.value === 'dm';
+        });
+
+        document.getElementById('broadcast-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            statusBox.textContent = '發送中...';
+            const formData = new FormData(e.target);
+            formData.set('token', token);
+            const res = await fetch('/api/discord/broadcast', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            statusBox.textContent = data.message || '發送完成';
+            if (!res.ok) statusBox.style.color = '#ed4245';
+            else statusBox.style.color = '#57f287';
+        });
+
         setInterval(updateStats, 5000);
         updateStats();
+        loadGuilds();
     </script>
 </body>
 </html>
@@ -135,6 +241,117 @@ def api_restart():
     if auth != panel_token: return "Unauthorized", 403
     threading.Thread(target=lambda: os._exit(0)).start()
     return jsonify({"message": "機器人正在重啟..."})
+
+@app.route('/api/discord/guilds')
+def api_discord_guilds():
+    auth = request.args.get("token")
+    if auth != panel_token: return "Unauthorized", 403
+    if not bot_instance:
+        return jsonify({"guilds": []})
+
+    guilds = []
+    for guild in sorted(bot_instance.guilds, key=lambda g: g.name.lower()):
+        channels = []
+        for channel in sorted(guild.text_channels, key=lambda c: (c.position, c.name)):
+            if channel.permissions_for(guild.me).send_messages:
+                channels.append({"id": str(channel.id), "name": f"#{channel.name}"})
+        guilds.append({"id": str(guild.id), "name": guild.name, "channels": channels[:20]})
+    return jsonify({"guilds": guilds})
+
+@app.route('/api/discord/guilds/<guild_id>/channels')
+def api_discord_channels(guild_id):
+    auth = request.args.get("token")
+    if auth != panel_token: return "Unauthorized", 403
+    if not bot_instance:
+        return jsonify({"channels": []})
+
+    guild = bot_instance.get_guild(int(guild_id))
+    if not guild:
+        return jsonify({"channels": []})
+
+    channels = []
+    for channel in sorted(guild.text_channels, key=lambda c: (c.position, c.name)):
+        if channel.permissions_for(guild.me).send_messages:
+            channels.append({"id": str(channel.id), "name": f"#{channel.name}"})
+    return jsonify({"channels": channels})
+
+@app.route('/api/discord/broadcast', methods=['POST'])
+def api_discord_broadcast():
+    auth = request.form.get("token") or request.args.get("token")
+    if auth != panel_token: return "Unauthorized", 403
+    if not bot_instance or not loop_instance:
+        return jsonify({"message": "機器人尚未就緒", "success": False}), 500
+
+    target_type = (request.form.get("target_type") or "server").strip()
+    guild_id = request.form.get("guild_id", "").strip()
+    channel_id = request.form.get("channel_id", "").strip()
+    message = (request.form.get("message") or "").strip()
+    uploaded_file = request.files.get("file")
+
+    if not message and not uploaded_file:
+        return jsonify({"message": "請輸入訊息內容或上傳圖片", "success": False}), 400
+
+    async def do_broadcast():
+        try:
+            file_obj = None
+            if uploaded_file and uploaded_file.filename:
+                filename = secure_filename(uploaded_file.filename)
+                if not filename:
+                    filename = f"upload_{secrets.token_hex(4)}.png"
+                save_path = os.path.join(UPLOAD_FOLDER, filename)
+                uploaded_file.save(save_path)
+                file_obj = discord.File(save_path, filename=filename)
+
+            if target_type == "dm":
+                guild = bot_instance.get_guild(int(guild_id)) if guild_id else None
+                if not guild:
+                    guild = bot_instance.guilds[0] if bot_instance.guilds else None
+                if not guild:
+                    raise RuntimeError("沒有可用伺服器")
+
+                sent = 0
+                for member in guild.members:
+                    if member.bot or member.pending or not member.guild_permissions:
+                        continue
+                    try:
+                        if file_obj:
+                            await member.send(content=message or None, file=file_obj)
+                        else:
+                            await member.send(content=message or None)
+                        sent += 1
+                    except Exception:
+                        continue
+                return {"message": f"已私訊 {sent} 位成員", "success": True}
+
+            guild = bot_instance.get_guild(int(guild_id)) if guild_id else None
+            if not guild:
+                guild = bot_instance.guilds[0] if bot_instance.guilds else None
+            if not guild:
+                raise RuntimeError("沒有可用伺服器")
+
+            channel = None
+            if channel_id:
+                channel = guild.get_channel(int(channel_id))
+            if not channel or not isinstance(channel, discord.TextChannel):
+                channel = next((c for c in guild.text_channels if c.permissions_for(guild.me).send_messages), None)
+            if not channel:
+                raise RuntimeError("找不到可發送的文字頻道")
+
+            if file_obj:
+                await channel.send(content=message or None, file=file_obj)
+            else:
+                await channel.send(content=message or None)
+            return {"message": f"已發送到頻道 {channel.mention}", "success": True}
+        except Exception as e:
+            print(f"❌ [WebPanel] 廣播發送失敗: {e}")
+            return {"message": f"發送失敗: {e}", "success": False}
+
+    result = asyncio.run_coroutine_threadsafe(do_broadcast(), loop_instance)
+    try:
+        result = result.result(timeout=120)
+    except Exception as e:
+        return jsonify({"message": f"發送超時或失敗: {e}", "success": False}), 500
+    return jsonify(result)
 
 @app.route('/api/widget/exchange', methods=['POST', 'OPTIONS'])
 def api_widget_exchange():
