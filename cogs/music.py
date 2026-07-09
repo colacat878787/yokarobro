@@ -200,6 +200,7 @@ class MusicSelectView(discord.ui.View):
         self.cog = cog
         self.results = results
         self.requester = requester
+        self.query = None
         
         select = discord.ui.Select(placeholder="🔍 請選擇您想要播放的歌曲", min_values=1, max_values=1)
         for i, res in enumerate(results):
@@ -222,11 +223,16 @@ class MusicSelectView(discord.ui.View):
         idx = int(interaction.data['values'][0])
         res = self.results[idx]
         url = res.get('webpage_url') or res.get('url')
-        
         ctx = await self.cog.bot.get_context(interaction.message)
-        ctx.author = self.requester 
+        ctx.author = self.requester
+        # store the original query used for selection so lyrics lookup can prefer it
+        try:
+            state = self.cog.get_state(ctx.guild.id)
+            if self.query:
+                state['last_search_query'] = self.query
+        except Exception:
+            pass
         await self.cog.play(ctx, search=url)
-        
         await interaction.delete_original_response()
 
 class LyricsView(discord.ui.View):
@@ -1022,6 +1028,8 @@ class MusicCog(commands.Cog):
                     
                     results = data['entries']
                     view = MusicSelectView(self, results, ctx.author)
+                    # remember original search string for view
+                    view.query = search
                     return await ctx.send(f"🔍 **為您找到與 `{search}` 相關的結果：**", view=view)
 
                 kuji = self.bot.get_cog("KujiCog")
@@ -1033,6 +1041,8 @@ class MusicCog(commands.Cog):
                                                  bass=is_prem and state.get('bass', True), 
                                                  requester=ctx.author)
                 
+                # save last search query for lyrics lookup
+                state['last_search_query'] = search
                 if ctx.voice_client.is_playing():
                     gid = ctx.guild.id
                     if gid not in self.queue: self.queue[gid] = []
@@ -1241,7 +1251,21 @@ class MusicCog(commands.Cog):
     async def lyrics(self, ctx, *, query: str = None):
         """查詢歌詞：可直接輸入 YouTube 連結、歌曲名稱，或「歌名 - 歌手」。"""
         if not query:
-            return await ctx.send("❌ 請提供歌曲名稱、歌手或 YouTube 連結來查詢歌詞。")
+            # try to use last_search_query saved during play
+            try:
+                state = self.get_state(ctx.guild.id)
+                query = state.get('last_search_query')
+            except Exception:
+                query = None
+
+            # fallback to current playing title
+            if not query:
+                vc = ctx.voice_client
+                if vc and getattr(vc, 'source', None) and getattr(vc.source, 'title', None):
+                    query = vc.source.title
+
+            if not query:
+                return await ctx.send("❌ 請提供歌曲名稱、歌手或 YouTube 連結來查詢歌詞。")
 
         async with ctx.typing():
             video_id = self.extract_youtube_video_id(query)
