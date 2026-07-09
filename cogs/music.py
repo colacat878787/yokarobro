@@ -11,6 +11,9 @@ from datetime import timedelta
 import aiohttp
 import random
 from html import unescape
+import difflib
+import logging
+from datetime import datetime
 import importlib
 
 # --- YTDL 設定 ---
@@ -300,6 +303,12 @@ class MusicCog(commands.Cog):
         self.history_file = "music_history.json"
         self.history = self._load_history()
         self.update_panel_task.start()
+        # setup simple lyrics debug logger
+        self.lyrics_log = "lyrics_debug.log"
+        try:
+            logging.basicConfig(filename=self.lyrics_log, level=logging.INFO, format='%(asctime)s %(message)s')
+        except Exception:
+            pass
 
     def cog_unload(self):
         self.update_panel_task.cancel()
@@ -415,7 +424,7 @@ class MusicCog(commands.Cog):
         if query:
             result = await self.unison_request("GET", "/lyrics/search", params={"q": query})
             if result and result.get("success") and isinstance(result.get("data"), list) and result["data"]:
-                # Try to pick the best matching entry by title/artist similarity
+                # Try to pick the best matching entry by title/artist similarity using difflib
                 entries = result.get("data", [])
                 qnorm = self._norm_str(query)
                 best = None
@@ -426,16 +435,18 @@ class MusicCog(commands.Cog):
                     if not cnorm:
                         score = 0.0
                     else:
-                        # simple overlap score
-                        qwords = set(qnorm.split())
-                        cwords = set(cnorm.split())
-                        inter = qwords & cwords
-                        score = len(inter) / max(1, len(qwords | cwords))
+                        # use difflib ratio for fuzzy matching
+                        score = difflib.SequenceMatcher(None, qnorm, cnorm).ratio()
                     if score > best_score:
                         best_score = score
                         best = entry
 
-                chosen = best or entries[0]
+                chosen = best or (entries[0] if entries else None)
+                # log matching info for debugging
+                try:
+                    logging.info(f"Unison search query='{query}' best_score={best_score} chosen='{(chosen.get('song') or chosen.get('title')) if chosen else None}'")
+                except Exception:
+                    pass
                 # If chosen has full lyrics, return; otherwise fetch detail by id
                 if chosen.get("lyrics"):
                     chosen["lyrics"] = self.sanitize_lyrics(chosen.get("lyrics"))
@@ -681,6 +692,13 @@ class MusicCog(commands.Cog):
 
                 if not res:
                     continue
+
+                # Log what functions are available and what they returned for debugging
+                try:
+                    fn_list = [n for n in dir(mod) if not n.startswith('__')]
+                    logging.info(f"example module functions: {fn_list} | called {name} with query='{query}' video_id='{video_id}' -> returned type {type(res)}")
+                except Exception:
+                    pass
 
                 # Normalize return types
                 if isinstance(res, str):
