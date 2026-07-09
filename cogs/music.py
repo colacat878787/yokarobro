@@ -11,6 +11,7 @@ from datetime import timedelta
 import aiohttp
 import random
 from html import unescape
+import importlib
 
 # --- YTDL 設定 ---
 YTDL_OPTIONS = {
@@ -571,6 +572,13 @@ class MusicCog(commands.Cog):
         """Try multiple lyric sources in order and return the first match.
         Order: Unison -> lyrics.ovh -> YouTube auto-captions
         """
+        # 0. Try example-provided lyrics integration (third-party friend module)
+        try:
+            example_result = await asyncio.get_event_loop().run_in_executor(None, lambda: self.try_example_lyrics(query, video_id))
+            if example_result:
+                return example_result
+        except Exception:
+            pass
         # 1. Unison
         data = await self.fetch_unison_lyrics(query=query, video_id=video_id)
         if data:
@@ -624,6 +632,56 @@ class MusicCog(commands.Cog):
             description += f"歌詞來源 ID：{source_id}\n"
         description += f"語言：{language} | 可信度：{confidence}\n"
         return description, lyrics
+
+    def try_example_lyrics(self, query=None, video_id=None):
+        """Attempt to call functions from example.歌詞 (if provided by friend). Tries several common function names.
+        Returns a dict similar to other sources or None.
+        """
+        try:
+            # try import example.歌詞 or example
+            mod = None
+            try:
+                mod = importlib.import_module('example')
+            except Exception:
+                try:
+                    mod = importlib.import_module('example.歌詞')
+                except Exception:
+                    return None
+
+            candidates = ['search_lyrics', 'fetch_lyrics', 'get_lyrics', 'lyrics_search', 'search', 'get', '查歌詞', '查歌詞_sync', '歌詞搜尋']
+            for name in candidates:
+                if hasattr(mod, name):
+                    fn = getattr(mod, name)
+                    if callable(fn):
+                        # try different arg signatures
+                        try:
+                            res = fn(query, video_id)
+                        except TypeError:
+                            try:
+                                res = fn(query)
+                            except TypeError:
+                                try:
+                                    res = fn(video_id)
+                                except Exception:
+                                    continue
+                        if not res:
+                            continue
+                        # Normalize return types
+                        if isinstance(res, str):
+                            return {"song": None, "artist": None, "lyrics": self.sanitize_lyrics(res), "format": 'example', 'confidence': 'unknown'}
+                        if isinstance(res, dict):
+                            if 'lyrics' in res:
+                                res['lyrics'] = self.sanitize_lyrics(res.get('lyrics') or '')
+                                return res
+                            # maybe returned tuple (song, artist, lyrics)
+                            if len(res) == 3:
+                                try:
+                                    song, artist, lyrics = res
+                                    return {"song": song, "artist": artist, "lyrics": self.sanitize_lyrics(lyrics), "format": 'example', 'confidence': 'unknown'}
+                        # otherwise ignore
+        except Exception:
+            return None
+        return None
 
     async def send_lyrics_response(self, ctx, data):
         description, lyrics = self.format_lyrics_result(data)
