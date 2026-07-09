@@ -287,6 +287,8 @@ class MusicCog(commands.Cog):
         self.settings_file = "music_settings.json"
         self.states = self.load_settings()
         self.lyrics = {} # guild_id -> lyrics metadata
+        self.current_ctxs = {}  # guild_id -> ctx (fix missing attribute error)
+        self._play_transition = {}  # guild_id -> bool
         self.bot.add_view(MusicControlView(self))
         self.history_file = "music_history.json"
         self.history = self._load_history()
@@ -374,39 +376,94 @@ class MusicCog(commands.Cog):
                 return parts[0].strip(), parts[1].strip()
         return None, text
 
+    def _norm_str(self, s: str):
+        if not s: return ""
+        s = s.lower()
+        s = re.sub(r"[^0-9a-z\u4e00-\u9fff]+", " ", s)
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+
+    def sanitize_lyrics(self, text: str):
+        if not text:
+            return ""
+        # Remove XML/HTML tags, xml headers, and decode HTML entities
+        text = re.sub(r"<\?xml[\s\S]*?\?>", "", text)
+        text = re.sub(r"<(?:!--[\s\S]*?--|[^>])+>", "", text)
+        text = unescape(text)
+        # remove stray control characters
+        text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text)
+        # collapse multiple blank lines
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+
     async def fetch_unison_lyrics(self, query=None, video_id=None):
         if video_id:
             result = await self.unison_request("GET", "/lyrics", params={"v": video_id})
             if result and result.get("success") and result.get("data"):
-                return result["data"]
+                data = result["data"]
+                if data.get("lyrics"):
+                    data["lyrics"] = self.sanitize_lyrics(data.get("lyrics"))
+                return data
 
         if query:
             result = await self.unison_request("GET", "/lyrics/search", params={"q": query})
             if result and result.get("success") and isinstance(result.get("data"), list) and result["data"]:
-                entry = result["data"][0]
-                if entry.get("lyrics"):
-                    return entry
-                lyric_id = entry.get("id")
+                # Try to pick the best matching entry by title/artist similarity
+                entries = result.get("data", [])
+                qnorm = self._norm_str(query)
+                best = None
+                best_score = 0.0
+                for entry in entries:
+                    candidate = ' '.join(filter(None, [entry.get('song') or entry.get('title'), entry.get('artist') or entry.get('uploader')]))
+                    cnorm = self._norm_str(candidate)
+                    if not cnorm:
+                        score = 0.0
+                    else:
+                        # simple overlap score
+                        qwords = set(qnorm.split())
+                        cwords = set(cnorm.split())
+                        inter = qwords & cwords
+                        score = len(inter) / max(1, len(qwords | cwords))
+                    if score > best_score:
+                        best_score = score
+                        best = entry
+
+                chosen = best or entries[0]
+                # If chosen has full lyrics, return; otherwise fetch detail by id
+                if chosen.get("lyrics"):
+                    chosen["lyrics"] = self.sanitize_lyrics(chosen.get("lyrics"))
+                    return chosen
+                lyric_id = chosen.get("id")
                 if lyric_id is not None:
                     detail = await self.unison_request("GET", f"/lyrics/{lyric_id}")
                     if detail and detail.get("success") and detail.get("data"):
-                        return detail["data"]
+                        data = detail["data"]
+                        if data.get("lyrics"):
+                            data["lyrics"] = self.sanitize_lyrics(data.get("lyrics"))
+                        return data
 
         song, artist = self.parse_song_artist(query)
         if song and artist:
             result = await self.unison_request("GET", "/lyrics", params={"song": song, "artist": artist})
             if result and result.get("success") and result.get("data"):
-                return result["data"]
+                data = result["data"]
+                if data.get("lyrics"):
+                    data["lyrics"] = self.sanitize_lyrics(data.get("lyrics"))
+                return data
             result = await self.unison_request("GET", "/lyrics/search", params={"song": song, "artist": artist})
             if result and result.get("success") and isinstance(result.get("data"), list) and result["data"]:
                 entry = result["data"][0]
                 if entry.get("lyrics"):
+                    entry["lyrics"] = self.sanitize_lyrics(entry.get("lyrics"))
                     return entry
                 lyric_id = entry.get("id")
                 if lyric_id is not None:
                     detail = await self.unison_request("GET", f"/lyrics/{lyric_id}")
                     if detail and detail.get("success") and detail.get("data"):
-                        return detail["data"]
+                        data = detail["data"]
+                        if data.get("lyrics"):
+                            data["lyrics"] = self.sanitize_lyrics(data.get("lyrics"))
+                        return data
 
         # As a fallback, try searching YouTube for the query and then query Unison by videoId
         try:
@@ -444,6 +501,7 @@ class MusicCog(commands.Cog):
                     data = await resp.json()
                     text = data.get('lyrics')
                     if text:
+                        text = self.sanitize_lyrics(text)
                         return {"song": song, "artist": artist, "lyrics": text, "format": "plain", "confidence": "unknown"}
         except Exception:
             return None
@@ -503,6 +561,7 @@ class MusicCog(commands.Cog):
                                     lines.append(unescape(re.sub(r"<[^>]+>", "", line)))
                                 text = "\n".join(lines).strip()
                                 if text:
+                                    text = self.sanitize_lyrics(text)
                                     return {"song": info.get('title'), "artist": info.get('uploader'), "lyrics": text, "format": 'captions', 'confidence': 'low', 'videoId': video_id}
                     except Exception:
                         continue
@@ -552,7 +611,7 @@ class MusicCog(commands.Cog):
         album = data.get("album")
         confidence = data.get("confidence") or "unknown"
         language = data.get("language") or "unknown"
-        lyrics = data.get("lyrics") or ""
+        lyrics = self.sanitize_lyrics(data.get("lyrics") or "")
         source_id = data.get("id")
         video_id = data.get("videoId")
 
