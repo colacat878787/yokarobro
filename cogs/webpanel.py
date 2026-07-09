@@ -52,64 +52,139 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <title>Yokaro Dash | 系統控制中心</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: sans-serif; background: #36393f; color: white; padding: 20px; }
-        .card { background: #2f3136; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        button { background: #5865f2; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px; }
-        button:hover { background: #4752c4; }
-        button.danger { background: #ed4245; }
-        .status-item { margin-bottom: 10px; font-size: 14px; color: #b9bbbe; }
-        b { color: #fff; }
-        label { display: block; margin-top: 10px; font-weight: bold; }
-        input, select, textarea { width: 100%; margin-top: 6px; padding: 8px; border-radius: 4px; border: 1px solid #4f545c; background: #40444b; color: white; box-sizing: border-box; }
-        textarea { min-height: 100px; }
-        .hint { color: #b9bbbe; font-size: 13px; margin-top: 4px; }
-        #status { margin-top: 12px; color: #57f287; font-weight: bold; }
+        :root {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #e2e8f0;
+            background: #020617;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, rgba(59, 130, 246, 0.18), transparent 22%), linear-gradient(180deg, #020617 0%, #090e1a 100%); }
+        main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 40px; }
+        .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; align-items: center; margin-bottom: 24px; }
+        .hero { display: grid; gap: 14px; }
+        h1 { margin: 0; font-size: clamp(2rem, 3vw, 2.6rem); letter-spacing: -0.04em; }
+        .hero p { margin: 0; color: #94a3b8; line-height: 1.75; }
+        .panel-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 20px; }
+        .panel { background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(148, 163, 184, 0.1); box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28); border-radius: 24px; padding: 24px; }
+        .panel-8 { grid-column: span 8; }
+        .panel-4 { grid-column: span 4; }
+        .panel-full { grid-column: span 12; }
+        .panel h2 { margin-top: 0; color: #f8fafc; font-size: 1.1rem; }
+        .panel p { margin: 0; color: #cbd5e1; }
+        .stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+        .stat-card { background: rgba(148, 163, 184, 0.08); border: 1px solid rgba(148, 163, 184, 0.12); border-radius: 18px; padding: 18px; }
+        .stat-card strong { display: block; font-size: 1.95rem; color: #fff; }
+        .stat-card span { color: #94a3b8; font-size: 0.95rem; }
+        label { display: block; margin-bottom: 8px; color: #cbd5e1; font-size: 0.95rem; }
+        input, select, textarea { width: 100%; border-radius: 16px; border: 1px solid rgba(148, 163, 184, 0.14); background: rgba(15, 23, 42, 0.92); color: #f8fafc; padding: 14px 16px; font-size: 0.95rem; }
+        textarea { min-height: 150px; resize: vertical; }
+        input[type=file] { padding: 12px 10px; }
+        .hint { margin-top: 6px; color: #94a3b8; font-size: 0.9rem; }
+        .button-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+        button { border: none; border-radius: 16px; padding: 14px 20px; font-size: 0.98rem; font-weight: 600; cursor: pointer; transition: transform .16s ease, box-shadow .16s ease; }
+        button:hover { transform: translateY(-1px); }
+        .btn-primary { background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff; box-shadow: 0 18px 45px rgba(37, 99, 235, 0.22); }
+        .btn-secondary { background: rgba(148, 163, 184, 0.12); color: #f8fafc; }
+        .btn-danger { background: #ef4444; color: #fff; }
+        .status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; background: rgba(59, 130, 246, 0.12); color: #7dd3fc; font-size: 0.92rem; }
+        .preview-box { margin-top: 18px; padding: 20px; border-radius: 22px; background: rgba(15, 23, 42, 0.96); border: 1px solid rgba(148, 163, 184, 0.12); min-height: 170px; }
+        .preview-box h3 { margin: 0 0 12px; font-size: 1rem; }
+        .preview-box p { margin: 0; color: #cbd5e1; white-space: pre-wrap; }
+        .tag { display: inline-flex; gap: 8px; align-items: center; background: rgba(15, 23, 42, 0.88); border: 1px solid rgba(148, 163, 184, 0.14); border-radius: 999px; padding: 10px 14px; color: #cbd5e1; font-size: 0.88rem; }
+        .bottom-note { margin-top: 16px; color: #94a3b8; font-size: 0.9rem; }
+        @media (max-width: 980px) { .panel-8, .panel-4, .panel-full { grid-column: span 12; } }
     </style>
 </head>
 <body>
-    <h1>Yokaro 系統控制中心</h1>
-
-    <div class="card">
-        <h3>🚀 機器人管理</h3>
-        <button onclick="manage('sync')">同步全域指令 (Sync)</button>
-        <button onclick="manage('restart')" class="danger">強制重啟機器人</button>
-    </div>
-
-    <div class="card">
-        <h3>📊 系統狀態</h3>
-        <div id="stats-content">載入中...</div>
-    </div>
-
-    <div class="card">
-        <h3>📣 發送公告 / 私訊 / 圖片訊息</h3>
-        <form id="broadcast-form" enctype="multipart/form-data">
-            <label for="target-type">發送方式</label>
-            <select id="target-type" name="target_type">
-                <option value="server">進入伺服器說話（頻道廣播）</option>
-                <option value="dm">私訊所有成員</option>
-            </select>
-            <div class="hint">可用機器人身份直接發送訊息，支援圖片附件與文字內容。</div>
-
-            <label for="guild-select">選擇伺服器</label>
-            <select id="guild-select" name="guild_id"></select>
-
-            <label for="channel-select">選擇頻道</label>
-            <select id="channel-select" name="channel_id"></select>
-            <div class="hint">若是私訊模式，會對該伺服器所有可私訊成員發送。</div>
-
-            <label for="message">訊息內容</label>
-            <textarea id="message" name="message" placeholder="輸入要發送的文字..."></textarea>
-
-            <label for="file">上傳圖片（可選）</label>
-            <input id="file" name="file" type="file" accept="image/*">
-
-            <div style="margin-top: 12px;">
-                <button type="submit">🚀 立即發送</button>
+    <main>
+        <div class="topbar">
+            <div class="hero">
+                <h1>Yokaro Control Center</h1>
+                <p>一個更像 App 的管理面板，讓你用機器人身份快速發送公告、私訊成員、上傳圖片與管理系統狀態。</p>
             </div>
-            <div id="status">等待發送...</div>
-        </form>
-    </div>
+            <div class="button-row">
+                <button class="btn-secondary" onclick="manage('sync')">同步指令</button>
+                <button class="btn-danger" onclick="manage('restart')">重新啟動</button>
+            </div>
+        </div>
+
+        <div class="panel-grid">
+            <section class="panel panel-8">
+                <h2>📊 系統總覽</h2>
+                <div class="stats-grid">
+                    <div class="stat-card"><strong id="stat-guilds">0</strong><span>伺服器數量</span></div>
+                    <div class="stat-card"><strong id="stat-cpu">0%</strong><span>CPU 使用率</span></div>
+                    <div class="stat-card"><strong id="stat-memory">0%</strong><span>記憶體使用率</span></div>
+                    <div class="stat-card"><strong id="stat-cogs">0</strong><span>已啟用模組</span></div>
+                </div>
+                <div class="preview-box" style="margin-top: 24px;">
+                    <h3>即時狀態</h3>
+                    <p id="stats-content">正在取得機器人狀態…</p>
+                </div>
+            </section>
+
+            <section class="panel panel-4">
+                <h2>🧠 快速操作</h2>
+                <p>這裡可以快速執行常見管理命令，適合緊急或維運情境使用。</p>
+                <div class="button-row">
+                    <button class="btn-primary" onclick="manage('sync')">同步全域指令</button>
+                    <button class="btn-danger" onclick="manage('restart')">強制重啟</button>
+                </div>
+                <div class="bottom-note">機器人正在執行中時，可立即更新或重啟。</div>
+            </section>
+
+            <section class="panel panel-full">
+                <h2>📣 內容發送中心</h2>
+                <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label for="target-type">發送方式</label>
+                        <select id="target-type" name="target_type">
+                            <option value="server">頻道廣播</option>
+                            <option value="dm">私訊所有成員</option>
+                        </select>
+                        <p class="hint">選擇私訊後，系統會向伺服器內可私訊成員發送內容。</p>
+                    </div>
+                    <div>
+                        <label for="guild-select">選擇伺服器</label>
+                        <select id="guild-select" name="guild_id"></select>
+                    </div>
+                </div>
+                <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px;">
+                    <div>
+                        <label for="channel-select">選擇頻道</label>
+                        <select id="channel-select" name="channel_id"></select>
+                        <p class="hint">若選擇私訊模式，可忽略此欄位。</p>
+                    </div>
+                    <div>
+                        <label for="file">上傳圖片（可選）</label>
+                        <input id="file" name="file" type="file" accept="image/*">
+                        <p class="hint">支援單張圖片上傳，可搭配文字內容一起發送。</p>
+                    </div>
+                </div>
+                <label for="message">訊息內容</label>
+                <textarea id="message" name="message" placeholder="在此撰寫要發送的公告或私訊內容…"></textarea>
+
+                <div class="button-row" style="margin-top: 18px;">
+                    <button type="button" class="btn-primary" onclick="submitBroadcast()">🚀 立即發送</button>
+                    <button type="button" class="btn-secondary" onclick="updatePreview()">預覽訊息</button>
+                </div>
+
+                <div class="preview-box">
+                    <h3>訊息預覽</h3>
+                    <p id="preview-text">請輸入文字或上傳圖片，然後按「預覽訊息」。</p>
+                    <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px;">
+                        <span class="tag">伺服器：<span id="preview-guild">尚未選擇</span></span>
+                        <span class="tag">頻道：<span id="preview-channel">尚未選擇</span></span>
+                        <span class="tag">模式：<span id="preview-mode">頻道廣播</span></span>
+                    </div>
+                </div>
+
+                <div class="bottom-note" id="status">已就緒，點擊「立即發送」開始推播。</div>
+            </section>
+        </div>
+    </main>
 
     <script>
         const token = new URLSearchParams(window.location.search).get('token');
@@ -117,26 +192,36 @@ HTML_TEMPLATE = """
         const channelSelect = document.getElementById('channel-select');
         const targetType = document.getElementById('target-type');
         const statusBox = document.getElementById('status');
+        const previewText = document.getElementById('preview-text');
+        const previewGuild = document.getElementById('preview-guild');
+        const previewChannel = document.getElementById('preview-channel');
+        const previewMode = document.getElementById('preview-mode');
+        const statGuilds = document.getElementById('stat-guilds');
+        const statCpu = document.getElementById('stat-cpu');
+        const statMemory = document.getElementById('stat-memory');
+        const statCogs = document.getElementById('stat-cogs');
 
         async function manage(action) {
             if(action === 'restart' && !confirm('確定要重啟嗎？')) return;
             const res = await fetch(`/api/system/${action}?token=${token}`, { method: 'POST' });
             const data = await res.json();
             alert(data.message || '執行成功');
-            if(action === 'sync') location.reload();
+            if(action === 'sync') loadStatistics();
         }
 
-        async function updateStats() {
+        async function loadStatistics() {
             try {
                 const res = await fetch(`/api/stats?token=${token}`);
                 const data = await res.json();
-                document.getElementById('stats-content').innerHTML = `
-                    <div class="status-item">CPU 使用率: <b>${data.cpu}%</b></div>
-                    <div class="status-item">記憶體使用率: <b>${data.memory}%</b></div>
-                    <div class="status-item">伺服器數量: <b>${data.guilds}</b></div>
-                    <div class="status-item">已註冊模組: <b>${data.cogs.join(', ')}</b></div>
-                `;
-            } catch(e) { console.error(e); }
+                statGuilds.textContent = data.guilds;
+                statCpu.textContent = `${data.cpu}%`;
+                statMemory.textContent = `${data.memory}%`;
+                statCogs.textContent = data.cogs.length;
+                document.getElementById('stats-content').innerHTML = `目前已連線 <b>${data.guilds}</b> 個伺服器，模組：<b>${data.cogs.join(', ')}</b>`;
+            } catch (e) {
+                console.error(e);
+                document.getElementById('stats-content').textContent = '取得系統狀態失敗。';
+            }
         }
 
         async function loadGuilds() {
@@ -180,28 +265,41 @@ HTML_TEMPLATE = """
             }
         }
 
+        function updatePreview() {
+            const message = document.getElementById('message').value.trim();
+            previewText.textContent = message || '目前尚未輸入任何文字內容。';
+            previewGuild.textContent = guildSelect.selectedOptions[0]?.textContent || '尚未選擇';
+            previewChannel.textContent = channelSelect.selectedOptions[0]?.textContent || '尚未選擇';
+            previewMode.textContent = targetType.value === 'dm' ? '私訊所有成員' : '頻道廣播';
+            statusBox.textContent = '已更新預覽。確認後點擊「立即發送」。';
+            statusBox.style.color = '#7dd3fc';
+        }
+
+        async function submitBroadcast() {
+            statusBox.textContent = '發送中，請稍候...';
+            statusBox.style.color = '#f8fafc';
+            const formData = new FormData();
+            formData.set('token', token);
+            formData.set('target_type', targetType.value);
+            formData.set('guild_id', guildSelect.value);
+            formData.set('channel_id', channelSelect.value);
+            formData.set('message', document.getElementById('message').value.trim());
+            const fileInput = document.getElementById('file');
+            if (fileInput.files.length > 0) {
+                formData.append('file', fileInput.files[0]);
+            }
+            const res = await fetch('/api/discord/broadcast', { method: 'POST', body: formData });
+            const data = await res.json();
+            statusBox.textContent = data.message || '發送完成';
+            statusBox.style.color = res.ok ? '#7dd3fc' : '#f87171';
+        }
+
         guildSelect.addEventListener('change', () => loadChannels(guildSelect.value));
         targetType.addEventListener('change', () => {
             channelSelect.disabled = targetType.value === 'dm';
         });
 
-        document.getElementById('broadcast-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            statusBox.textContent = '發送中...';
-            const formData = new FormData(e.target);
-            formData.set('token', token);
-            const res = await fetch('/api/discord/broadcast', {
-                method: 'POST',
-                body: formData
-            });
-            const data = await res.json();
-            statusBox.textContent = data.message || '發送完成';
-            if (!res.ok) statusBox.style.color = '#ed4245';
-            else statusBox.style.color = '#57f287';
-        });
-
-        setInterval(updateStats, 5000);
-        updateStats();
+        loadStatistics();
         loadGuilds();
     </script>
 </body>
@@ -293,14 +391,14 @@ def api_discord_broadcast():
 
     async def do_broadcast():
         try:
-            file_obj = None
+            file_path = None
+            filename = None
             if uploaded_file and uploaded_file.filename:
                 filename = secure_filename(uploaded_file.filename)
                 if not filename:
                     filename = f"upload_{secrets.token_hex(4)}.png"
-                save_path = os.path.join(UPLOAD_FOLDER, filename)
-                uploaded_file.save(save_path)
-                file_obj = discord.File(save_path, filename=filename)
+                file_path = os.path.join(UPLOAD_FOLDER, filename)
+                uploaded_file.save(file_path)
 
             if target_type == "dm":
                 guild = bot_instance.get_guild(int(guild_id)) if guild_id else None
@@ -311,11 +409,13 @@ def api_discord_broadcast():
 
                 sent = 0
                 for member in guild.members:
-                    if member.bot or member.pending or not member.guild_permissions:
+                    if member.bot or member.pending:
                         continue
                     try:
-                        if file_obj:
-                            await member.send(content=message or None, file=file_obj)
+                        if file_path:
+                            with open(file_path, 'rb') as f:
+                                send_file = discord.File(f, filename=filename)
+                                await member.send(content=message or None, file=send_file)
                         else:
                             await member.send(content=message or None)
                         sent += 1
@@ -337,8 +437,10 @@ def api_discord_broadcast():
             if not channel:
                 raise RuntimeError("找不到可發送的文字頻道")
 
-            if file_obj:
-                await channel.send(content=message or None, file=file_obj)
+            if file_path:
+                with open(file_path, 'rb') as f:
+                    send_file = discord.File(f, filename=filename)
+                    await channel.send(content=message or None, file=send_file)
             else:
                 await channel.send(content=message or None)
             return {"message": f"已發送到頻道 {channel.mention}", "success": True}
