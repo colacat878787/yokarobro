@@ -451,17 +451,27 @@ class MusicCog(commands.Cog):
         # prefer exact song - artist parse
         song_title, artist = self.parse_song_artist(query)
         try:
+            if video_id and not query:
+                # When only a video ID is available, try to search Genius by the YouTube title.
+                try:
+                    info = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False))
+                    query = info.get('title') or query
+                except Exception:
+                    pass
+
             if song_title and artist:
                 song = await asyncio.get_event_loop().run_in_executor(None, lambda: client.search_song(song_title, artist))
-            else:
+            elif query:
                 song = await asyncio.get_event_loop().run_in_executor(None, lambda: client.search_song(query))
+            else:
+                song = None
             if not song:
                 return None
             lyrics = getattr(song, 'lyrics', None)
             if not lyrics:
                 return None
             text = self.sanitize_lyrics(lyrics)
-            return {"song": getattr(song, 'title', None) or song_title or query, "artist": getattr(song, 'artist', None) or artist, "lyrics": text, "format": 'genius', 'confidence': 'high'}
+            return {"song": getattr(song, 'title', None) or song_title or query, "artist": getattr(song, 'artist', None) or artist, "lyrics": text, "format": 'genius', 'confidence': 'high', 'source': 'genius'}
         except Exception:
             logging.exception("Genius fetch error")
             return None
@@ -1121,8 +1131,8 @@ class MusicCog(commands.Cog):
                                                  bass=is_prem and state.get('bass', True), 
                                                  requester=ctx.author)
                 
-                # save last search query for lyrics lookup
-                state['last_search_query'] = search
+                # save last search query for lyrics lookup as actual title, not raw URL
+                state['last_search_query'] = player.title or search
                 if ctx.voice_client.is_playing():
                     gid = ctx.guild.id
                     if gid not in self.queue: self.queue[gid] = []
@@ -1168,6 +1178,7 @@ class MusicCog(commands.Cog):
         self.current_ctxs[ctx.guild.id] = ctx
         state = self.get_state(ctx.guild.id)
         state['current_url'] = player.original_url or player.url
+        state['last_search_query'] = player.title or state.get('last_search_query')
         state['elapsed'] = 0
         state['last_elapsed'] = 0
         player.start_time = time.time()
