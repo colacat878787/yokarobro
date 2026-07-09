@@ -634,11 +634,11 @@ class MusicCog(commands.Cog):
         return description, lyrics
 
     def try_example_lyrics(self, query=None, video_id=None):
-        """Attempt to call functions from example.歌詞 (if provided by friend). Tries several common function names.
-        Returns a dict similar to other sources or None.
+        """Attempt to call functions from example module (if provided by friend).
+        This function is defensive: it will try several common function names and
+        call patterns, normalize results to a dict, and always return None on any error.
         """
         try:
-            # try import example.歌詞 or example
             mod = None
             try:
                 mod = importlib.import_module('example')
@@ -650,38 +650,48 @@ class MusicCog(commands.Cog):
 
             candidates = ['search_lyrics', 'fetch_lyrics', 'get_lyrics', 'lyrics_search', 'search', 'get', '查歌詞', '查歌詞_sync', '歌詞搜尋']
             for name in candidates:
-                if hasattr(mod, name):
-                    fn = getattr(mod, name)
-                    if callable(fn):
-                        # try different arg signatures
-                        try:
-                            res = fn(query, video_id)
-                        except TypeError:
-                            try:
-                                res = fn(query)
-                            except TypeError:
-                                try:
-                                    res = fn(video_id)
-                                except Exception:
-                                    continue
-                        if not res:
-                            continue
-                        # Normalize return types
-                        if isinstance(res, str):
-                            return {"song": None, "artist": None, "lyrics": self.sanitize_lyrics(res), "format": 'example', 'confidence': 'unknown'}
-                        if isinstance(res, dict):
-                            if 'lyrics' in res:
-                                res['lyrics'] = self.sanitize_lyrics(res.get('lyrics') or '')
-                                return res
-                            # maybe returned tuple (song, artist, lyrics)
-                            if len(res) == 3:
-                                try:
-                                    song, artist, lyrics = res
-                                    return {"song": song, "artist": artist, "lyrics": self.sanitize_lyrics(lyrics), "format": 'example', 'confidence': 'unknown'}
-                        # otherwise ignore
+                fn = getattr(mod, name, None)
+                if not callable(fn):
+                    continue
+
+                res = None
+                # try common call signatures in order
+                call_args = [(query, video_id), (query,), (video_id,), ()]
+                for args in call_args:
+                    try:
+                        # filter out None-only calls
+                        if args == ():
+                            res = fn()
+                        else:
+                            # remove trailing None values to match many signatures
+                            filt = tuple(a for a in args if a is not None)
+                            res = fn(*filt)
+                        break
+                    except TypeError:
+                        continue
+                    except Exception:
+                        res = None
+                        break
+
+                if not res:
+                    continue
+
+                # Normalize return types
+                if isinstance(res, str):
+                    return {"song": None, "artist": None, "lyrics": self.sanitize_lyrics(res), "format": 'example', 'confidence': 'unknown'}
+
+                if isinstance(res, dict):
+                    if 'lyrics' in res:
+                        res['lyrics'] = self.sanitize_lyrics(res.get('lyrics') or '')
+                        return res
+
+                if isinstance(res, (list, tuple)) and len(res) >= 3:
+                    song, artist, lyrics = res[0], res[1], res[2]
+                    return {"song": song, "artist": artist, "lyrics": self.sanitize_lyrics(lyrics), "format": 'example', 'confidence': 'unknown'}
+
+            return None
         except Exception:
             return None
-        return None
 
     async def send_lyrics_response(self, ctx, data):
         description, lyrics = self.format_lyrics_result(data)
