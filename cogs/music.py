@@ -354,7 +354,7 @@ class MusicCog(commands.Cog):
         return self.states[guild_id]
 
     async def unison_request(self, method, path, params=None, json_data=None):
-        base = "https://unison.boidu.dev"
+        base = "https://boidu.dev"
         url = f"{base}{path}"
         try:
             async with aiohttp.ClientSession() as session:

@@ -1,4 +1,4 @@
-﻿import discord
+import discord
 from discord.ext import commands, tasks
 import yt_dlp
 import asyncio
@@ -79,7 +79,7 @@ class MusicControlView(discord.ui.View):
     @discord.ui.button(label="?賂?/?塚?", style=discord.ButtonStyle.primary, custom_id="mus_pause", row=0)
     async def pause_resume(self, interaction: discord.Interaction, button: discord.ui.Button):
         vc = interaction.guild.voice_client
-        if not vc: return await interaction.response.send_message("??瘝?甇??剖?璅?, ephemeral=True)
+        if not vc: return await interaction.response.send_message("No voice client connected.", ephemeral=True)
         if vc.is_paused(): vc.resume()
         else: vc.pause()
         await interaction.response.defer()
