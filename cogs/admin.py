@@ -248,34 +248,5 @@ class AdminCog(commands.Cog):
         embed.set_footer(text="提示：所有修改將即時儲存至 guild_settings.json")
         await ctx.send(embed=embed, view=ControlPanelView(self.bot))
 
-    @commands.hybrid_command(name='reloadcog', aliases=['reload'])
-    async def reloadcog(self, ctx):
-        """Reload all cogs and reinstall requirements.
-        Usage: !reloadcog
-        """
-        await ctx.send('🔄 正在重新載入所有模組並安裝依賴套件，請稍候...')
-        # Reload extensions
-        loaded = []
-        for ext in list(self.bot.extensions.keys()):
-            try:
-                await self.bot.unload_extension(ext)
-                await self.bot.load_extension(ext)
-                loaded.append(ext)
-            except Exception as e:
-                await ctx.send(f'⚠️ 重新載入 {ext} 失敗: {e}')
-        # Reinstall requirements
-        import asyncio, sys
-        proc = await asyncio.create_subprocess_shell(
-            f"{sys.executable} -m pip install -r requirements.txt",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode == 0:
-            await ctx.send('✅ 依賴套件重新安裝完成。')
-        else:
-            await ctx.send(f'❌ 依賴安裝失敗:\n```{stderr.decode()}```')
-        await ctx.send(f'✅ 已重新載入模組: {"、".join(loaded)}')
-
 async def setup(bot):
     await bot.add_cog(AdminCog(bot))
