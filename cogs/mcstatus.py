@@ -7,6 +7,7 @@ import sys
 # Auto-install mcstatus if not present
 try:
     from mcstatus import JavaServer
+    from mcstatus.status_response import JavaStatusResponse
 except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "mcstatus==11.1.0"])
     from mcstatus import JavaServer
@@ -26,12 +27,20 @@ class MCStatusCog(commands.Cog):
             cached, timestamp = self._cache[address]
             if now - timestamp < self._cache_ttl:
                 return cached
+
+        loop = asyncio.get_event_loop()
         try:
-            server = JavaServer.lookup(address)
-            status = await asyncio.get_event_loop().run_in_executor(None, server.status)
+            server = JavaServer.lookup(address, timeout=5)
+            status = await loop.run_in_executor(None, server.status)
+
             desc = status.description
             if isinstance(desc, dict):
                 desc = desc.get("text", "")
+            elif hasattr(desc, "to_plain"):
+                desc = desc.to_plain()
+            else:
+                desc = str(desc)
+
             result = {
                 "online": True,
                 "address": address,
@@ -39,11 +48,18 @@ class MCStatusCog(commands.Cog):
                 "players_max": status.players.max,
                 "version": status.version.name,
                 "protocol": status.version.protocol,
-                "description": str(desc),
+                "description": desc,
                 "latency": round(status.latency),
             }
+        except ConnectionRefusedError:
+            result = {"online": False, "address": address, "error": "連線被拒絕（伺服器可能已關閉）"}
+        except TimeoutError:
+            result = {"online": False, "address": address, "error": "連線逾時（超過 5 秒）"}
+        except OSError as e:
+            result = {"online": False, "address": address, "error": f"網路錯誤: {e.strerror}"}
         except Exception as e:
             result = {"online": False, "address": address, "error": str(e)}
+
         self._cache[address] = (result, now)
         return result
 
@@ -52,6 +68,7 @@ class MCStatusCog(commands.Cog):
         """查詢 Minecraft 伺服器狀態。格式：!mcstatus <host:port>"""
         async with ctx.typing():
             data = await self._query_server(address)
+
         if data.get("online"):
             embed = discord.Embed(
                 title=f"🟢 {data['address']}",
@@ -66,13 +83,15 @@ class MCStatusCog(commands.Cog):
             )
             embed.add_field(name="延遲", value=f"{data.get('latency', '?')} ms", inline=True)
             if data.get("description"):
-                embed.add_field(name="MOTD", value=data["description"], inline=False)
+                embed.add_field(name="MOTD", value=data["description"][:200], inline=False)
         else:
             embed = discord.Embed(
-                title=f"🔴 {data['address']}",
-                description=f"❌ 伺服器離線或無法連線\n```{data.get('error', '')}```",
+                title=f"🔴 {data['address']} — 離線",
+                description=f"❌ {data.get('error', '伺服器無法連線')}",
                 color=0xE74C3C,
             )
+            embed.set_footer(text="結果已快取 60 秒。請確認 IP 與連接埠是否正確。")
+
         await ctx.send(embed=embed)
 
 

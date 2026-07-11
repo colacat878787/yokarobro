@@ -18,5 +18,5 @@ moviepy
 spotify-dlp
 flask
 
-lyricsgenius==4.2.0
+lyricsgenius>=3.0.0
 mcstatus==11.1.0
