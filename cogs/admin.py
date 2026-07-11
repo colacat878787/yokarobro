@@ -274,9 +274,7 @@ class AdminCog(commands.Cog):
         if proc.returncode == 0:
             await ctx.send('✅ 依賴套件重新安裝完成。')
         else:
-            await ctx.send(f'❌ 依賴安裝失敗:\n```
-{stderr.decode()}
-```')
+            await ctx.send(f'❌ 依賴安裝失敗:\n```{stderr.decode()}```')
         await ctx.send(f'✅ 已重新載入模組: {"、".join(loaded)}')
 
 async def setup(bot):

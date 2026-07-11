@@ -17,6 +17,6 @@ pydub
 moviepy
 spotify-dlp
 flask
-cloudflared
+
 lyricsgenius==4.2.0
 mcstatus==11.1.0

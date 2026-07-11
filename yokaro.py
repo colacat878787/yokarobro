@@ -57,7 +57,8 @@ class YokaroBot(commands.Bot):
             'cogs.games',
             'cogs.werewolf',
             'cogs.widget',
-            'cogs.mcstatus'
+            'cogs.mcstatus',
+            'cogs.reloader',
         ]
 
     async def setup_hook(self):
