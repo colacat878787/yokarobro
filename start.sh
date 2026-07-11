@@ -23,6 +23,7 @@ fi
 # 3. 安裝/更新 Python 套件 (移除靜音模式以利除錯)
 echo "📦 正在安裝 Python 套件..."
 python -m pip install -r requirements.txt
+python -m pip install mcstatus==11.1.0
 
 echo "================================================"
 echo "🤖 正在啟動 Yokaro 機器人..."
