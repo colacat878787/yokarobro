@@ -59,6 +59,7 @@ class YokaroBot(commands.Bot):
             'cogs.widget',
             'cogs.mcstatus',
             'cogs.reloader',
+            'cogs.delete_log',
         ]
 
     async def setup_hook(self):
