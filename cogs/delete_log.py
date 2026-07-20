@@ -191,60 +191,63 @@ class DeleteLogCog(commands.Cog):
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     # ── 事件監聽 ──────────────────────────────
+    async def _get_log_channel(self, guild: discord.Guild):
+        settings = config_manager.get_guild_settings(guild.id)
+        if not settings.get("delete_log_enabled", False):
+            return None
+        ch_id = settings.get("delete_log_channel")
+        return guild.get_channel(int(ch_id)) if ch_id else None
+
+    def _in_monitor(self, guild_id: int, channel_id: int) -> bool:
+        ids = config_manager.get_guild_settings(guild_id).get("delete_log_monitor", [])
+        return not ids or str(channel_id) in ids
+
     @commands.Cog.listener()
     async def on_message_delete(self, message: discord.Message):
-        # 只處理伺服器訊息
-        if not message.guild:
+        if not message.guild or message.author.bot:
             return
-        # 忽略機器人自己的訊息
-        if message.author.bot:
+        if not self._in_monitor(message.guild.id, message.channel.id):
             return
-
-        settings = config_manager.get_guild_settings(message.guild.id)
-        if not settings.get("delete_log_enabled", False):
+        log_ch = await self._get_log_channel(message.guild)
+        if not log_ch:
             return
 
-        log_ch_id = settings.get("delete_log_channel")
-        if not log_ch_id:
-            return
-        log_channel = message.guild.get_channel(int(log_ch_id))
-        if not log_channel:
-            return
-
-        # 檢查監控範圍
-        monitor_ids = settings.get("delete_log_monitor", [])
-        if monitor_ids and str(message.channel.id) not in monitor_ids:
-            return
-
-        # 建立 embed
-        embed = discord.Embed(
-            title="🗑️ 訊息已刪除",
-            color=0xE74C3C,
-            timestamp=message.created_at,
-        )
-        embed.set_author(
-            name=f"{message.author.display_name} ({message.author})",
-            icon_url=message.author.display_avatar.url,
-        )
+        embed = discord.Embed(title="🗑️ 訊息已刪除", color=0xE74C3C, timestamp=message.created_at)
+        embed.set_author(name=f"{message.author} ({message.author.id})", icon_url=message.author.display_avatar.url)
         embed.add_field(name="頻道", value=message.channel.mention, inline=True)
-        embed.add_field(name="作者 ID", value=str(message.author.id), inline=True)
-
-        content = message.content or "*(無文字內容)*"
-        if len(content) > 1024:
-            content = content[:1021] + "..."
-        embed.add_field(name="訊息內容", value=content, inline=False)
-
-        # 附件
+        content = (message.content or "*(無文字內容)*")[:1024]
+        embed.add_field(name="內容", value=content, inline=False)
         if message.attachments:
-            attach_list = "\n".join(a.filename for a in message.attachments)
-            embed.add_field(name=f"附件 ({len(message.attachments)})", value=attach_list, inline=False)
-
+            embed.add_field(name="附件", value="\n".join(a.filename for a in message.attachments), inline=False)
         embed.set_footer(text=f"訊息 ID: {message.id}")
-
         try:
-            await log_channel.send(embed=embed)
+            await log_ch.send(embed=embed)
         except discord.Forbidden:
-            pass  # 沒有權限就靜默略過
+            pass
+
+    @commands.Cog.listener()
+    async def on_message_edit(self, before: discord.Message, after: discord.Message):
+        if not before.guild or before.author.bot:
+            return
+        if before.content == after.content:
+            return  # 只有 embed 更新，忽略
+        if not self._in_monitor(before.guild.id, before.channel.id):
+            return
+        log_ch = await self._get_log_channel(before.guild)
+        if not log_ch:
+            return
+
+        embed = discord.Embed(title="✏️ 訊息已編輯", color=0xF39C12, timestamp=after.edited_at or after.created_at)
+        embed.set_author(name=f"{before.author} ({before.author.id})", icon_url=before.author.display_avatar.url)
+        embed.add_field(name="頻道", value=before.channel.mention, inline=True)
+        embed.add_field(name="跳轉", value=f"[點此]({after.jump_url})", inline=True)
+        embed.add_field(name="修改前", value=(before.content or "*(空)*")[:1024], inline=False)
+        embed.add_field(name="修改後", value=(after.content or "*(空)*")[:1024], inline=False)
+        embed.set_footer(text=f"訊息 ID: {before.id}")
+        try:
+            await log_ch.send(embed=embed)
+        except discord.Forbidden:
+            pass
 
 
 async def setup(bot: commands.Bot):

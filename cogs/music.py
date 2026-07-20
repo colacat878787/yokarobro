@@ -403,8 +403,8 @@ class MusicCog(commands.Cog):
         if not text:
             return ""
         # Remove XML/HTML tags, xml headers, and decode HTML entities
-        text = re.sub(r"<\?xml[\s\S]*?\?>", "", text)
-        text = re.sub(r"<(?:!--[\s\S]*?--|[^>])+>", "", text)
+        text = re.sub(r"<\?xml[^>]*\?>", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"</?[^>]+>", "", text)
         text = unescape(text)
         # remove stray control characters
         text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text)
@@ -895,7 +895,24 @@ class MusicCog(commands.Cog):
             return
 
         video_id = self.extract_youtube_video_id(getattr(source, 'original_url', '') or getattr(source, 'url', ''))
+        # Build a better query with artist info if available from uploader
         query = source.title
+        uploader = getattr(source, 'data', {}).get('uploader') if hasattr(source, 'data') else None
+        if uploader and uploader not in query:
+            # Try to construct "Song - Artist" format for better matching
+            query = f"{source.title} - {uploader}"
+        
+        # Try to get stored search query which might have better formatting
+        try:
+            state = self.get_state(guild_id)
+            stored_query = state.get('last_search_query')
+            if stored_query and len(stored_query) > 3:
+                # Prefer stored query if it looks like "Song - Artist"
+                if ' - ' in stored_query:
+                    query = stored_query
+        except Exception:
+            pass
+        
         lyrics_data = await self.fetch_all_lyrics(query=query, video_id=video_id)
         if not lyrics_data:
             self.lyrics.pop(guild_id, None)
@@ -948,11 +965,16 @@ class MusicCog(commands.Cog):
 
             try:
                 source = vc.source
-                elapsed = int(time.time() - source.start_time + state.get('elapsed', 0))
+                # Use float for precise timing, especially for lyrics sync
                 if vc.is_paused():
-                    elapsed = int(state.get('last_elapsed', elapsed))
-                state['last_elapsed'] = elapsed
-
+                    # When paused, use the saved elapsed time
+                    elapsed = float(state.get('last_elapsed', 0))
+                else:
+                    # When playing, calculate from start_time
+                    elapsed = time.time() - source.start_time + state.get('elapsed', 0)
+                    state['last_elapsed'] = elapsed
+                
+                # Round to 1 decimal place for display but keep precision for lyrics
                 embed = self.create_music_embed(guild_id, source, elapsed)
                 await message.edit(embed=embed, view=MusicControlView(self))
             except Exception:
