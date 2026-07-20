@@ -27,16 +27,6 @@ YTDL_OPTIONS = {
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',
-    # 音質優化：優先選擇高品質音訊
-    'format_sort': ['abr', 'acodec:mp3', 'acodec:aac', 'acodec:flac', 'acodec:opus'],
-    'format_sort_force': True,
-    'prefer_free_formats': False,
-    # 音訊編碼器優先順序
-    'postprocessors': [{
-        'key': 'FFmpegAudioConvertor',
-        'preferredcodec': 'mp3',
-        'preferredquality': '320',
-    }],
     # 嘗試避開 JS 依賴
     'extract_flat': 'in_playlist',
     'youtube_include_dash_manifest': False,
@@ -73,20 +63,16 @@ class YTDLSource(discord.PCMVolumeTransformer):
         header_str = "".join([f"{k}: {v}\r\n" for k, v in headers.items()])
 
         filters = []
-        # 音質優化：高品質音訊處理
-        filters.append("aresample=48000:filter_type=kaiser:beta=9")  # 高品質取樣率轉換
         if theater: filters.append("extrastereo=m=2.5")
         if exciter: filters.append("highpass=f=200, treble=g=5")
         if bass: filters.append("bass=g=10:f=110:w=0.6")
         if pitch != 1.0: filters.append(f"asetrate=48000*{pitch},atempo=1/{pitch}")
-        if not filters: 
-            filters.append("loudnorm")
+        if not filters: filters.append("loudnorm")
         
-        # 音質優化：使用高品質編碼參數
-        af_string = f"-af \"{','.join(filters)}\""
+        af_string = f"-af \"{','.join(filters)}\"" if filters else ""
         ffmpeg_options = {
             'before_options': f'-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -ss {seek}',
-            'options': f'-vn -ac 2 -ar 48000 -b:a 320k {af_string}'  # 立體聲、48kHz、320kbps
+            'options': f'-vn {af_string}'
         }
         
         if header_str:
