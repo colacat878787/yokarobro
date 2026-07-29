@@ -423,6 +423,11 @@ class MusicCog(commands.Cog):
             return ""
         # Remove script and style tags and their contents
         text = re.sub(r"<(script|style)[^>]*>[\s\S]*?</\1>", "", text, flags=re.IGNORECASE)
+        # Remove inline JavaScript code patterns (e.g. window.WIZ_global_data, window.ytcfg, window.onerror, function(...) etc.)
+        text = re.sub(r"window\.[A-Za-z0-9_]+\s*=[\s\S]*?(?=\n\n|\Z)", "", text)
+        text = re.sub(r"window\.ytcfg[\s\S]*?(?=\n\n|\Z)", "", text)
+        text = re.sub(r"window\.onerror[\s\S]*?(?=\n\n|\Z)", "", text)
+        text = re.sub(r"var\s+[A-Za-z0-9_]+\s*=[\s\S]*?(?=\n\n|\Z)", "", text)
         # Remove XML declaration, processing instructions, DOCTYPE
         text = re.sub(r"<\?xml[^>]*\?>", "", text, flags=re.IGNORECASE)
         text = re.sub(r"<!DOCTYPE[^>]*>", "", text, flags=re.IGNORECASE)
@@ -433,6 +438,9 @@ class MusicCog(commands.Cog):
         # Remove Genius boilerplate headers (e.g. "15 ContributorsTranslations...", "Embed")
         text = re.sub(r"^\d+\s*Contributors.*?\n", "", text, flags=re.IGNORECASE)
         text = re.sub(r"\d*Embed$", "", text, flags=re.IGNORECASE)
+        # If the remaining text starts with JS code signature, discard it
+        if "window." in text or "function(" in text or "var combinedLineAndColumn" in text:
+            return ""
         # Remove stray control characters
         text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text)
         # Collapse multiple blank lines
