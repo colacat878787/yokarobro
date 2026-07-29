@@ -27,7 +27,6 @@ YTDL_OPTIONS = {
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',
-    # 嘗試避開 JS 依賴
     'extract_flat': 'in_playlist',
     'youtube_include_dash_manifest': False,
 }
@@ -35,7 +34,6 @@ YTDL_OPTIONS = {
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
 class YTDLSource(discord.PCMVolumeTransformer):
-    # ... (保持原樣)
     def __init__(self, source, *, data, volume=0.5, pitch=1.0, theater=True, exciter=True, bass=True, requester=None):
         super().__init__(source, volume)
         self.data = data
@@ -67,16 +65,20 @@ class YTDLSource(discord.PCMVolumeTransformer):
         if exciter: filters.append("highpass=f=200, treble=g=5")
         if bass: filters.append("bass=g=10:f=110:w=0.6")
         if pitch != 1.0: filters.append(f"asetrate=48000*{pitch},atempo=1/{pitch}")
-        if not filters: filters.append("loudnorm")
         
         af_string = f"-af \"{','.join(filters)}\"" if filters else ""
-        ffmpeg_options = {
-            'before_options': f'-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -ss {seek}',
-            'options': f'-vn {af_string}'
-        }
         
+        before_opts = (
+            f'-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 '
+            f'-probesize 10M -analyzeduration 10M -ss {seek}'
+        )
         if header_str:
-            ffmpeg_options['before_options'] += f' -headers "{header_str}"'
+            before_opts += f' -headers "{header_str}"'
+
+        ffmpeg_options = {
+            'before_options': before_opts,
+            'options': f'-vn {af_string}'.strip()
+        }
 
         filename = data['url'] if stream else ytdl.prepare_filename(data)
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data, volume=volume, pitch=pitch, theater=theater, exciter=exciter, bass=bass, requester=requester)
