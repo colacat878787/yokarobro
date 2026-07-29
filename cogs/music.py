@@ -1270,41 +1270,33 @@ class MusicCog(commands.Cog):
                         self.bot.loop
                     )
             except: pass
-            
-            # 處理 Loop 循環模式邏輯
-            loop_mode = state.get('loop', 'off')
-            if loop_mode == 'song':
-                # 單曲循環：重新準備該曲
-                async def _replay_single():
-                    try:
-                        kuji = self.bot.get_cog("KujiCog")
-                        is_prem = kuji and kuji.is_premium(player.requester.id if player.requester else 0)
-                        re_player = await YTDLSource.from_url(
-                            player.original_url or player.url or player.title,
-                            loop=self.bot.loop, stream=True,
-                            volume=state['volume'], pitch=state['pitch'],
-                            theater=is_prem and state.get('theater', True),
-                            exciter=is_prem and state.get('exciter', True),
-                            bass=is_prem and state.get('bass', True),
-                            requester=player.requester
-                        )
-                        self._play_song(ctx, re_player)
-                    except Exception as e:
-                        print(f"Loop Single Error: {e}")
-                        self.play_next(ctx)
-                asyncio.run_coroutine_threadsafe(_replay_single(), self.bot.loop)
-                return
-            elif loop_mode == 'queue':
-                # 歌單循環：把剛放完的歌加到隊尾
-                lazy_item = {
-                    'type': 'lazy',
-                    'query': player.original_url or player.url or player.title,
-                    'requester': player.requester
-                }
-                if ctx.guild.id not in self.queue: self.queue[ctx.guild.id] = []
-                self.queue[ctx.guild.id].append(lazy_item)
+            gid = ctx.guild.id
+            if gid in self.queue and self.queue[gid] and ctx.voice_client:
+                player = self.queue[gid].pop(0)
+                
+                if isinstance(player, dict) and player.get('type') == 'lazy':
+                    async def _resolve_and_play():
+                        try:
+                            state = self.get_state(gid)
+                            kuji = self.bot.get_cog("KujiCog")
+                            is_prem = kuji and kuji.is_premium(player['requester'].id)
+                            real_player = await YTDLSource.from_url(player['query'], loop=self.bot.loop, stream=True, 
+                                                                    volume=state['volume'], pitch=state['pitch'], 
+                                                                    theater=is_prem and state.get('theater', True), 
+                                                                    exciter=is_prem and state.get('exciter', True), 
+                                                                    bass=is_prem and state.get('bass', True), 
+                                                                    requester=player['requester'])
+                            self._play_song(ctx, real_player)
+                        except Exception as e:
+                            print(f"Lazy Load Error: {e}")
+                            self.play_next(ctx)
+                    asyncio.run_coroutine_threadsafe(_resolve_and_play(), self.bot.loop)
+                    return
 
-            self.play_next(ctx)
+                self._play_song(ctx, player)
+            else:
+                if gid in self.panels:
+                    self.panels.pop(gid)
 
         ctx.voice_client.play(player, after=after_playing)
         asyncio.run_coroutine_threadsafe(self.send_panel(ctx, player), self.bot.loop)
