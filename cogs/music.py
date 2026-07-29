@@ -1262,25 +1262,15 @@ class MusicCog(commands.Cog):
         asyncio.run_coroutine_threadsafe(_load_lyrics(), self.bot.loop)
 
         def after_playing(error):
-            if error: print(f"播放錯誤: {error}")
+            if error:
+                print(f"播放錯誤: {error}")
+            # 清除頻道顯示的播放狀態
             try:
-                if hasattr(ctx.voice_client.channel, 'edit'):
+                if hasattr(ctx.voice_client.channel, "edit"):
                     asyncio.run_coroutine_threadsafe(
-                        ctx.voice_client.channel.edit(status=""), 
-                        self.bot.loop
+                        ctx.voice_client.channel.edit(status=""),
+                        self.bot.loop,
                     )
-            except: pass
-            gid = ctx.guild.id
-            if gid in self.queue and self.queue[gid] and ctx.voice_client:
-                player = self.queue[gid].pop(0)
-                
-                if isinstance(player, dict) and player.get('type') == 'lazy':
-                    async def _resolve_and_play():
-                        try:
-                            state = self.get_state(gid)
-                            kuji = self.bot.get_cog("KujiCog")
-                            is_prem = kuji and kuji.is_premium(player['requester'].id)
-                            real_player = await YTDLSource.from_url(player['query'], loop=self.bot.loop, stream=True, 
                                                                     volume=state['volume'], pitch=state['pitch'], 
                                                                     theater=is_prem and state.get('theater', True), 
                                                                     exciter=is_prem and state.get('exciter', True), 
