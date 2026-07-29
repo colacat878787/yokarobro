@@ -73,7 +73,6 @@ class YTDLSource(discord.PCMVolumeTransformer):
         
         before_opts = (
             f'-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 '
-            f'-reconnect_on_network_error 1 '
             f'-probesize 32M -analyzeduration 32M '
             f'-ss {seek}'
         )
