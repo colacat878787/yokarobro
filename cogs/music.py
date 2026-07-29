@@ -1264,29 +1264,38 @@ class MusicCog(commands.Cog):
         def after_playing(error):
             if error:
                 print(f"播放錯誤: {error}")
-            # 清除頻道顯示的播放狀態
+
+            # 1️⃣ 清除頻道顯示的播放狀態
             try:
                 if hasattr(ctx.voice_client.channel, "edit"):
                     asyncio.run_coroutine_threadsafe(
                         ctx.voice_client.channel.edit(status=""),
                         self.bot.loop,
                     )
-                                                                    volume=state['volume'], pitch=state['pitch'], 
-                                                                    theater=is_prem and state.get('theater', True), 
-                                                                    exciter=is_prem and state.get('exciter', True), 
-                                                                    bass=is_prem and state.get('bass', True), 
-                                                                    requester=player['requester'])
-                            self._play_song(ctx, real_player)
-                        except Exception as e:
-                            print(f"Lazy Load Error: {e}")
-                            self.play_next(ctx)
-                    asyncio.run_coroutine_threadsafe(_resolve_and_play(), self.bot.loop)
-                    return
+            except Exception:
+                pass
 
-                self._play_song(ctx, player)
-            else:
-                if gid in self.panels:
-                    self.panels.pop(gid)
+            # 2️⃣ 循環模式處理
+            try:
+                state = self.get_state(ctx.guild.id)
+                loop_mode = state.get("loop", "off")
+                lazy_item = {
+                    "type": "lazy",
+                    "query": getattr(player, "original_url", None)
+                             or getattr(player, "url", None)
+                             or getattr(player, "title", None),
+                    "requester": getattr(player, "requester", None),
+                }
+                self.queue.setdefault(ctx.guild.id, [])
+                if loop_mode == "song":
+                    self.queue[ctx.guild.id].insert(0, lazy_item)
+                elif loop_mode == "queue":
+                    self.queue[ctx.guild.id].append(lazy_item)
+            except Exception as exc:
+                print(f"After playing handling error: {exc}")
+
+            # 3️⃣ 播放下一首
+            self.play_next(ctx)
 
         ctx.voice_client.play(player, after=after_playing)
         asyncio.run_coroutine_threadsafe(self.send_panel(ctx, player), self.bot.loop)
