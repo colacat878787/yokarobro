@@ -86,9 +86,24 @@ class MusicControlView(discord.ui.View):
         super().__init__(timeout=None)
         self.cog = cog
 
-    @discord.ui.button(label="上一首", style=discord.ButtonStyle.secondary, custom_id="mus_prev", row=0)
-    async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("⏮️ 功能還在開發中，請先享受現在的音樂！", ephemeral=True)
+    @discord.ui.button(label="🔂 循環", style=discord.ButtonStyle.secondary, custom_id="mus_loop", row=0)
+    async def toggle_loop(self, interaction: discord.Interaction, button: discord.ui.Button):
+        state = self.cog.get_state(interaction.guild_id)
+        current_mode = state.get('loop', 'off')
+        modes = {'off': 'song', 'song': 'queue', 'queue': 'off'}
+        names = {'off': '❌ 關閉', 'song': '🔂 單曲循環', 'queue': '🔁 歌單循環'}
+        next_mode = modes.get(current_mode, 'off')
+        state['loop'] = next_mode
+        await interaction.response.send_message(f"🔁 **循環模式切換為：{names[next_mode]}**", ephemeral=True)
+
+    @discord.ui.button(label="🔀 隨機", style=discord.ButtonStyle.secondary, custom_id="mus_shuffle", row=0)
+    async def shuffle_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        gid = interaction.guild_id
+        if gid in self.cog.queue and len(self.cog.queue[gid]) > 0:
+            random.shuffle(self.cog.queue[gid])
+            await interaction.response.send_message("🔀 **播放隊列已隨機打亂！**", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ 目前隊列中沒有待播放的歌曲喔！", ephemeral=True)
 
     @discord.ui.button(label="暫停/播放", style=discord.ButtonStyle.primary, custom_id="mus_pause", row=0)
     async def pause_resume(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -350,7 +365,9 @@ class MusicCog(commands.Cog):
 
     def get_state(self, guild_id):
         if guild_id not in self.states:
-            self.states[guild_id] = {'volume': 0.5, 'pitch': 1.0, 'theater': True, 'exciter': True, 'bass': True, 'current_url': None, 'elapsed': 0, '247': False}
+            self.states[guild_id] = {'volume': 0.5, 'pitch': 1.0, 'theater': True, 'exciter': True, 'bass': True, 'current_url': None, 'elapsed': 0, '247': False, 'loop': 'off'}
+        elif 'loop' not in self.states[guild_id]:
+            self.states[guild_id]['loop'] = 'off'
         return self.states[guild_id]
 
     async def unison_request(self, method, path, params=None, json_data=None):
@@ -402,15 +419,21 @@ class MusicCog(commands.Cog):
     def sanitize_lyrics(self, text: str):
         if not text:
             return ""
-        # Remove script tags and their content first
-        text = re.sub(r"<script[^>]*>[\s\S]*?</script>", "", text, flags=re.IGNORECASE)
-        # Remove XML/HTML tags, xml headers, and decode HTML entities
+        # Remove script and style tags and their contents
+        text = re.sub(r"<(script|style)[^>]*>[\s\S]*?</\1>", "", text, flags=re.IGNORECASE)
+        # Remove XML declaration, processing instructions, DOCTYPE
         text = re.sub(r"<\?xml[^>]*\?>", "", text, flags=re.IGNORECASE)
-        text = re.sub(r"</?[^>]+>", "", text)
-        text = unescape(text)
-        # remove stray control characters
+        text = re.sub(r"<!DOCTYPE[^>]*>", "", text, flags=re.IGNORECASE)
+        # Strip all HTML/XML tags
+        text = re.sub(r"<[^>]+>", "", text)
+        # Decode HTML entities (e.g., &amp;, &quot;, &#39;, &lt;) twice in case of double encoding
+        text = unescape(unescape(text))
+        # Remove Genius boilerplate headers (e.g. "15 ContributorsTranslations...", "Embed")
+        text = re.sub(r"^\d+\s*Contributors.*?\n", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\d*Embed$", "", text, flags=re.IGNORECASE)
+        # Remove stray control characters
         text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text)
-        # collapse multiple blank lines
+        # Collapse multiple blank lines
         text = re.sub(r"\n{3,}", "\n\n", text)
         return text.strip()
 
@@ -501,13 +524,13 @@ class MusicCog(commands.Cog):
                     if not cnorm:
                         score = 0.0
                     else:
-                        # use difflib ratio for fuzzy matching
                         score = difflib.SequenceMatcher(None, qnorm, cnorm).ratio()
                     if score > best_score:
                         best_score = score
                         best = entry
 
-                chosen = best or (entries[0] if entries else None)
+                # Only accept chosen if score is reasonably high (> 0.4) or exact query match
+                chosen = best if best_score >= 0.4 else None
                 # log matching info for debugging
                 try:
                     logging.info(f"Unison search query='{query}' best_score={best_score} chosen='{(chosen.get('song') or chosen.get('title')) if chosen else None}'")
@@ -1203,6 +1226,7 @@ class MusicCog(commands.Cog):
         state = self.get_state(ctx.guild.id)
         state['current_url'] = player.original_url or player.url
         state['last_search_query'] = player.title or state.get('last_search_query')
+        state['current_player'] = player
         state['elapsed'] = 0
         state['last_elapsed'] = 0
         player.start_time = time.time()
@@ -1236,6 +1260,40 @@ class MusicCog(commands.Cog):
                         self.bot.loop
                     )
             except: pass
+            
+            # 處理 Loop 循環模式邏輯
+            loop_mode = state.get('loop', 'off')
+            if loop_mode == 'song':
+                # 單曲循環：重新準備該曲
+                async def _replay_single():
+                    try:
+                        kuji = self.bot.get_cog("KujiCog")
+                        is_prem = kuji and kuji.is_premium(player.requester.id if player.requester else 0)
+                        re_player = await YTDLSource.from_url(
+                            player.original_url or player.url or player.title,
+                            loop=self.bot.loop, stream=True,
+                            volume=state['volume'], pitch=state['pitch'],
+                            theater=is_prem and state.get('theater', True),
+                            exciter=is_prem and state.get('exciter', True),
+                            bass=is_prem and state.get('bass', True),
+                            requester=player.requester
+                        )
+                        self._play_song(ctx, re_player)
+                    except Exception as e:
+                        print(f"Loop Single Error: {e}")
+                        self.play_next(ctx)
+                asyncio.run_coroutine_threadsafe(_replay_single(), self.bot.loop)
+                return
+            elif loop_mode == 'queue':
+                # 歌單循環：把剛放完的歌加到隊尾
+                lazy_item = {
+                    'type': 'lazy',
+                    'query': player.original_url or player.url or player.title,
+                    'requester': player.requester
+                }
+                if ctx.guild.id not in self.queue: self.queue[ctx.guild.id] = []
+                self.queue[ctx.guild.id].append(lazy_item)
+
             self.play_next(ctx)
 
         ctx.voice_client.play(player, after=after_playing)
@@ -1292,7 +1350,28 @@ class MusicCog(commands.Cog):
             if ctx.guild.id in self.panels: self.panels.pop(ctx.guild.id)
             await ctx.send("🛑 劇院已關閉，洛洛下班啦～")
 
-    @commands.command(name='shuffle', aliases=['亂序'])
+    @commands.command(name='loop', aliases=['循環', '重複', '單曲循環'])
+    async def loop_cmd(self, ctx, mode: str = None):
+        """切換循環播放模式: off (關閉) / song (單曲循環) / queue (歌單循環)"""
+        state = self.get_state(ctx.guild.id)
+        current_mode = state.get('loop', 'off')
+        
+        if not mode:
+            modes = {'off': 'song', 'song': 'queue', 'queue': 'off'}
+            mode = modes.get(current_mode, 'off')
+        else:
+            mode = mode.lower()
+            if mode in ['single', 'song', '單曲']: mode = 'song'
+            elif mode in ['queue', 'all', '歌單', '全體']: mode = 'queue'
+            elif mode in ['off', 'none', '關閉']: mode = 'off'
+            else:
+                return await ctx.send("❌ 請使用 `!loop [off / song / queue]` 或 `!循環` 直接切換！")
+                
+        state['loop'] = mode
+        names = {'off': '❌ 關閉循環', 'song': '🔂 單曲循環', 'queue': '🔁 歌單循環'}
+        await ctx.send(f"🔁 **循環播放模式已設定為：{names[mode]}**")
+
+    @commands.command(name='shuffle', aliases=['亂序', '隨機'])
     async def shuffle(self, ctx):
         if ctx.guild.id in self.queue and len(self.queue[ctx.guild.id]) > 0:
             random.shuffle(self.queue[ctx.guild.id])
@@ -1417,6 +1496,162 @@ class MusicCog(commands.Cog):
                 self._play_song(ctx, player)
         except Exception as e:
             await ctx.send("❌ 無法連接該電台或找不到訊號源。")
+
+    @commands.command(name='ai_playlist', aliases=['聽什麼', '隨喜歌單', 'ai歌單', '點歌幫手'])
+    async def ai_playlist(self, ctx, *, prompt: str = None):
+        """透過 Gemini AI 根據您的喜好生成專屬歌單並自動加入播放隊列！"""
+        if not prompt:
+            return await ctx.send("💡 請告訴洛洛你想聽什麼風格或心情的歌，例如：`!ai_playlist 想聽輕鬆適合打程式的日文歌曲 5 首`")
+
+        ai_cog = self.bot.get_cog("AICog")
+        if not ai_cog or not getattr(ai_cog, 'active_key', None):
+            return await ctx.send("❌ AI 服務未啟動或未設定 GEMINI_API_KEY。")
+
+        async with ctx.typing():
+            system_prompt = (
+                "你是一個專業的音樂 DJ。請根據使用者的需求生成一份歌單。\n"
+                "務必只傳回一個 JSON 格式的字串陣列，格式如下：\n"
+                '["歌手 - 歌名 1", "歌手 - 歌名 2", ...]\n'
+                "不要包含任何 markdown 標記（如 ```json），只傳回純文字 JSON 陣列！預設生成 5 首歌曲。"
+            )
+            
+            gemini_key = ai_cog.active_key
+            model_name = getattr(ai_cog, 'model', 'gemini-1.5-flash')
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
+            
+            payload = {
+                "contents": [{"role": "user", "parts": [{"text": f"請幫我生成歌單：{prompt}"}]}],
+                "system_instruction": {"parts": [{"text": system_prompt}]},
+                "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024}
+            }
+            
+            songs = []
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, json=payload, timeout=20) as resp:
+                        if resp.status == 200:
+                            res_data = await resp.json()
+                            raw_text = res_data['candidates'][0]['content']['parts'][0]['text'].strip()
+                            raw_text = re.sub(r"^```json\s*", "", raw_text, flags=re.IGNORECASE)
+                            raw_text = re.sub(r"^```\s*", "", raw_text, flags=re.IGNORECASE)
+                            raw_text = re.sub(r"```$", "", raw_text, flags=re.IGNORECASE).strip()
+                            songs = json.loads(raw_text)
+            except Exception as e:
+                print(f"AI Playlist Gen Error: {e}")
+                return await ctx.send("❌ 生成歌單失敗，請稍後再試一次！")
+
+            if not isinstance(songs, list) or not songs:
+                return await ctx.send("❌ AI 未能成功理解您的需求，請更換描述重試！")
+
+            # 確保已連接語音頻道
+            if not ctx.voice_client:
+                if not ctx.author.voice:
+                    return await ctx.send("❌ 請先加入語音頻道！")
+                await ctx.author.voice.channel.connect(timeout=60.0, reconnect=True)
+
+            gid = ctx.guild.id
+            if gid not in self.queue: self.queue[gid] = []
+
+            for song_query in songs:
+                search_term = f"ytsearch1:{song_query}"
+                self.queue[gid].append({
+                    'type': 'lazy',
+                    'query': search_term,
+                    'requester': ctx.author
+                })
+
+            # 儲存到使用者歷史歌單
+            user_id = str(ctx.author.id)
+            history_file = "playlists_history.json"
+            playlists = {}
+            if os.path.exists(history_file):
+                try:
+                    with open(history_file, 'r', encoding='utf-8') as f:
+                        playlists = json.load(f)
+                except Exception: pass
+
+            if user_id not in playlists:
+                playlists[user_id] = []
+
+            playlist_entry = {
+                'title': prompt[:30],
+                'time': datetime.now().strftime("%Y-%m-%d %H:%M"),
+                'songs': songs
+            }
+            # 保持前 15 份歷史歌單
+            playlists[user_id].insert(0, playlist_entry)
+            playlists[user_id] = playlists[user_id][:15]
+
+            try:
+                with open(history_file, 'w', encoding='utf-8') as f:
+                    json.dump(playlists, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                print(f"Save playlist error: {e}")
+
+            # 如果未在播放則開始播放
+            if not ctx.voice_client.is_playing():
+                self.play_next(ctx)
+
+            song_list_str = "\n".join([f"`{i+1}.` {s}" for i, s in enumerate(songs)])
+            embed = discord.Embed(title="✨ Gemini 專屬 AI 推薦歌單已生成！", description=f"**主題**：{prompt}\n\n**曲目列表：**\n{song_list_str}", color=0x9b59b6)
+            embed.set_footer(text="已自動加入播放佇列並儲存至個人歷史歌單！輸入 !my_playlists 可隨時查看。")
+            await ctx.send(embed=embed)
+
+    @commands.command(name='my_playlists', aliases=['我的歌單', '歷史歌單', '歌單庫'])
+    async def my_playlists(self, ctx, load_index: int = None):
+        """查看或載入過去生成的 AI 歷史歌單。用法: !my_playlists [編號]"""
+        user_id = str(ctx.author.id)
+        history_file = "playlists_history.json"
+        if not os.path.exists(history_file):
+            return await ctx.send("📜 您尚未生成過任何 AI 歌單喔！快輸入 `!ai_playlist [主題]` 生成第一份吧！")
+
+        try:
+            with open(history_file, 'r', encoding='utf-8') as f:
+                playlists = json.load(f)
+        except Exception:
+            return await ctx.send("❌ 讀取歷史歌單失敗。")
+
+        user_pl = playlists.get(user_id, [])
+        if not user_pl:
+            return await ctx.send("📜 您尚未生成過任何 AI 歌單喔！快輸入 `!ai_playlist [主題]` 生成第一份吧！")
+
+        if load_index is not None:
+            if load_index < 1 or load_index > len(user_pl):
+                return await ctx.send(f"❌ 無效的歌單編號！請選擇 1 ~ {len(user_pl)} 之間的數字。")
+
+            target_pl = user_pl[load_index - 1]
+            songs = target_pl.get('songs', [])
+
+            if not ctx.voice_client:
+                if not ctx.author.voice:
+                    return await ctx.send("❌ 請先加入語音頻道！")
+                await ctx.author.voice.channel.connect(timeout=60.0, reconnect=True)
+
+            gid = ctx.guild.id
+            if gid not in self.queue: self.queue[gid] = []
+
+            for song_query in songs:
+                search_term = f"ytsearch1:{song_query}"
+                self.queue[gid].append({
+                    'type': 'lazy',
+                    'query': search_term,
+                    'requester': ctx.author
+                })
+
+            if not ctx.voice_client.is_playing():
+                self.play_next(ctx)
+
+            return await ctx.send(f"✅ **已成功載入歷史歌單「{target_pl['title']}」({len(songs)} 首) 至播放隊列！**")
+
+        embed = discord.Embed(title=f"📜 {ctx.author.display_name} 的歷史 AI 歌單庫", color=0x3498db)
+        desc = "輸入 `!my_playlists <編號>` 可直接將該歌單載入到播放隊列中！\n\n"
+        for i, pl in enumerate(user_pl):
+            song_preview = " / ".join(pl['songs'][:2])
+            if len(pl['songs']) > 2: song_preview += "..."
+            desc += f"**{i+1}.** 【{pl['title']}】 ({pl['time']}) - {len(pl['songs'])} 首\n`└ {song_preview}`\n\n"
+
+        embed.description = desc
+        await ctx.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(MusicCog(bot))

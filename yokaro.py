@@ -60,6 +60,10 @@ class YokaroBot(commands.Bot):
             'cogs.mcstatus',
             'cogs.reloader',
             'cogs.delete_log',
+            # ===== 新功能模組 =====
+            'cogs.greeting_buttons',   # 🤝 互動打招呼按鈕
+            'cogs.checkin_cards',      # 🎮 每日簽到+抽卡
+            'cogs.confession',         # 🗣️ 匿名告白牆
         ]
 
     async def setup_hook(self):
