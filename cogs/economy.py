@@ -322,7 +322,7 @@ class EconomyCog(commands.Cog):
         embed = discord.Embed(title="🏪 Yokaro 24h 自動櫃員機", description="歡迎使用洛洛銀行！請點選下方按鈕。", color=0x2ecc71)
         await ctx.send(embed=embed, view=ATMMainView(ctx.author, self))
 
-    @commands.hybrid_command(name='daily', aliases=['簽到'])
+    @commands.hybrid_command(name='daily', aliases=['每日獎勵'])
     async def daily(self, ctx):
         uid = str(ctx.author.id)
         d = self.get_user_data(uid)
