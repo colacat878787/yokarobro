@@ -24,6 +24,9 @@ fi
 echo "📦 正在安裝 Python 套件..."
 python -m pip install -r requirements.txt
 python -m pip install mcstatus==11.1.0
+# yt-dlp 需要保持最新，否則 YouTube 串流 URL 會失效
+echo "🔄 正在升級 yt-dlp 至最新版本..."
+python -m pip install -U yt-dlp
 
 echo "================================================"
 echo "🤖 正在啟動 Yokaro 機器人..."

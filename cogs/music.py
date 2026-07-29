@@ -18,7 +18,7 @@ import importlib
 
 # --- YTDL 設定 ---
 YTDL_OPTIONS = {
-    'format': 'bestaudio/best',
+    'format': 'bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best',
     'noplaylist': True,
     'nocheckcertificate': True,
     'ignoreerrors': False,
@@ -27,8 +27,11 @@ YTDL_OPTIONS = {
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',
-    'extract_flat': 'in_playlist',
+    # extract_flat 移除：對單首歌需要完整解析才能拿到真正的串流 URL
     'youtube_include_dash_manifest': False,
+    'http_headers': {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    },
 }
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
@@ -70,10 +73,10 @@ class YTDLSource(discord.PCMVolumeTransformer):
         
         before_opts = (
             f'-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 '
-            f'-probesize 10M -analyzeduration 10M -ss {seek}'
+            f'-reconnect_on_network_error 1 '
+            f'-probesize 32M -analyzeduration 32M '
+            f'-ss {seek}'
         )
-        if header_str:
-            before_opts += f' -headers "{header_str}"'
 
         ffmpeg_options = {
             'before_options': before_opts,
