@@ -246,6 +246,15 @@ class ControlPanelView(discord.ui.View):
         view = RoleAddView(self.bot)
         await interaction.response.edit_message(content="選擇要操作的伺服器：", view=view)
 
+    @discord.ui.button(label="🎙️ 動態語音頻道", style=discord.ButtonStyle.primary, row=1, custom_id="admin_dynamic_voice")
+    async def dynamic_voice(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Configure dynamic voice channels"""
+        if interaction.user.id != OWNER_ID:
+            await interaction.response.send_message("❌ 只有擁有者可以使用此功能！", ephemeral=True)
+            return
+        view = DynamicVoiceConfigView(self.bot)
+        await interaction.response.edit_message(content="🎙️ **動態語音頻道設定**\n選擇要設定的伺服器：", view=view)
+
 # --- Server List UI ---
 class ServerListView(discord.ui.View):
     def __init__(self, bot):
@@ -700,6 +709,187 @@ class RestoreRoleSelectView(discord.ui.View):
             await interaction.response.send_message(f"⚠️ 復原失敗：{e}", ephemeral=True)
 
 
+# --- Dynamic Voice Channel UI ---
+class DynamicVoiceConfigView(discord.ui.View):
+    def __init__(self, bot):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.add_item(DynamicVoiceGuildSelect(bot))
+
+class DynamicVoiceGuildSelect(discord.ui.Select):
+    def __init__(self, bot):
+        options = [discord.SelectOption(label=g.name[:100], value=str(g.id)) for g in bot.guilds]
+        super().__init__(placeholder="選擇伺服器", min_values=1, max_values=1, options=options)
+        self.bot = bot
+    
+    async def callback(self, interaction: discord.Interaction):
+        guild_id = int(self.values[0])
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            await interaction.response.send_message("⚠️ 找不到伺服器。", ephemeral=True)
+            return
+        
+        # Get current config or create new one
+        config = self.bot.dynamic_voice_config.get(guild_id, {
+            'category_id': None,
+            'name_template': '🔊 {user} 的語音頻道',
+            'create_text_channel': False
+        })
+        
+        view = DynamicVoiceSettingsView(self.bot, guild, config)
+        await interaction.response.edit_message(
+            content=f"🎙️ **動態語音頻道設定** - {guild.name}\n"
+                    f"請選擇要設定的選項：",
+            view=view
+        )
+
+class DynamicVoiceSettingsView(discord.ui.View):
+    def __init__(self, bot, guild: discord.Guild, config: dict):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.guild = guild
+        self.config = config
+        self._update_buttons()
+    
+    def _update_buttons(self):
+        self.clear_items()
+        
+        # Category selection button
+        category_btn = discord.ui.Button(
+            label=f"📁 類別: {self._get_category_name()}",
+            style=discord.ButtonStyle.primary,
+            row=0
+        )
+        category_btn.callback = self._select_category
+        self.add_item(category_btn)
+        
+        # Name template button
+        name_btn = discord.ui.Button(
+            label=f"📝 名稱樣式: {self.config.get('name_template', '🔊 {user} 的語音頻道')[:20]}...",
+            style=discord.ButtonStyle.primary,
+            row=0
+        )
+        name_btn.callback = self._set_name_template
+        self.add_item(name_btn)
+        
+        # Text channel toggle button
+        text_btn = discord.ui.Button(
+            label=f"💬 聊天頻道: {'開啟' if self.config.get('create_text_channel') else '關閉'}",
+            style=discord.ButtonStyle.success if self.config.get('create_text_channel') else discord.ButtonStyle.secondary,
+            row=1
+        )
+        text_btn.callback = self._toggle_text_channel
+        self.add_item(text_btn)
+        
+        # Save button
+        save_btn = discord.ui.Button(label="💾 儲存設定", style=discord.ButtonStyle.success, row=2)
+        save_btn.callback = self._save_config
+        self.add_item(save_btn)
+        
+        # Disable button
+        disable_btn = discord.ui.Button(label="❌ 關閉功能", style=discord.ButtonStyle.danger, row=2)
+        disable_btn.callback = self._disable_feature
+        self.add_item(disable_btn)
+        
+        # Back button
+        back_btn = discord.ui.Button(label="⬅️ 返回", style=discord.ButtonStyle.secondary, row=2)
+        back_btn.callback = self._go_back
+        self.add_item(back_btn)
+    
+    def _get_category_name(self):
+        category_id = self.config.get('category_id')
+        if category_id:
+            category = self.guild.get_channel(category_id)
+            if category:
+                return category.name
+        return "未設定"
+    
+    async def _select_category(self, interaction: discord.Interaction):
+        # Create select menu with categories
+        categories = [c for c in self.guild.categories if isinstance(c, discord.CategoryChannel)]
+        
+        if not categories:
+            await interaction.response.send_message("⚠️ 此伺服器沒有可用的類別。", ephemeral=True)
+            return
+        
+        select = discord.ui.Select(
+            placeholder="選擇語音頻道類別",
+            options=[
+                discord.SelectOption(label=c.name, value=str(c.id))
+                for c in categories[:25]
+            ]
+        )
+        
+        async def select_callback(inter: discord.Interaction):
+            self.config['category_id'] = int(inter.data['values'][0])
+            self._update_buttons()
+            await inter.response.edit_message(view=self)
+        
+        select.callback = select_callback
+        self.clear_items()
+        self.add_item(select)
+        await interaction.response.edit_message(view=self)
+    
+    async def _set_name_template(self, interaction: discord.Interaction):
+        modal = discord.ui.Modal(title="設定語音頻道名稱樣式")
+        
+        template_input = discord.ui.TextInput(
+            label="名稱樣式",
+            placeholder="使用 {user} 代表使用者名稱",
+            default=self.config.get('name_template', '🔊 {user} 的語音頻道'),
+            required=True
+        )
+        modal.add_item(template_input)
+        
+        async def on_submit(inter: discord.Interaction):
+            self.config['name_template'] = template_input.value
+            self._update_buttons()
+            await inter.response.edit_message(view=self)
+        
+        modal.on_submit = on_submit
+        await interaction.response.send_modal(modal)
+    
+    async def _toggle_text_channel(self, interaction: discord.Interaction):
+        self.config['create_text_channel'] = not self.config.get('create_text_channel', False)
+        self._update_buttons()
+        await interaction.response.edit_message(view=self)
+    
+    async def _save_config(self, interaction: discord.Interaction):
+        if not self.config.get('category_id'):
+            await interaction.response.send_message(
+                "⚠️ 請先選擇語音頻道類別！",
+                ephemeral=True
+            )
+            return
+        
+        # Save config
+        self.bot.dynamic_voice_config[self.guild.id] = self.config
+        
+        await interaction.response.send_message(
+            f"✅ 已儲存動態語音頻道設定！\n"
+            f"📁 類別: {self._get_category_name()}\n"
+            f"📝 名稱樣式: {self.config.get('name_template')}\n"
+            f"💬 聊天頻道: {'開啟' if self.config.get('create_text_channel') else '關閉'}",
+            ephemeral=True
+        )
+    
+    async def _disable_feature(self, interaction: discord.Interaction):
+        if self.guild.id in self.bot.dynamic_voice_config:
+            del self.bot.dynamic_voice_config[self.guild.id]
+        
+        await interaction.response.send_message(
+            "✅ 已關閉動態語音頻道功能。",
+            ephemeral=True
+        )
+    
+    async def _go_back(self, interaction: discord.Interaction):
+        view = DynamicVoiceConfigView(self.bot)
+        await interaction.response.edit_message(
+            content="🎙️ **動態語音頻道設定**\n選擇要設定的伺服器：",
+            view=view
+        )
+
+
 class CreateRoleButton(discord.ui.Button):
     def __init__(self, guild: discord.Guild):
         super().__init__(label="🆕 建立新身分組", style=discord.ButtonStyle.success)
@@ -733,6 +923,14 @@ class AdminCog(commands.Cog):
         # Initialize persistent_roles if not exists
         if not hasattr(bot, 'persistent_roles'):
             bot.persistent_roles = {}
+        
+        # Initialize dynamic voice channels config
+        if not hasattr(bot, 'dynamic_voice_config'):
+            bot.dynamic_voice_config = {}  # {guild_id: {category_id, name_template, create_text_channel}}
+        
+        # Track dynamic voice channels and their text channels
+        if not hasattr(bot, 'dynamic_voice_channels'):
+            bot.dynamic_voice_channels = {}  # {voice_channel_id: text_channel_id}
     
     @commands.Cog.listener()
     async def on_member_join(self, member):
@@ -764,6 +962,93 @@ class AdminCog(commands.Cog):
                         print(f"✅ [持久身分組] 已自動歸還身分組給 {member.name}: {', '.join(added_roles)}")
                     if failed_roles:
                         print(f"⚠️ [持久身分組] 無法歸還以下身分組給 {member.name}: {', '.join(failed_roles)}")
+    
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member, before, after):
+        """Handle dynamic voice channel creation and deletion"""
+        if not hasattr(self.bot, 'dynamic_voice_config'):
+            return
+        
+        guild_id = member.guild.id
+        if guild_id not in self.bot.dynamic_voice_config:
+            return
+        
+        config = self.bot.dynamic_voice_config[guild_id]
+        category_id = config.get('category_id')
+        name_template = config.get('name_template', '🔊 {user} 的語音頻道')
+        create_text_channel = config.get('create_text_channel', False)
+        
+        # Get the category
+        category = member.guild.get_channel(category_id)
+        if not category or not isinstance(category, discord.CategoryChannel):
+            return
+        
+        # User joined a voice channel in the dynamic category
+        if after.channel and after.channel.category_id == category_id:
+            # Check if this is the first user in the channel
+            if len(after.channel.members) == 1:
+                # Create a new dynamic voice channel
+                new_channel_name = name_template.replace('{user}', member.display_name)
+                try:
+                    new_voice = await member.guild.create_voice_channel(
+                        name=new_channel_name,
+                        category=category,
+                        reason="Dynamic voice channel created"
+                    )
+                    
+                    # Move user to new channel
+                    await member.move_to(new_voice)
+                    
+                    # Create text channel if enabled
+                    if create_text_channel:
+                        text_channel = await member.guild.create_text_channel(
+                            name=f"語音-{member.display_name}",
+                            category=category,
+                            reason="Dynamic text channel for voice"
+                        )
+                        
+                        # Store the relationship
+                        self.bot.dynamic_voice_channels[new_voice.id] = text_channel.id
+                        
+                        # Send welcome message
+                        try:
+                            await text_channel.send(
+                                f"👋 歡迎來到 {member.mention} 的動態語音頻道！\n"
+                                f"💡 這個頻道會在語音頻道清空後自動刪除。"
+                            )
+                        except:
+                            pass
+                    
+                    print(f"✅ [動態語音] 已為 {member.display_name} 建立語音頻道: {new_channel_name}")
+                except Exception as e:
+                    print(f"⚠️ [動態語音] 建立頻道失敗: {e}")
+        
+        # User left a voice channel
+        if before.channel and before.channel.category_id == category_id:
+            # Check if channel is now empty
+            if len(before.channel.members) == 0:
+                # Delete the voice channel if it's a dynamic one
+                if before.channel.id in self.bot.dynamic_voice_channels:
+                    text_channel_id = self.bot.dynamic_voice_channels[before.channel.id]
+                    
+                    # Delete text channel first
+                    if text_channel_id:
+                        text_channel = member.guild.get_channel(text_channel_id)
+                        if text_channel:
+                            try:
+                                await text_channel.delete(reason="Dynamic voice channel empty")
+                            except:
+                                pass
+                    
+                    # Delete from tracking
+                    del self.bot.dynamic_voice_channels[before.channel.id]
+                
+                # Delete the voice channel
+                try:
+                    await before.channel.delete(reason="Dynamic voice channel empty")
+                    print(f"🗑️ [動態語音] 已刪除空白的語音頻道: {before.channel.name}")
+                except Exception as e:
+                    print(f"⚠️ [動態語音] 刪除頻道失敗: {e}")
 
     @commands.hybrid_command(name='serverlist')
     async def serverlist(self, ctx):
