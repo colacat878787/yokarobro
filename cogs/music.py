@@ -974,20 +974,61 @@ class MusicCog(commands.Cog):
             return
 
         video_id = self.extract_youtube_video_id(getattr(source, 'original_url', '') or getattr(source, 'url', ''))
-        # Build a better query with artist info if available from uploader
+        
+        # Clean YouTube title: remove common keywords like 歌詞, lyrics, MV, official, etc.
         query = source.title
-        uploader = getattr(source, 'data', {}).get('uploader') if hasattr(source, 'data') else None
-        if uploader and uploader not in query:
-            # Try to construct "Song - Artist" format for better matching
-            query = f"{source.title} - {uploader}"
+        # Remove common YouTube title suffixes
+        import re as _re
+        query = _re.sub(r'\s*(歌詞|lyrics|MV|Official|Video|Audio|歌詞版|字幕版|中文字幕|高清|HD|1080p|4K)\s*', ' ', query, flags=_re.IGNORECASE)
+        query = _re.sub(r'\s+', ' ', query).strip()
+        query = _re.sub(r'\s*[【\[\(].*?[】\]\)]\s*', ' ', query)
+        query = _re.sub(r'\s+', ' ', query).strip()
+        
+        # For YouTube titles, the format is usually "Artist - Song" or "Song - Artist"
+        # Try to detect if it's "Artist - Song" format (most common on YouTube)
+        if ' - ' in query:
+            parts = query.split(' - ', 1)
+            # If the left part is short (likely artist name), swap to "Song - Artist" 
+            # But actually, let's just use video_id to search instead of query
+            # Genius works better with a simple query
+            pass
+        
+        # Use video_id to search YouTube first, then try Genius
+        if video_id:
+            try:
+                youtube_info = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: ytdl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+                )
+                if youtube_info:
+                    # Extract clean song title from YouTube info
+                    clean_title = youtube_info.get('title', '')
+                    clean_uploader = youtube_info.get('uploader', '') or youtube_info.get('channel', '') or ''
+                    clean_title = _re.sub(r'\s*(歌詞|lyrics|MV|Official|Video|Audio|歌詞版|字幕版|中文字幕|高清|HD|1080p|4K)\s*', ' ', clean_title, flags=_re.IGNORECASE)
+                    clean_title = _re.sub(r'\s+', ' ', clean_title).strip()
+                    clean_title = _re.sub(r'\s*[【\[\(].*?[】\]\)]\s*', ' ', clean_title)
+                    clean_title = _re.sub(r'\s+', ' ', clean_title).strip()
+                    
+                    # If title has " - ", it's likely "Artist - Song" format
+                    if ' - ' in clean_title:
+                        # Try to search with just the song part (right side) + artist
+                        artist_part, song_part = clean_title.split(' - ', 1)
+                        # Remove suffixes from song_part
+                        song_part = _re.sub(r'\s*(歌詞|lyrics|MV|Official|Video|Audio|歌詞版|字幕版|中文字幕|高清|HD|1080p|4K).*', '', song_part, flags=_re.IGNORECASE).strip()
+                        if song_part:
+                            query = f"{song_part} - {artist_part}"
+                    else:
+                        query = clean_title
+            except Exception:
+                pass
         
         # Try to get stored search query which might have better formatting
         try:
             state = self.get_state(guild_id)
             stored_query = state.get('last_search_query')
-            if stored_query and len(stored_query) > 3:
-                # Prefer stored query if it looks like "Song - Artist"
-                if ' - ' in stored_query:
+            if stored_query and len(stored_query) > 3 and ' - ' in stored_query:
+                # Use stored query if it looks like "Song - Artist"
+                s_parts = stored_query.split(' - ', 1)
+                if len(s_parts) == 2 and len(s_parts[0]) < 50 and len(s_parts[1]) < 50:
                     query = stored_query
         except Exception:
             pass
@@ -996,6 +1037,11 @@ class MusicCog(commands.Cog):
         lyrics_data = await self.fetch_all_lyrics(query=query, video_id=video_id)
         if not lyrics_data:
             print(f"[DEBUG Lyrics] No lyrics data returned for: {query}")
+            # Try again with just the original title without any processing
+            if query != source.title:
+                print(f"[DEBUG Lyrics] Retrying with original title: {source.title}")
+                lyrics_data = await self.fetch_all_lyrics(query=source.title, video_id=video_id)
+        if not lyrics_data:
             self.lyrics.pop(guild_id, None)
             return
 
