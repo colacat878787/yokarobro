@@ -340,11 +340,63 @@ class AssignRoleView(discord.ui.View):
     def __init__(self, guild: discord.Guild, role: discord.Role):
         super().__init__(timeout=60)
         self.guild = guild
-        self.role = role
+        # Store role ID to prevent stale Role objects
+        self.role_id = role.id
 
     @discord.ui.button(label="💎 給我這個身分組", style=discord.ButtonStyle.success)
-    async def give_me(self, interaction: discord.Interaction, button: discord.ui.Button):
-        member = interaction.user
+    async def give_me_self(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Assign role to the invoking user (self)
+        member = self.guild.get_member(interaction.user.id)
+        if member is None:
+            try:
+                member = await self.guild.fetch_member(interaction.user.id)
+            except Exception:
+                await interaction.response.send_message(
+                    "⚠️ 無法取得您的會員資訊，請確保您在目標伺服器中。",
+                    ephemeral=True
+                )
+                return
+        try:
+            await member.add_roles(self.role)
+            await interaction.response.send_message(
+                f"✅ 已將身分組 **{self.role.name}** 給予 <@{member.id}>。",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ 給予身分組失敗：{e}", ephemeral=True)
+
+    @discord.ui.button(label="👤 給成員身分組", style=discord.ButtonStyle.primary)
+    async def give_me_member(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Open a modal to request a member ID or mention
+        await interaction.response.send_modal(AssignRoleMemberModal(self.guild, self.role))
+
+class AssignRoleMemberModal(discord.ui.Modal, title="給成員身分組"):
+    def __init__(self, guild: discord.Guild, role: discord.Role):
+        super().__init__()
+        self.guild = guild
+        self.role = role
+        self.member_input = discord.ui.TextInput(
+            label="成員 ID 或 @ 提及",
+            placeholder="輸入成員的 ID 或 @提及",
+            required=True
+        )
+        self.add_item(self.member_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        import re
+        content = self.member_input.value.strip()
+        match = re.search(r"(\d{17,})", content)
+        if not match:
+            await interaction.response.send_message("⚠️ 無效的成員 ID。", ephemeral=True)
+            return
+        member_id = int(match.group(1))
+        member = self.guild.get_member(member_id)
+        if member is None:
+            try:
+                member = await self.guild.fetch_member(member_id)
+            except Exception:
+                await interaction.response.send_message("⚠️ 找不到此成員於目標伺服器。", ephemeral=True)
+                return
         try:
             await member.add_roles(self.role)
             await interaction.response.send_message(
