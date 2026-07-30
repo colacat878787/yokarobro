@@ -992,16 +992,21 @@ class MusicCog(commands.Cog):
         except Exception:
             pass
         
+        print(f"[DEBUG Lyrics] load_lyrics_for_song: guild={guild_id}, query='{query}', video_id='{video_id}'")
         lyrics_data = await self.fetch_all_lyrics(query=query, video_id=video_id)
         if not lyrics_data:
+            print(f"[DEBUG Lyrics] No lyrics data returned for: {query}")
             self.lyrics.pop(guild_id, None)
             return
 
         description, lyrics = self.format_lyrics_result(lyrics_data)
+        print(f"[DEBUG Lyrics] Got lyrics: song='{lyrics_data.get('song')}', artist='{lyrics_data.get('artist')}', length={len(lyrics)}")
         parsed_lines = self.parse_lyrics_text(lyrics)
         if not parsed_lines and lyrics:
+            print(f"[DEBUG Lyrics] No timestamps found, using plain text ({len(lyrics.splitlines())} lines)")
             parsed_lines = [(None, line.strip()) for line in lyrics.splitlines() if line.strip()]
 
+        print(f"[DEBUG Lyrics] parsed_lines count: {len(parsed_lines)}")
         self.lyrics[guild_id] = {
             "song": lyrics_data.get("song"),
             "artist": lyrics_data.get("artist"),
@@ -1009,6 +1014,7 @@ class MusicCog(commands.Cog):
             "lines": parsed_lines,
             "duration": duration or source.duration,
         }
+        print(f"[DEBUG Lyrics] Lyrics stored successfully for guild {guild_id}")
 
     def create_progress_bar(self, current, total):
         if total == 0: return "[▬▬▬▬▬▬▬▬▬🔘]"
