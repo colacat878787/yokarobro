@@ -9,6 +9,7 @@ from flask import render_template_string, jsonify, request, Response
 from cogs.webpanel import app, bot_instance, loop_instance
 from datetime import timedelta
 import time
+import edge_tts
 
 # --- 音樂儀表板 HTML 模板 ---
 MUSIC_HTML_TEMPLATE = """
@@ -745,14 +746,20 @@ def music_tts(guild_id):
     async def do_tts():
         if guild.voice_client:
             try:
-                from gtts import gTTS
-                import io
-                fp = io.BytesIO()
-                gTTS(text=text, lang='zh-tw').write_to_fp(fp)
-                fp.seek(0)
-                source = discord.FFmpegPCMAudio(fp, pipe=True)
-                if guild.voice_client.is_playing(): guild.voice_client.stop()
-                guild.voice_client.play(source)
+                # 使用 edge-tts 生成語音 (使用 zh-CN-XiaoxiaoNeural 中文女聲)
+                communicate = edge_tts.Communicate(text, "zh-CN-XiaoxiaoNeural")
+                audio_data = await communicate.get_audio()
+                
+                # 寫入暫存檔案
+                import tempfile
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as fp:
+                    fp.write(audio_data)
+                    temp_path = fp.name
+                
+                source = discord.FFmpegPCMAudio(temp_path)
+                if guild.voice_client.is_playing(): 
+                    guild.voice_client.stop()
+                guild.voice_client.play(source, after=lambda e: os.unlink(temp_path) if os.path.exists(temp_path) else None)
             except Exception as e:
                 print(f"❌ [TTS] 失敗: {e}")
     asyncio.run_coroutine_threadsafe(do_tts(), loop_instance)

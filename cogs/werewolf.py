@@ -5,7 +5,7 @@ import os
 import uuid
 import asyncio
 import urllib.request
-from gtts import gTTS
+import edge_tts
 import discord.ui
 from yt_dlp import YoutubeDL
 
@@ -494,8 +494,20 @@ class WerewolfCog(commands.Cog):
             print(f"Local TTS generation error: {e}")
         
         try:
-            tts = gTTS(text=text, lang='zh-tw')
-            tts.save(filepath)
+            # 使用 edge-tts 生成語音 (使用 zh-CN-XiaoxiaoNeural 中文女聲)
+            communicate = edge_tts.Communicate(text, "zh-CN-XiaoxiaoNeural")
+            
+            # 在同步函數中運行異步代碼
+            async def generate_audio():
+                return await communicate.get_audio()
+            
+            # 使用 asyncio 運行
+            loop = asyncio.get_event_loop()
+            audio_data = loop.run_until_complete(generate_audio())
+            
+            with open(filepath, 'wb') as f:
+                f.write(audio_data)
+            
             self.tts_queues[guild_id].append(filepath)
             self.play_next_tts(guild)
         except Exception as e:
