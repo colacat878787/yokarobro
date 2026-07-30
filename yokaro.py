@@ -29,6 +29,8 @@ logger = logging.getLogger("Yokaro")
 class YokaroBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix='!', intents=intents, help_command=None)
+        # Track deleted roles for restore functionality
+        self.deleted_roles = {}  # {guild_id: [list of deleted role data]}
         # ... (其餘部分不變)
         self.initial_extensions = [
             'cogs.ai',

@@ -317,6 +317,9 @@ class RoleSelectView(discord.ui.View):
         self.guild = guild
         self.add_item(RoleSelect(guild))
         self.add_item(CreateRoleButton(guild))
+        # Add restore button if there are recently deleted roles
+        if hasattr(bot, 'deleted_roles') and guild.id in bot.deleted_roles:
+            self.add_item(RestoreRoleButton(bot, guild))
 
 class RoleSelect(discord.ui.Select):
     def __init__(self, guild: discord.Guild):
@@ -342,6 +345,12 @@ class AssignRoleView(discord.ui.View):
         self.guild = guild
         # Store role ID to prevent stale Role objects
         self.role_id = role.id
+        self.role_name = role.name
+        self.role_color = role.color
+        self.role_permissions = role.permissions.value
+        self.role_hoist = role.hoist
+        self.role_mentionable = role.mentionable
+        self.role_position = role.position
 
     @discord.ui.button(label="💎 給我這個身分組", style=discord.ButtonStyle.success)
     async def give_me_self(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -370,10 +379,55 @@ class AssignRoleView(discord.ui.View):
         except Exception as e:
             await interaction.response.send_message(f"⚠️ 給予身分組失敗：{e}", ephemeral=True)
 
+    @discord.ui.button(label="🗑️ 移除我的身分組", style=discord.ButtonStyle.danger)
+    async def remove_me_self(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Remove role from the invoking user (self)
+        member = self.guild.get_member(interaction.user.id)
+        if member is None:
+            try:
+                member = await self.guild.fetch_member(interaction.user.id)
+            except Exception:
+                await interaction.response.send_message(
+                    "⚠️ 無法取得您的會員資訊，請確保您在目標伺服器中。",
+                    ephemeral=True
+                )
+                return
+        # Retrieve the role using stored role_id
+        role = self.guild.get_role(self.role_id)
+        if role is None:
+            await interaction.response.send_message("⚠️ 找不到該身分組，請稍後再試。", ephemeral=True)
+            return
+        try:
+            await member.remove_roles(role)
+            await interaction.response.send_message(
+                f"✅ 已從 <@{member.id}> 移除身分組 **{role.name}**。",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ 移除身分組失敗：{e}", ephemeral=True)
+
     @discord.ui.button(label="👤 給成員身分組", style=discord.ButtonStyle.primary)
     async def give_me_member(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Open a modal to request a member ID or mention, pass role_id instead of role object
         await interaction.response.send_modal(AssignRoleMemberModal(self.guild, self.role_id))
+
+    @discord.ui.button(label="❌ 刪除身分組", style=discord.ButtonStyle.danger)
+    async def delete_role(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Confirm deletion
+        role = self.guild.get_role(self.role_id)
+        if role is None:
+            await interaction.response.send_message("⚠️ 找不到該身分組，可能已被刪除。", ephemeral=True)
+            return
+        
+        # Create confirmation view
+        confirm_view = ConfirmDeleteView(self.guild, self.role_id, self.role_name, self.role_color, 
+                                         self.role_permissions, self.role_hoist, self.role_mentionable, 
+                                         self.role_position)
+        await interaction.response.send_message(
+            f"⚠️ **確認刪除**\n你確定要刪除身分組 **{role.name}** 嗎？\n此操作無法復原（除非使用復原功能）。",
+            view=confirm_view,
+            ephemeral=True
+        )
 
 class AssignRoleMemberModal(discord.ui.Modal, title="給成員身分組"):
     def __init__(self, guild: discord.Guild, role_id: int):
@@ -423,6 +477,178 @@ class AssignRoleMemberModal(discord.ui.Modal, title="給成員身分組"):
         except Exception as e:
             await interaction.response.send_message(f"⚠️ 給予身分組失敗：{e}", ephemeral=True)
 
+
+
+class ConfirmDeleteView(discord.ui.View):
+    def __init__(self, guild: discord.Guild, role_id: int, role_name: str, role_color: int, 
+                 role_permissions: int, role_hoist: bool, role_mentionable: bool, role_position: int):
+        super().__init__(timeout=30)
+        self.guild = guild
+        self.role_id = role_id
+        self.role_name = role_name
+        self.role_color = role_color
+        self.role_permissions = role_permissions
+        self.role_hoist = role_hoist
+        self.role_mentionable = role_mentionable
+        self.role_position = role_position
+
+    @discord.ui.button(label="✅ 確認刪除", style=discord.ButtonStyle.danger)
+    async def confirm_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
+        role = self.guild.get_role(self.role_id)
+        if role is None:
+            await interaction.response.send_message("⚠️ 找不到該身分組，可能已被刪除。", ephemeral=True)
+            return
+        
+        try:
+            # Save role data before deletion
+            role_data = {
+                'id': self.role_id,
+                'name': self.role_name,
+                'color': self.role_color,
+                'permissions': self.role_permissions,
+                'hoist': self.role_hoist,
+                'mentionable': self.role_mentionable,
+                'position': self.role_position,
+                'deleted_at': discord.utils.utcnow().timestamp()
+            }
+            
+            # Store in bot's deleted_roles dictionary
+            if not hasattr(interaction.client, 'deleted_roles'):
+                interaction.client.deleted_roles = {}
+            
+            if self.guild.id not in interaction.client.deleted_roles:
+                interaction.client.deleted_roles[self.guild.id] = []
+            
+            interaction.client.deleted_roles[self.guild.id].append(role_data)
+            
+            # Delete the role
+            role_name = role.name
+            await role.delete(reason="Deleted via admin panel")
+            
+            await interaction.response.edit_message(
+                content=f"✅ 已成功刪除身分組 **{role_name}**。\n💡 提示：使用「🔄 復原身分組」按鈕可恢復此身分組（需在30分鐘內）。",
+                view=None
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ 刪除失敗：{e}", ephemeral=True)
+
+    @discord.ui.button(label="❌ 取消", style=discord.ButtonStyle.secondary)
+    async def cancel_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="❌ 已取消刪除操作。", view=None)
+
+
+class RestoreRoleView(discord.ui.View):
+    def __init__(self, bot, guild: discord.Guild):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.guild = guild
+        # In a real implementation, you would store deleted roles in a database
+        # For now, we'll show a message that this feature needs a database
+        self.add_item(RestoreRoleSelect(guild))
+
+
+class RestoreRoleButton(discord.ui.Button):
+    def __init__(self, bot, guild: discord.Guild):
+        super().__init__(label="🔄 復原身分組", style=discord.ButtonStyle.primary, row=1)
+        self.bot = bot
+        self.guild = guild
+
+    async def callback(self, interaction: discord.Interaction):
+        # Get recently deleted roles for this guild
+        deleted_roles = getattr(self.bot, 'deleted_roles', {}).get(self.guild.id, [])
+        
+        if not deleted_roles:
+            await interaction.response.send_message(
+                "⚠️ 沒有可復原的身分組記錄。",
+                ephemeral=True
+            )
+            return
+        
+        # Create view with restore options
+        view = RestoreRoleSelectView(self.guild, deleted_roles)
+        await interaction.response.send_message(
+            "🔄 **選擇要復原的身分組**（最近30分鐘內刪除的）：",
+            view=view,
+            ephemeral=True
+        )
+
+
+class RestoreRoleSelectView(discord.ui.View):
+    def __init__(self, guild: discord.Guild, deleted_roles: list):
+        super().__init__(timeout=60)
+        self.guild = guild
+        self.deleted_roles = deleted_roles
+        # Create select menu with deleted roles
+        options = []
+        for role_data in deleted_roles[:25]:  # Discord limit: 25 options max
+            options.append(
+                discord.SelectOption(
+                    label=role_data['name'],
+                    description=f"顏色: #{role_data['color']:06x} | 權限值: {role_data['permissions']}",
+                    value=str(role_data['id'])
+                )
+            )
+        
+        if options:
+            select = discord.ui.Select(
+                placeholder="選擇要復原的身分組",
+                options=options
+            )
+            select.callback = self.on_select
+            self.add_item(select)
+        else:
+            select = discord.ui.Select(
+                placeholder="沒有可復原的身分組",
+                options=[discord.SelectOption(label="無", value="none")],
+                disabled=True
+            )
+            self.add_item(select)
+
+    async def on_select(self, interaction: discord.Interaction):
+        role_id = int(interaction.data['values'][0])
+        
+        # Find the role data
+        role_data = None
+        for r in self.deleted_roles:
+            if r['id'] == role_id:
+                role_data = r
+                break
+        
+        if not role_data:
+            await interaction.response.send_message("⚠️ 找不到該身分組資料。", ephemeral=True)
+            return
+        
+        try:
+            # Recreate the role with saved properties
+            permissions = discord.Permissions(role_data['permissions'])
+            new_role = await self.guild.create_role(
+                name=role_data['name'],
+                color=discord.Color(role_data['color']),
+                permissions=permissions,
+                hoist=role_data['hoist'],
+                mentionable=role_data['mentionable']
+            )
+            
+            # Try to set position (may fail if position is taken)
+            try:
+                await new_role.edit(position=min(role_data['position'], len(self.guild.roles) - 1))
+            except:
+                pass  # Position setting is optional
+            
+            # Remove from deleted roles list
+            if hasattr(self.guild._state, '_connection') and hasattr(self.guild._state._connection, 'bot'):
+                bot = self.guild._state._connection.bot
+                if hasattr(bot, 'deleted_roles') and self.guild.id in bot.deleted_roles:
+                    bot.deleted_roles[self.guild.id] = [
+                        r for r in bot.deleted_roles[self.guild.id] if r['id'] != role_id
+                    ]
+            
+            await interaction.response.edit_message(
+                content=f"✅ 已成功復原身分組 **{new_role.name}** (ID: {new_role.id})！",
+                view=None
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ 復原失敗：{e}", ephemeral=True)
 
 
 class CreateRoleButton(discord.ui.Button):
