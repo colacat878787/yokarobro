@@ -488,8 +488,17 @@ class MusicCog(commands.Cog):
             except Exception as e:
                 print(f"[DEBUG Genius] utils.config error: {e}")
                 token = None
-        print(f"[DEBUG Genius] Token found: {bool(token)}, LYRICSGENIUS_AVAILABLE: {LYRICSGENIUS_AVAILABLE}")
-        if not token or not LYRICSGENIUS_AVAILABLE:
+        
+        # Check if lyricsgenius is available
+        try:
+            lyrics_available = self.LYRICSGENIUS_AVAILABLE
+        except AttributeError:
+            lyrics_available = False
+            print("[DEBUG Genius] LYRICSGENIUS_AVAILABLE attribute not found")
+        
+        print(f"[DEBUG Genius] Token found: {bool(token)}, LYRICSGENIUS_AVAILABLE: {lyrics_available}")
+        print(f"[DEBUG Genius] Token found: {bool(token)}, LYRICSGENIUS_AVAILABLE: {lyrics_available}")
+        if not token or not lyrics_available:
             print("[DEBUG Genius] No token or lyricsgenius not available - RETURNING NONE")
             return None
         try:
