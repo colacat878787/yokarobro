@@ -323,10 +323,36 @@ class RoleSelect(discord.ui.Select):
         options = [discord.SelectOption(label=r.name, value=str(r.id)) for r in guild.roles if not r.is_default()]
         super().__init__(placeholder="選擇已有身分組", min_values=1, max_values=1, options=options)
         self.guild = guild
+        self.selected_role = None
     async def callback(self, interaction: discord.Interaction):
         role_id = int(self.values[0])
         role = self.guild.get_role(role_id)
-        await interaction.response.send_message(f"✅ 已選擇身分組 **{role.name}** (ID: {role.id})。", ephemeral=True)
+        self.selected_role = role
+        # Provide a button to assign the role to the invoking user
+        view = AssignRoleView(self.guild, role)
+        await interaction.response.send_message(
+            f"✅ 已選擇身分組 **{role.name}** (ID: {role.id})。點擊下方按鈕給予您此身分組。",
+            view=view,
+            ephemeral=True
+        )
+
+class AssignRoleView(discord.ui.View):
+    def __init__(self, guild: discord.Guild, role: discord.Role):
+        super().__init__(timeout=60)
+        self.guild = guild
+        self.role = role
+
+    @discord.ui.button(label="💎 給我這個身分組", style=discord.ButtonStyle.success)
+    async def give_me(self, interaction: discord.Interaction, button: discord.ui.Button):
+        member = interaction.user
+        try:
+            await member.add_roles(self.role)
+            await interaction.response.send_message(
+                f"✅ 已將身分組 **{self.role.name}** 給予 <@{member.id}>。",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ 給予身分組失敗：{e}", ephemeral=True)
 
 class CreateRoleButton(discord.ui.Button):
     def __init__(self, guild: discord.Guild):
