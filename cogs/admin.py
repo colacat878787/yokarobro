@@ -942,6 +942,192 @@ class DynamicVoiceSettingsView(discord.ui.View):
         )
 
 
+# --- Dynamic Voice Channel Control Panel ---
+class VoiceControlPanel(discord.ui.View):
+    def __init__(self, bot, voice_channel_id: int, text_channel_id: int):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.voice_channel_id = voice_channel_id
+        self.text_channel_id = text_channel_id
+    
+    def get_channels(self, guild: discord.Guild):
+        voice_channel = guild.get_channel(self.voice_channel_id)
+        text_channel = guild.get_channel(self.text_channel_id)
+        return voice_channel, text_channel
+    
+    @discord.ui.button(label="🔒 鎖定頻道", style=discord.ButtonStyle.primary, row=0)
+    async def lock_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        voice_channel, text_channel = self.get_channels(interaction.guild)
+        if not voice_channel:
+            await interaction.response.send_message("⚠️ 語音頻道不存在。", ephemeral=True)
+            return
+        
+        try:
+            await voice_channel.set_permissions(interaction.guild.default_role, connect=False)
+            if text_channel:
+                await text_channel.set_permissions(interaction.guild.default_role, send_messages=False)
+            await interaction.response.send_message("🔒 已鎖定頻道。", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ 鎖定失敗：{e}", ephemeral=True)
+    
+    @discord.ui.button(label="🔓 解鎖頻道", style=discord.ButtonStyle.success, row=0)
+    async def unlock_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        voice_channel, text_channel = self.get_channels(interaction.guild)
+        if not voice_channel:
+            await interaction.response.send_message("⚠️ 語音頻道不存在。", ephemeral=True)
+            return
+        
+        try:
+            await voice_channel.set_permissions(interaction.guild.default_role, connect=None)
+            if text_channel:
+                await text_channel.set_permissions(interaction.guild.default_role, send_messages=None)
+            await interaction.response.send_message("🔓 已解鎖頻道。", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ 解鎖失敗：{e}", ephemeral=True)
+    
+    @discord.ui.button(label="👑 轉移所有權", style=discord.ButtonStyle.primary, row=0)
+    async def transfer_ownership(self, interaction: discord.Interaction, button: discord.ui.Button):
+        voice_channel, text_channel = self.get_channels(interaction.guild)
+        if not voice_channel:
+            await interaction.response.send_message("⚠️ 語音頻道不存在。", ephemeral=True)
+            return
+        
+        members_in_channel = voice_channel.members
+        if not members_in_channel:
+            await interaction.response.send_message("⚠️ 頻道中沒有成員。", ephemeral=True)
+            return
+        
+        select = discord.ui.Select(
+            placeholder="選擇要轉移所有權的成員",
+            options=[
+                discord.SelectOption(label=m.display_name, value=str(m.id))
+                for m in members_in_channel[:25]
+            ]
+        )
+        
+        async def select_callback(inter: discord.Interaction):
+            new_owner_id = int(inter.data['values'][0])
+            new_owner = interaction.guild.get_member(new_owner_id)
+            
+            if not new_owner:
+                await inter.response.send_message("⚠️ 找不到該成員。", ephemeral=True)
+                return
+            
+            try:
+                await voice_channel.set_permissions(new_owner, manage_channels=True, move_members=True)
+                if text_channel:
+                    await text_channel.set_permissions(new_owner, manage_channels=True, manage_messages=True)
+                await inter.response.send_message(f"👑 已將頻道所有權轉移給 {new_owner.mention}。", ephemeral=True)
+            except Exception as e:
+                await inter.response.send_message(f"⚠️ 轉移失敗：{e}", ephemeral=True)
+        
+        select.callback = select_callback
+        self.clear_items()
+        self.add_item(select)
+        await interaction.response.edit_message(view=self)
+    
+    @discord.ui.button(label="⚙️ 頻道設定", style=discord.ButtonStyle.secondary, row=1)
+    async def channel_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
+        voice_channel, text_channel = self.get_channels(interaction.guild)
+        if not voice_channel:
+            await interaction.response.send_message("⚠️ 語音頻道不存在。", ephemeral=True)
+            return
+        
+        view = ChannelSettingsView(self.bot, voice_channel, text_channel)
+        embed = discord.Embed(
+            title="⚙️ 頻道設定",
+            description=f"語音頻道：{voice_channel.name}\n文字頻道：{text_channel.name if text_channel else '無'}",
+            color=0x3498db
+        )
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    
+    @discord.ui.button(label="🔇 禁言所有人", style=discord.ButtonStyle.danger, row=1)
+    async def mute_all(self, interaction: discord.Interaction, button: discord.ui.Button):
+        voice_channel, _ = self.get_channels(interaction.guild)
+        if not voice_channel:
+            await interaction.response.send_message("⚠️ 語音頻道不存在。", ephemeral=True)
+            return
+        
+        try:
+            for member in voice_channel.members:
+                await member.edit(mute=True)
+            await interaction.response.send_message("🔇 已禁言所有成員。", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ 禁言失敗：{e}", ephemeral=True)
+    
+    @discord.ui.button(label="🔊 解除禁言", style=discord.ButtonStyle.success, row=1)
+    async def unmute_all(self, interaction: discord.Interaction, button: discord.ui.Button):
+        voice_channel, _ = self.get_channels(interaction.guild)
+        if not voice_channel:
+            await interaction.response.send_message("⚠️ 語音頻道不存在。", ephemeral=True)
+            return
+        
+        try:
+            for member in voice_channel.members:
+                await member.edit(mute=False)
+            await interaction.response.send_message("🔊 已解除所有成員的禁言。", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ 解除禁言失敗：{e}", ephemeral=True)
+
+
+class ChannelSettingsView(discord.ui.View):
+    def __init__(self, bot, voice_channel: discord.VoiceChannel, text_channel: discord.TextChannel):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.voice_channel = voice_channel
+        self.text_channel = text_channel
+    
+    @discord.ui.button(label="📝 重新命名", style=discord.ButtonStyle.primary, row=0)
+    async def rename_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = discord.ui.Modal(title="重新命名頻道")
+        name_input = discord.ui.TextInput(
+            label="新名稱",
+            placeholder="輸入頻道名稱",
+            default=self.voice_channel.name,
+            required=True
+        )
+        modal.add_item(name_input)
+        
+        async def on_submit(inter: discord.Interaction):
+            try:
+                new_name = name_input.value
+                await self.voice_channel.edit(name=new_name)
+                if self.text_channel:
+                    await self.text_channel.edit(name=f"語音-{new_name}")
+                await inter.response.send_message(f"✅ 已重新命名為：{new_name}", ephemeral=True)
+            except Exception as e:
+                await inter.response.send_message(f"⚠️ 重新命名失敗：{e}", ephemeral=True)
+        
+        modal.on_submit = on_submit
+        await interaction.response.send_modal(modal)
+    
+    @discord.ui.button(label="👥 限制人數", style=discord.ButtonStyle.primary, row=0)
+    async def limit_members(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = discord.ui.Modal(title="限制成員數量")
+        limit_input = discord.ui.TextInput(
+            label="人數限制 (0 = 無限制)",
+            placeholder="輸入數字，例如：5",
+            default=str(self.voice_channel.user_limit),
+            required=True
+        )
+        modal.add_item(limit_input)
+        
+        async def on_submit(inter: discord.Interaction):
+            try:
+                limit = int(limit_input.value)
+                await self.voice_channel.edit(user_limit=limit)
+                await inter.response.send_message(f"✅ 已設定人數限制為：{limit if limit > 0 else '無限制'}", ephemeral=True)
+            except Exception as e:
+                await inter.response.send_message(f"⚠️ 設定失敗：{e}", ephemeral=True)
+        
+        modal.on_submit = on_submit
+        await interaction.response.send_modal(modal)
+    
+    @discord.ui.button(label="❌ 關閉面板", style=discord.ButtonStyle.danger, row=1)
+    async def close_panel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="❌ 已關閉控制面板。", view=None)
+
+
 class CreateRoleButton(discord.ui.Button):
     def __init__(self, guild: discord.Guild):
         super().__init__(label="🆕 建立新身分組", style=discord.ButtonStyle.success)
@@ -1064,12 +1250,24 @@ class AdminCog(commands.Cog):
                     # Store the relationship
                     self.bot.dynamic_voice_channels[new_voice.id] = text_channel.id
                     
-                    # Send welcome message
+                    # Send welcome message with control panel
                     try:
-                        await text_channel.send(
-                            f"👋 歡迎來到 {member.mention} 的動態語音頻道！\n"
-                            f"💡 這個頻道會在語音頻道清空後自動刪除。"
+                        embed = discord.Embed(
+                            title="🎙️ 語音控制面板",
+                            description="使用下方按鈕來控制你的語音頻道",
+                            color=0x3498db
                         )
+                        embed.add_field(
+                            name="功能說明",
+                            value="• 🔒/🔓 鎖定/解鎖頻道\n"
+                                "• 👑 轉移所有權給其他人\n"
+                                "• ⚙️ 重新命名、限制人數\n"
+                                "• 🔇 禁言/解除禁言所有人",
+                            inline=False
+                        )
+                        
+                        view = VoiceControlPanel(self.bot, new_voice.id, text_channel.id)
+                        await text_channel.send(embed=embed, view=view)
                     except:
                         pass
                 
