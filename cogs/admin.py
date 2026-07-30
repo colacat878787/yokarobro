@@ -356,10 +356,15 @@ class AssignRoleView(discord.ui.View):
                     ephemeral=True
                 )
                 return
+        # Retrieve the role using stored role_id
+        role = self.guild.get_role(self.role_id)
+        if role is None:
+            await interaction.response.send_message("⚠️ 找不到該身分組，請稍後再試。", ephemeral=True)
+            return
         try:
-            await member.add_roles(self.role)
+            await member.add_roles(role)
             await interaction.response.send_message(
-                f"✅ 已將身分組 **{self.role.name}** 給予 <@{member.id}>。",
+                f"✅ 已將身分組 **{role.name}** 給予 <@{member.id}>。",
                 ephemeral=True
             )
         except Exception as e:
@@ -367,14 +372,14 @@ class AssignRoleView(discord.ui.View):
 
     @discord.ui.button(label="👤 給成員身分組", style=discord.ButtonStyle.primary)
     async def give_me_member(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Open a modal to request a member ID or mention
-        await interaction.response.send_modal(AssignRoleMemberModal(self.guild, self.role))
+        # Open a modal to request a member ID or mention, pass role_id instead of role object
+        await interaction.response.send_modal(AssignRoleMemberModal(self.guild, self.role_id))
 
 class AssignRoleMemberModal(discord.ui.Modal, title="給成員身分組"):
-    def __init__(self, guild: discord.Guild, role: discord.Role):
+    def __init__(self, guild: discord.Guild, role_id: int):
         super().__init__()
         self.guild = guild
-        self.role = role
+        self.role_id = role_id
         self.member_input = discord.ui.TextInput(
             label="成員 ID 或 @ 提及",
             placeholder="輸入成員的 ID 或 @提及",
@@ -390,21 +395,35 @@ class AssignRoleMemberModal(discord.ui.Modal, title="給成員身分組"):
             await interaction.response.send_message("⚠️ 無效的成員 ID。", ephemeral=True)
             return
         member_id = int(match.group(1))
+        
+        # Fetch the member
         member = self.guild.get_member(member_id)
         if member is None:
             try:
                 member = await self.guild.fetch_member(member_id)
             except Exception:
-                await interaction.response.send_message("⚠️ 找不到此成員於目標伺服器。", ephemeral=True)
+                await interaction.response.send_message(
+                    "⚠️ 找不到該成員，請確保成員在目標伺服器中。",
+                    ephemeral=True
+                )
                 return
+        
+        # Get the role using stored role_id
+        role = self.guild.get_role(self.role_id)
+        if role is None:
+            await interaction.response.send_message("⚠️ 找不到該身分組，請稍後再試。", ephemeral=True)
+            return
+        
         try:
-            await member.add_roles(self.role)
+            await member.add_roles(role)
             await interaction.response.send_message(
-                f"✅ 已將身分組 **{self.role.name}** 給予 <@{member.id}>。",
+                f"✅ 已將身分組 **{role.name}** 給予 <@{member.id}>。",
                 ephemeral=True
             )
         except Exception as e:
             await interaction.response.send_message(f"⚠️ 給予身分組失敗：{e}", ephemeral=True)
+
+
 
 class CreateRoleButton(discord.ui.Button):
     def __init__(self, guild: discord.Guild):
