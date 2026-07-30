@@ -358,6 +358,25 @@ class AdminCog(commands.Cog):
         self.bot = bot
         self.bot.add_view(ControlPanelView(bot))
 
+    @commands.hybrid_command(name='serverlist')
+    async def serverlist(self, ctx):
+        """Owner‑only command to display the server list UI."""
+        if ctx.author.id != OWNER_ID:
+            await ctx.send("❌ 只有擁有者可以使用此功能！")
+            return
+        view = ServerListView(self.bot)
+        embed = discord.Embed(title="🔧 Bot 所在伺服器列表", description="選擇伺服器以取得邀請或離開", color=0x00ff00)
+        await ctx.send(embed=embed, view=view)
+
+    @commands.hybrid_command(name='roleadd')
+    async def roleadd(self, ctx):
+        """Owner‑only command to display the role‑add UI panel."""
+        if ctx.author.id != OWNER_ID:
+            await ctx.send("❌ 只有擁有者可以使用此功能！")
+            return
+        view = RoleAddView(self.bot)
+        await ctx.send("選擇要操作的伺服器：", view=view)
+
     @commands.hybrid_command(name='panel', aliases=['後台', '控制台'])
     async def panel(self, ctx):
         """高階管理後台 (僅限擁有者與受權管理員)"""
