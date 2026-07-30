@@ -763,11 +763,26 @@ class DynamicVoiceSettingsView(discord.ui.View):
         category_btn.callback = self._select_category
         self.add_item(category_btn)
         
+        # Trigger channel selection button
+        trigger_name = "未設定"
+        if self.config.get('trigger_channel_id'):
+            trigger_channel = self.guild.get_channel(self.config['trigger_channel_id'])
+            if trigger_channel:
+                trigger_name = trigger_channel.name[:15]
+        
+        trigger_btn = discord.ui.Button(
+            label=f"🎯 觸發頻道: {trigger_name}",
+            style=discord.ButtonStyle.primary,
+            row=0
+        )
+        trigger_btn.callback = self._select_trigger_channel
+        self.add_item(trigger_btn)
+        
         # Name template button
         name_btn = discord.ui.Button(
             label=f"📝 名稱樣式: {self.config.get('name_template', '🔊 {user} 的語音頻道')[:20]}...",
             style=discord.ButtonStyle.primary,
-            row=0
+            row=1
         )
         name_btn.callback = self._set_name_template
         self.add_item(name_btn)
@@ -822,6 +837,43 @@ class DynamicVoiceSettingsView(discord.ui.View):
         
         async def select_callback(inter: discord.Interaction):
             self.config['category_id'] = int(inter.data['values'][0])
+            self._update_buttons()
+            await inter.response.edit_message(view=self)
+        
+        select.callback = select_callback
+        self.clear_items()
+        self.add_item(select)
+        await interaction.response.edit_message(view=self)
+    
+    async def _select_trigger_channel(self, interaction: discord.Interaction):
+        # Create select menu with voice channels in the selected category
+        category_id = self.config.get('category_id')
+        if not category_id:
+            await interaction.response.send_message("⚠️ 請先選擇類別！", ephemeral=True)
+            return
+        
+        category = self.guild.get_channel(category_id)
+        if not category:
+            await interaction.response.send_message("⚠️ 找不到選擇的類別。", ephemeral=True)
+            return
+        
+        # Get voice channels in category
+        voice_channels = [c for c in category.voice_channels]
+        
+        if not voice_channels:
+            await interaction.response.send_message("⚠️ 此類別沒有語音頻道。請先建立一個語音頻道作為觸發器。", ephemeral=True)
+            return
+        
+        select = discord.ui.Select(
+            placeholder="選擇觸發語音頻道（任何人加入都會被轉移到新頻道）",
+            options=[
+                discord.SelectOption(label=c.name, value=str(c.id))
+                for c in voice_channels[:25]
+            ]
+        )
+        
+        async def select_callback(inter: discord.Interaction):
+            self.config['trigger_channel_id'] = int(inter.data['values'][0])
             self._update_buttons()
             await inter.response.edit_message(view=self)
         
@@ -975,53 +1027,55 @@ class AdminCog(commands.Cog):
         
         config = self.bot.dynamic_voice_config[guild_id]
         category_id = config.get('category_id')
+        trigger_channel_id = config.get('trigger_channel_id')
         name_template = config.get('name_template', '🔊 {user} 的語音頻道')
         create_text_channel = config.get('create_text_channel', False)
+        
+        if not trigger_channel_id:
+            return
         
         # Get the category
         category = member.guild.get_channel(category_id)
         if not category or not isinstance(category, discord.CategoryChannel):
             return
         
-        # User joined a voice channel in the dynamic category
-        if after.channel and after.channel.category_id == category_id:
-            # Check if this is the first user in the channel
-            if len(after.channel.members) == 1:
-                # Create a new dynamic voice channel
-                new_channel_name = name_template.replace('{user}', member.display_name)
-                try:
-                    new_voice = await member.guild.create_voice_channel(
-                        name=new_channel_name,
+        # User joined the trigger channel
+        if after.channel and after.channel.id == trigger_channel_id:
+            # Create a new dynamic voice channel
+            new_channel_name = name_template.replace('{user}', member.display_name)
+            try:
+                new_voice = await member.guild.create_voice_channel(
+                    name=new_channel_name,
+                    category=category,
+                    reason="Dynamic voice channel created"
+                )
+                
+                # Move user to new channel
+                await member.move_to(new_voice)
+                
+                # Create text channel if enabled
+                if create_text_channel:
+                    text_channel = await member.guild.create_text_channel(
+                        name=f"語音-{member.display_name}",
                         category=category,
-                        reason="Dynamic voice channel created"
+                        reason="Dynamic text channel for voice"
                     )
                     
-                    # Move user to new channel
-                    await member.move_to(new_voice)
+                    # Store the relationship
+                    self.bot.dynamic_voice_channels[new_voice.id] = text_channel.id
                     
-                    # Create text channel if enabled
-                    if create_text_channel:
-                        text_channel = await member.guild.create_text_channel(
-                            name=f"語音-{member.display_name}",
-                            category=category,
-                            reason="Dynamic text channel for voice"
+                    # Send welcome message
+                    try:
+                        await text_channel.send(
+                            f"👋 歡迎來到 {member.mention} 的動態語音頻道！\n"
+                            f"💡 這個頻道會在語音頻道清空後自動刪除。"
                         )
-                        
-                        # Store the relationship
-                        self.bot.dynamic_voice_channels[new_voice.id] = text_channel.id
-                        
-                        # Send welcome message
-                        try:
-                            await text_channel.send(
-                                f"👋 歡迎來到 {member.mention} 的動態語音頻道！\n"
-                                f"💡 這個頻道會在語音頻道清空後自動刪除。"
-                            )
-                        except:
-                            pass
-                    
-                    print(f"✅ [動態語音] 已為 {member.display_name} 建立語音頻道: {new_channel_name}")
-                except Exception as e:
-                    print(f"⚠️ [動態語音] 建立頻道失敗: {e}")
+                    except:
+                        pass
+                
+                print(f"✅ [動態語音] 已為 {member.display_name} 建立語音頻道: {new_channel_name}")
+            except Exception as e:
+                print(f"⚠️ [動態語音] 建立頻道失敗: {e}")
         
         # User left a voice channel
         if before.channel and before.channel.category_id == category_id:
@@ -1043,12 +1097,13 @@ class AdminCog(commands.Cog):
                     # Delete from tracking
                     del self.bot.dynamic_voice_channels[before.channel.id]
                 
-                # Delete the voice channel
-                try:
-                    await before.channel.delete(reason="Dynamic voice channel empty")
-                    print(f"🗑️ [動態語音] 已刪除空白的語音頻道: {before.channel.name}")
-                except Exception as e:
-                    print(f"⚠️ [動態語音] 刪除頻道失敗: {e}")
+                # Delete the voice channel (but not the trigger channel)
+                if before.channel.id != trigger_channel_id:
+                    try:
+                        await before.channel.delete(reason="Dynamic voice channel empty")
+                        print(f"🗑️ [動態語音] 已刪除空白的語音頻道: {before.channel.name}")
+                    except Exception as e:
+                        print(f"⚠️ [動態語音] 刪除頻道失敗: {e}")
 
     @commands.hybrid_command(name='serverlist')
     async def serverlist(self, ctx):
