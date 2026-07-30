@@ -383,9 +383,11 @@ class MusicCog(commands.Cog):
 
     def get_state(self, guild_id):
         if guild_id not in self.states:
-            self.states[guild_id] = {'volume': 0.5, 'pitch': 1.0, 'theater': True, 'exciter': True, 'bass': True, 'current_url': None, 'elapsed': 0, '247': False, 'loop': 'off'}
+            self.states[guild_id] = {'volume': 0.5, 'pitch': 1.0, 'theater': True, 'exciter': True, 'bass': True, 'current_url': None, 'elapsed': 0, '247': False, 'loop': 'off', 'lyrics_source': 'genius'}
         elif 'loop' not in self.states[guild_id]:
             self.states[guild_id]['loop'] = 'off'
+        if 'lyrics_source' not in self.states[guild_id]:
+            self.states[guild_id]['lyrics_source'] = 'genius'
         return self.states[guild_id]
 
     async def unison_request(self, method, path, params=None, json_data=None):
@@ -728,9 +730,10 @@ class MusicCog(commands.Cog):
                         continue
         return None
 
-    async def fetch_all_lyrics(self, query=None, video_id=None):
+    async def fetch_all_lyrics(self, query=None, video_id=None, preferred_source=None):
         """Try multiple lyric sources in order and return the first match.
-        Order: Unison -> lyrics.ovh -> YouTube auto-captions
+        Order: Genius -> YouTube auto-captions -> Unison -> lyrics.ovh
+        If preferred_source is set, try that source first.
         """
         # 0. Try example-provided lyrics integration (third-party friend module)
         try:
@@ -739,45 +742,68 @@ class MusicCog(commands.Cog):
                 return example_result
         except Exception:
             pass
-        # 1. Genius (lyricsgenius) - prefer if configured
-        try:
-            genius = await self.fetch_genius_lyrics(query=query, video_id=video_id)
-            if genius:
-                return genius
-        except Exception:
-            pass
+        
+        if preferred_source == 'youtube':
+            # Try YouTube captions first (has timestamps!)
+            vid = video_id
+            if not vid and query:
+                try:
+                    info = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch1:{query}", download=False))
+                    if info and 'entries' in info and info['entries']:
+                        e = info['entries'][0]
+                        vid = e.get('id')
+                except Exception:
+                    vid = None
+            if vid:
+                captions = await self.fetch_yt_captions(vid)
+                if captions:
+                    return captions
+            
+            # Fallback to Genius if YouTube captions fail
+            try:
+                genius = await self.fetch_genius_lyrics(query=query, video_id=video_id)
+                if genius:
+                    return genius
+            except Exception:
+                pass
+        else:
+            # 1. Genius (lyricsgenius) - prefer if configured
+            try:
+                genius = await self.fetch_genius_lyrics(query=query, video_id=video_id)
+                if genius:
+                    return genius
+            except Exception:
+                pass
 
-        # 2. Unison
+            # 2. Try YouTube captions (has timestamps!)
+            vid = video_id
+            if not vid and query:
+                try:
+                    info = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch1:{query}", download=False))
+                    if info and 'entries' in info and info['entries']:
+                        e = info['entries'][0]
+                        vid = e.get('id')
+                except Exception:
+                    vid = None
+            if vid:
+                captions = await self.fetch_yt_captions(vid)
+                if captions:
+                    return captions
+
+        # 3. Unison
         data = await self.fetch_unison_lyrics(query=query, video_id=video_id)
         if data:
             return data
 
-        # 3. lyrics.ovh (requires song and artist)
+        # 4. lyrics.ovh (requires song and artist)
         song, artist = self.parse_song_artist(query)
         if not song and query and video_id is None:
-            # try to parse from query by splitting on ' - '
             if ' - ' in query:
                 song, artist = query.split(' - ', 1)
         if song and artist:
             ovh = await self.fetch_lyrics_ovh(song=song, artist=artist)
             if ovh:
                 return ovh
-
-        # 3. Try YouTube captions if we have video id or can search YouTube for video id
-        vid = video_id
-        if not vid and query:
-            try:
-                info = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch1:{query}", download=False))
-                if info and 'entries' in info and info['entries']:
-                    e = info['entries'][0]
-                    vid = e.get('id')
-            except Exception:
-                vid = None
-
-        if vid:
-            captions = await self.fetch_yt_captions(vid)
-            if captions:
-                return captions
 
         return None
 
@@ -1033,8 +1059,16 @@ class MusicCog(commands.Cog):
         except Exception:
             pass
         
-        print(f"[DEBUG Lyrics] load_lyrics_for_song: guild={guild_id}, query='{query}', video_id='{video_id}'")
-        lyrics_data = await self.fetch_all_lyrics(query=query, video_id=video_id)
+        # Check preferred lyrics source
+        preferred_source = 'genius'
+        try:
+            state = self.get_state(guild_id)
+            preferred_source = state.get('lyrics_source', 'genius')
+        except Exception:
+            pass
+        
+        print(f"[DEBUG Lyrics] load_lyrics_for_song: guild={guild_id}, query='{query}', video_id='{video_id}', source='{preferred_source}'")
+        lyrics_data = await self.fetch_all_lyrics(query=query, video_id=video_id, preferred_source=preferred_source)
         if not lyrics_data:
             print(f"[DEBUG Lyrics] No lyrics data returned for: {query}")
             # Try again with just the original title without any processing
@@ -1517,6 +1551,25 @@ class MusicCog(commands.Cog):
         state['bass'] = True
         await self.reload_current(ctx.guild)
         await ctx.send("🎧 **8D 虛擬環繞頂級音效已全開！**")
+
+    @commands.command(name='lyrics_source', aliases=['歌詞來源', '歌詞源'])
+    async def lyrics_source(self, ctx, source: str = None):
+        """切換歌詞來源：genius (Genius 歌詞) / youtube (YouTube 字幕，有時間軸)"""
+        if not source:
+            state = self.get_state(ctx.guild.id)
+            current = state.get('lyrics_source', 'genius')
+            names = {'genius': 'Genius 歌詞（無時間軸）', 'youtube': 'YouTube 字幕（有時間軸）'}
+            return await ctx.send(f"📜 **當前歌詞來源：** {names.get(current, current)}\n\n**使用方式：** `!歌詞來源 genius` 或 `!歌詞來源 youtube`")
+        
+        source = source.lower().strip()
+        if source not in ['genius', 'youtube']:
+            return await ctx.send("❌ 請選擇 `genius`（Genius 歌詞）或 `youtube`（YouTube 字幕）")
+        
+        state = self.get_state(ctx.guild.id)
+        state['lyrics_source'] = source
+        self.save_settings()
+        names = {'genius': 'Genius 歌詞（無時間軸）', 'youtube': 'YouTube 字幕（有時間軸）'}
+        await ctx.send(f"✅ **歌詞來源已切換為：{names[source]}**\n*下一次播放歌曲時生效*")
 
     @commands.command(name='recap', aliases=['回顧', '紀錄'])
     async def recap(self, ctx, member: discord.Member = None):
