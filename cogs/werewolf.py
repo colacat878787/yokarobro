@@ -497,9 +497,13 @@ class WerewolfCog(commands.Cog):
             # 使用 edge-tts 生成語音 (使用 zh-CN-XiaoxiaoNeural 中文女聲)
             communicate = edge_tts.Communicate(text, "zh-CN-XiaoxiaoNeural")
             
-            # 在同步函數中運行異步代碼
+            # 收集音訊資料
             async def generate_audio():
-                return await communicate.get_audio()
+                audio_data = b""
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        audio_data += chunk["data"]
+                return audio_data
             
             # 使用 asyncio 運行
             loop = asyncio.get_event_loop()

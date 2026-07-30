@@ -71,7 +71,12 @@ class TTSCog(commands.Cog):
         try:
             # 使用 edge-tts 生成語音 (使用 zh-CN-XiaoxiaoNeural 中文女聲)
             communicate = edge_tts.Communicate(message.content, "zh-CN-XiaoxiaoNeural")
-            audio_data = await communicate.get_audio()
+            
+            # 收集音訊資料
+            audio_data = b""
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_data += chunk["data"]
             
             # 寫入檔案
             with open(filepath, 'wb') as f:
