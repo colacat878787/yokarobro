@@ -1,9 +1,10 @@
 import discord
 from discord.ext import commands
 import asyncio
-from gtts import gTTS
+import edge_tts
 import os
 import uuid
+import io
 
 class TTSCog(commands.Cog):
     def __init__(self, bot):
@@ -68,9 +69,13 @@ class TTSCog(commands.Cog):
         filepath = os.path.join(os.getcwd(), tts_filename)
         
         try:
-            # 轉換文字成語音
-            tts = gTTS(text=message.content, lang='zh-tw')
-            tts.save(filepath)
+            # 使用 edge-tts 生成語音 (使用 zh-CN-XiaoxiaoNeural 中文女聲)
+            communicate = edge_tts.Communicate(message.content, "zh-CN-XiaoxiaoNeural")
+            audio_data = await communicate.get_audio()
+            
+            # 寫入檔案
+            with open(filepath, 'wb') as f:
+                f.write(audio_data)
             
             # 放入佇列並嘗試播放
             self.queue[guild_id].append(filepath)
