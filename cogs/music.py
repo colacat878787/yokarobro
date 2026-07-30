@@ -484,32 +484,30 @@ class MusicCog(commands.Cog):
                 token = getattr(_config, 'GENIUS_ACCESS_TOKEN', None)
             except Exception:
                 token = None
-        lyrics_logger = logging.getLogger('lyrics')
-        lyrics_logger.info(f"[Genius] Token found: {bool(token)}, LYRICSGENIUS_AVAILABLE: {LYRICSGENIUS_AVAILABLE}")
+        print(f"[DEBUG Genius] Token found: {bool(token)}, LYRICSGENIUS_AVAILABLE: {LYRICSGENIUS_AVAILABLE}")
         if not token or not LYRICSGENIUS_AVAILABLE:
-            lyrics_logger.warning("[Genius] No token or lyricsgenius not available")
+            print("[DEBUG Genius] No token or lyricsgenius not available - RETURNING NONE")
             return None
         try:
             client = _lyricsgenius.Genius(token, timeout=15, skip_non_songs=True, excluded_terms=["(Remix)", "(Live)"])
-            lyrics_logger.info("[Genius] Client created successfully")
+            print("[DEBUG Genius] Client created successfully")
             return client
         except Exception as e:
-            lyrics_logger.error(f"[Genius] Failed to create client: {e}")
+            print(f"[DEBUG Genius] Failed to create client: {e}")
             return None
 
     async def fetch_genius_lyrics(self, query=None, video_id=None):
         """Fetch lyrics from Genius using lyricsgenius. Runs blocking calls in executor.
         Returns dict like other sources or None.
         """
+        print(f"[DEBUG Genius] fetch_genius_lyrics called with query='{query}', video_id='{video_id}'")
         client = self.get_genius_client()
         if not client:
-            lyrics_logger = logging.getLogger('lyrics')
-            lyrics_logger.warning("[Genius] Client is None - check token configuration")
+            print("[DEBUG Genius] Client is None - RETURNING NONE")
             return None
         # prefer exact song - artist parse
         song_title, artist = self.parse_song_artist(query)
-        lyrics_logger = logging.getLogger('lyrics')
-        lyrics_logger.info(f"[Genius] Searching for: song='{song_title}', artist='{artist}', query='{query}'")
+        print(f"[DEBUG Genius] Searching for: song='{song_title}', artist='{artist}', query='{query}'")
         try:
             if video_id and not query:
                 # When only a video ID is available, try to search Genius by the YouTube title.
@@ -520,25 +518,28 @@ class MusicCog(commands.Cog):
                     pass
 
             if song_title and artist:
-                lyrics_logger.info(f"[Genius] Searching with song+artist: {song_title} by {artist}")
+                print(f"[DEBUG Genius] Searching with song+artist: {song_title} by {artist}")
                 song = await asyncio.get_event_loop().run_in_executor(None, lambda: client.search_song(song_title, artist))
             elif query:
-                lyrics_logger.info(f"[Genius] Searching with query only: {query}")
+                print(f"[DEBUG Genius] Searching with query only: {query}")
                 song = await asyncio.get_event_loop().run_in_executor(None, lambda: client.search_song(query))
             else:
                 song = None
-            lyrics_logger.info(f"[Genius] Search result: {song is not None}")
+            print(f"[DEBUG Genius] Search result: {song is not None}")
             if not song:
+                print("[DEBUG Genius] No song found - RETURNING NONE")
                 return None
             lyrics = getattr(song, 'lyrics', None)
             if not lyrics:
-                lyrics_logger.warning("[Genius] Song found but no lyrics")
+                print("[DEBUG Genius] Song found but no lyrics - RETURNING NONE")
                 return None
             text = self.sanitize_lyrics(lyrics)
-            lyrics_logger.info(f"[Genius] Lyrics found, length: {len(text)}")
+            print(f"[DEBUG Genius] Lyrics found, length: {len(text)}")
             return {"song": getattr(song, 'title', None) or song_title or query, "artist": getattr(song, 'artist', None) or artist, "lyrics": text, "format": 'genius', 'confidence': 'high', 'source': 'genius'}
         except Exception as e:
-            lyrics_logger.exception(f"Genius fetch error: {e}")
+            print(f"[DEBUG Genius] Exception: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     async def fetch_unison_lyrics(self, query=None, video_id=None):
