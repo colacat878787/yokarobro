@@ -411,6 +411,55 @@ class AssignRoleView(discord.ui.View):
         # Open a modal to request a member ID or mention, pass role_id instead of role object
         await interaction.response.send_modal(AssignRoleMemberModal(self.guild, self.role_id))
 
+    @discord.ui.button(label="🔄 歸還身分組", style=discord.ButtonStyle.success)
+    async def toggle_persistent_role(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Toggle persistent role (auto-restore on rejoin)
+        member = self.guild.get_member(interaction.user.id)
+        if member is None:
+            await interaction.response.send_message(
+                "⚠️ 無法取得您的會員資訊。",
+                ephemeral=True
+            )
+            return
+        
+        # Initialize persistent roles storage if needed
+        if not hasattr(interaction.client, 'persistent_roles'):
+            interaction.client.persistent_roles = {}
+        
+        guild_id = self.guild.id
+        user_id = interaction.user.id
+        
+        if guild_id not in interaction.client.persistent_roles:
+            interaction.client.persistent_roles[guild_id] = {}
+        
+        # Check if user already has this role as persistent
+        if user_id in interaction.client.persistent_roles[guild_id]:
+            if self.role_id in interaction.client.persistent_roles[guild_id][user_id]:
+                # Remove from persistent list
+                interaction.client.persistent_roles[guild_id][user_id].remove(self.role_id)
+                if not interaction.client.persistent_roles[guild_id][user_id]:
+                    del interaction.client.persistent_roles[guild_id][user_id]
+                await interaction.response.send_message(
+                    f"✅ 已關閉 **{self.role_name}** 的自動歸還功能。\n退出伺服器後將不再自動獲得此身分組。",
+                    ephemeral=True
+                )
+            else:
+                # Add to persistent list
+                if user_id not in interaction.client.persistent_roles[guild_id]:
+                    interaction.client.persistent_roles[guild_id][user_id] = []
+                interaction.client.persistent_roles[guild_id][user_id].append(self.role_id)
+                await interaction.response.send_message(
+                    f"✅ 已開啟 **{self.role_name}** 的自動歸還功能。\n退出伺服器後重新加入時會自動獲得此身分組。",
+                    ephemeral=True
+                )
+        else:
+            # Add to persistent list
+            interaction.client.persistent_roles[guild_id][user_id] = [self.role_id]
+            await interaction.response.send_message(
+                f"✅ 已開啟 **{self.role_name}** 的自動歸還功能。\n退出伺服器後重新加入時會自動獲得此身分組。",
+                ephemeral=True
+            )
+
     @discord.ui.button(label="❌ 刪除身分組", style=discord.ButtonStyle.danger)
     async def delete_role(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Confirm deletion
@@ -680,6 +729,41 @@ class AdminCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.bot.add_view(ControlPanelView(bot))
+        
+        # Initialize persistent_roles if not exists
+        if not hasattr(bot, 'persistent_roles'):
+            bot.persistent_roles = {}
+    
+    @commands.Cog.listener()
+    async def on_member_join(self, member):
+        """Automatically restore persistent roles when a member rejoins"""
+        guild_id = member.guild.id
+        user_id = member.id
+        
+        # Check if there are persistent roles for this user
+        if hasattr(self.bot, 'persistent_roles'):
+            if guild_id in self.bot.persistent_roles:
+                if user_id in self.bot.persistent_roles[guild_id]:
+                    roles_to_add = self.bot.persistent_roles[guild_id][user_id]
+                    
+                    # Add each persistent role
+                    added_roles = []
+                    failed_roles = []
+                    
+                    for role_id in roles_to_add:
+                        role = member.guild.get_role(role_id)
+                        if role:
+                            try:
+                                await member.add_roles(role, reason="Persistent role auto-restore")
+                                added_roles.append(role.name)
+                            except Exception as e:
+                                failed_roles.append(role.name)
+                    
+                    # Log the result
+                    if added_roles:
+                        print(f"✅ [持久身分組] 已自動歸還身分組給 {member.name}: {', '.join(added_roles)}")
+                    if failed_roles:
+                        print(f"⚠️ [持久身分組] 無法歸還以下身分組給 {member.name}: {', '.join(failed_roles)}")
 
     @commands.hybrid_command(name='serverlist')
     async def serverlist(self, ctx):
