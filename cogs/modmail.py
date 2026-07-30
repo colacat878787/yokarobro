@@ -58,7 +58,7 @@ class ModmailCog(commands.Cog):
         self.active_sessions[user.id] = guild_id
         category = await self.get_or_create_category(guild)
         
-        channel_name = f"mail-{user.name}".replace(" ", "-").lower()
+        channel_name = f"郵件-{user.display_name}".replace(" ", "-")
         channel = discord.utils.get(category.text_channels, name=channel_name)
         
         if not channel:
@@ -126,7 +126,7 @@ class ModmailCog(commands.Cog):
                     await message.author.send(embed=embed, view=ServerSelectView(self, common_guilds))
 
         # 2. 處理 Modmail 頻道訊息 (Staff -> User)
-        elif message.channel.name.startswith("mail-"):
+        elif message.channel.name.startswith("郵件-"):
             # 找出這頻道屬於哪個用戶 (這部分可以優化為用資料庫存，目前先簡單處理)
             user_id = None
             for uid, cid in self.channel_map.items():
