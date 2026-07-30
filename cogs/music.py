@@ -497,12 +497,12 @@ class MusicCog(commands.Cog):
             print("[DEBUG Genius] LYRICSGENIUS_AVAILABLE attribute not found")
         
         print(f"[DEBUG Genius] Token found: {bool(token)}, LYRICSGENIUS_AVAILABLE: {lyrics_available}")
-        print(f"[DEBUG Genius] Token found: {bool(token)}, LYRICSGENIUS_AVAILABLE: {lyrics_available}")
         if not token or not lyrics_available:
             print("[DEBUG Genius] No token or lyricsgenius not available - RETURNING NONE")
             return None
         try:
-            client = _lyricsgenius.Genius(token, timeout=15, skip_non_songs=True, excluded_terms=["(Remix)", "(Live)"])
+            import lyricsgenius
+            client = lyricsgenius.Genius(token, timeout=15, skip_non_songs=True, excluded_terms=["(Remix)", "(Live)"])
             print("[DEBUG Genius] Client created successfully")
             return client
         except Exception as e:
