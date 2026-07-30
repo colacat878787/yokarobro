@@ -476,13 +476,17 @@ class MusicCog(commands.Cog):
         The token is read from environment variable `GENIUS_ACCESS_TOKEN` or
         `utils.config.GENIUS_ACCESS_TOKEN` if present. Do NOT hardcode tokens in repo.
         """
+        print("[DEBUG Genius] get_genius_client() CALLED")
         token = os.getenv('GENIUS_ACCESS_TOKEN')
+        print(f"[DEBUG Genius] os.getenv result: {token is not None}")
         if not token:
             # try utils.config
             try:
                 from utils import config as _config
                 token = getattr(_config, 'GENIUS_ACCESS_TOKEN', None)
-            except Exception:
+                print(f"[DEBUG Genius] utils.config token: {token is not None}")
+            except Exception as e:
+                print(f"[DEBUG Genius] utils.config error: {e}")
                 token = None
         print(f"[DEBUG Genius] Token found: {bool(token)}, LYRICSGENIUS_AVAILABLE: {LYRICSGENIUS_AVAILABLE}")
         if not token or not LYRICSGENIUS_AVAILABLE:
