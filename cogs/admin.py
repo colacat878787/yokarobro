@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import os
+import json
 import psutil
 from utils.config import config_manager
 OWNER_ID = 1113353915010920452
@@ -914,8 +915,13 @@ class DynamicVoiceSettingsView(discord.ui.View):
             )
             return
         
-        # Save config
+        # Save config to bot memory
         self.bot.dynamic_voice_config[self.guild.id] = self.config
+        
+        # Save config to file
+        admin_cog = self.bot.get_cog("AdminCog")
+        if admin_cog:
+            admin_cog._save_dynamic_voice_config()
         
         await interaction.response.send_message(
             f"✅ 已儲存動態語音頻道設定！\n"
@@ -928,6 +934,11 @@ class DynamicVoiceSettingsView(discord.ui.View):
     async def _disable_feature(self, interaction: discord.Interaction):
         if self.guild.id in self.bot.dynamic_voice_config:
             del self.bot.dynamic_voice_config[self.guild.id]
+        
+        # Save config to file
+        admin_cog = self.bot.get_cog("AdminCog")
+        if admin_cog:
+            admin_cog._save_dynamic_voice_config()
         
         await interaction.response.send_message(
             "✅ 已關閉動態語音頻道功能。",
@@ -949,6 +960,7 @@ class VoiceControlPanel(discord.ui.View):
         self.bot = bot
         self.voice_channel_id = voice_channel_id
         self.text_channel_id = text_channel_id
+        self.current_view = "main"  # Track current view state
     
     def get_channels(self, guild: discord.Guild):
         voice_channel = guild.get_channel(self.voice_channel_id)
@@ -1033,13 +1045,14 @@ class VoiceControlPanel(discord.ui.View):
             await interaction.response.send_message("⚠️ 語音頻道不存在。", ephemeral=True)
             return
         
-        view = ChannelSettingsView(self.bot, voice_channel, text_channel)
+        self.current_view = "settings"
+        view = ChannelSettingsView(self.bot, voice_channel, text_channel, self)
         embed = discord.Embed(
             title="⚙️ 頻道設定",
             description=f"語音頻道：{voice_channel.name}\n文字頻道：{text_channel.name if text_channel else '無'}",
             color=0x3498db
         )
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await interaction.response.edit_message(embed=embed, view=view)
     
     @discord.ui.button(label="🔇 禁言所有人", style=discord.ButtonStyle.danger, row=1)
     async def mute_all(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1071,11 +1084,12 @@ class VoiceControlPanel(discord.ui.View):
 
 
 class ChannelSettingsView(discord.ui.View):
-    def __init__(self, bot, voice_channel: discord.VoiceChannel, text_channel: discord.TextChannel):
+    def __init__(self, bot, voice_channel: discord.VoiceChannel, text_channel: discord.TextChannel, parent_view: VoiceControlPanel = None):
         super().__init__(timeout=60)
         self.bot = bot
         self.voice_channel = voice_channel
         self.text_channel = text_channel
+        self.parent_view = parent_view
     
     @discord.ui.button(label="📝 重新命名", style=discord.ButtonStyle.primary, row=0)
     async def rename_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1123,6 +1137,27 @@ class ChannelSettingsView(discord.ui.View):
         modal.on_submit = on_submit
         await interaction.response.send_modal(modal)
     
+    @discord.ui.button(label="⬅️ 返回", style=discord.ButtonStyle.secondary, row=1)
+    async def back_to_panel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Return to main voice control panel"""
+        if self.parent_view:
+            embed = discord.Embed(
+                title="🎙️ 語音控制面板",
+                description=f"目前語音頻道：{self.voice_channel.name}\n使用下方按鈕來控制你的語音頻道",
+                color=0x3498db
+            )
+            embed.add_field(
+                name="功能說明",
+                value="• 🔒/🔓 鎖定/解鎖頻道\n"
+                      "• 👑 轉移所有權給其他人\n"
+                      "• ⚙️ 重新命名、限制人數\n"
+                      "• 🔇 禁言/解除禁言所有人",
+                inline=False
+            )
+            await interaction.response.edit_message(embed=embed, view=self.parent_view)
+        else:
+            await interaction.response.edit_message(content="❌ 已關閉控制面板。", view=None)
+    
     @discord.ui.button(label="❌ 關閉面板", style=discord.ButtonStyle.danger, row=1)
     async def close_panel(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(content="❌ 已關閉控制面板。", view=None)
@@ -1164,11 +1199,37 @@ class AdminCog(commands.Cog):
         
         # Initialize dynamic voice channels config
         if not hasattr(bot, 'dynamic_voice_config'):
-            bot.dynamic_voice_config = {}  # {guild_id: {category_id, name_template, create_text_channel}}
+            bot.dynamic_voice_config = {}
         
         # Track dynamic voice channels and their text channels
         if not hasattr(bot, 'dynamic_voice_channels'):
-            bot.dynamic_voice_channels = {}  # {voice_channel_id: text_channel_id}
+            bot.dynamic_voice_channels = {}
+        
+        # Load dynamic voice config from file
+        self._load_dynamic_voice_config()
+    
+    def _load_dynamic_voice_config(self):
+        """Load dynamic voice configuration from file"""
+        config_file = "dynamic_voice_config.json"
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    # Convert string keys back to int
+                    self.bot.dynamic_voice_config = {int(k): v for k, v in data.items()}
+                    print(f"✅ [動態語音] 已載入 {len(self.bot.dynamic_voice_config)} 個伺服器的設定")
+            except Exception as e:
+                print(f"⚠️ [動態語音] 無法載入設定檔: {e}")
+                self.bot.dynamic_voice_config = {}
+    
+    def _save_dynamic_voice_config(self):
+        """Save dynamic voice configuration to file"""
+        config_file = "dynamic_voice_config.json"
+        try:
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(self.bot.dynamic_voice_config, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            print(f"⚠️ [動態語音] 無法儲存設定檔: {e}")
     
     @commands.Cog.listener()
     async def on_member_join(self, member):
