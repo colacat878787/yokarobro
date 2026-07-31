@@ -67,6 +67,7 @@ class YokaroBot(commands.Bot):
             'cogs.checkin_cards',      # 🎮 每日簽到+抽卡
             'cogs.confession',         # 🗣️ 匿名告白牆
             'cogs.stocks',             # 📈 股票市場系統
+            'cogs.alien',              # 👽 外星文翻譯機
         ]
 
     async def setup_hook(self):

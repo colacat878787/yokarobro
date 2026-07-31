@@ -247,14 +247,101 @@ class ControlPanelView(discord.ui.View):
         view = RoleAddView(self.bot)
         await interaction.response.edit_message(content="選擇要操作的伺服器：", view=view)
 
-    @discord.ui.button(label="🎙️ 動態語音頻道", style=discord.ButtonStyle.primary, row=1, custom_id="admin_dynamic_voice")
-    async def dynamic_voice(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Configure dynamic voice channels"""
+    @discord.ui.button(label="🤖 Bot 設定", style=discord.ButtonStyle.success, row=2, custom_id="admin_bot_settings")
+    async def bot_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """管理 Bot 名稱、頭貼等設定"""
         if interaction.user.id != OWNER_ID:
             await interaction.response.send_message("❌ 只有擁有者可以使用此功能！", ephemeral=True)
             return
-        view = DynamicVoiceConfigView(self.bot)
-        await interaction.response.edit_message(content="🎙️ **動態語音頻道設定**\n選擇要設定的伺服器：", view=view)
+        view = BotSettingsView(self.bot, self)
+        embed = discord.Embed(
+            title="🤖 Yokaro Bot 設定",
+            description=f"**當前資訊：**\n👤 名稱：{self.bot.user.name}\n🆔 ID：{self.bot.user.id}\n🖼️ 頭貼：當前頭貼\n\n選擇要修改的項目：",
+            color=0x00d4aa
+        )
+        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+        await interaction.response.edit_message(content=None, embed=embed, view=view)
+
+# --- Bot Settings UI ---
+class BotSettingsView(discord.ui.View):
+    def __init__(self, bot, parent_view):
+        super().__init__(timeout=120)
+        self.bot = bot
+        self.parent_view = parent_view
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != OWNER_ID:
+            await interaction.response.send_message("❌ 只有擁有者可以使用此功能！", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="✏️ 修改暱稱", style=discord.ButtonStyle.primary, row=0, custom_id="bot_change_nick")
+    async def change_nick(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = NicknameModal(self.bot)
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(label="🖼️ 更換頭貼", style=discord.ButtonStyle.primary, row=0, custom_id="bot_change_avatar")
+    async def change_avatar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = AvatarModal(self.bot)
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(label="⬅️ 返回主選單", style=discord.ButtonStyle.secondary, row=4, custom_id="bot_back_main")
+    async def back_main(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="🔧 請選擇你要修改的設定類別：", view=self.parent_view)
+
+class NicknameModal(discord.ui.Modal, title="✏️ 修改 Bot 暱稱"):
+    def __init__(self, bot):
+        super().__init__()
+        self.bot = bot
+        self.nick_input = discord.ui.TextInput(
+            label="新暱稱",
+            placeholder="輸入新的 Bot 暱稱...",
+            required=True,
+            max_length=32,
+        )
+        self.add_item(self.nick_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        new_nick = self.nick_input.value.strip()
+        if not new_nick:
+            return await interaction.response.send_message("❌ 暱稱不能為空！", ephemeral=True)
+        
+        try:
+            # 修改當前伺服器暱稱
+            await interaction.guild.me.edit(nick=new_nick)
+            await interaction.response.send_message(f"✅ 已將 Bot 暱稱修改為：**{new_nick}**", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ 修改暱稱失敗：{e}", ephemeral=True)
+
+class AvatarModal(discord.ui.Modal, title="🖼️ 更換 Bot 頭貼"):
+    def __init__(self, bot):
+        super().__init__()
+        self.bot = bot
+        self.url_input = discord.ui.TextInput(
+            label="圖片網址",
+            placeholder="請輸入新頭貼的圖片網址（JPG/PNG）",
+            required=True,
+            max_length=500,
+        )
+        self.add_item(self.url_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        url = self.url_input.value.strip()
+        if not url:
+            return await interaction.response.send_message("❌ 網址不能為空！", ephemeral=True)
+        
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=15) as resp:
+                    if resp.status != 200:
+                        return await interaction.response.send_message("❌ 無法下載該圖片，請確認網址是否正確！", ephemeral=True)
+                    image_data = await resp.read()
+            
+            await self.bot.user.edit(avatar=image_data)
+            await interaction.response.send_message("✅ Bot 頭貼已更新！", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ 更換頭貼失敗：{e}", ephemeral=True)
 
 # --- Server List UI ---
 class ServerListView(discord.ui.View):
