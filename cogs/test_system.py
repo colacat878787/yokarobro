@@ -50,7 +50,7 @@ class TestSystemCog(commands.Cog):
         
         try:
             # ========== 第一階段：重新載入所有 Cogs ==========
-            await self.update_progress(progress_embed, "第一階段：重新載入所有 Cogs", 0)
+            await self.update_progress(progress_message, "第一階段：重新載入所有 Cogs", 0)
             self.log("=" * 60)
             self.log("開始測試：重新載入所有 Cogs")
             
@@ -91,12 +91,12 @@ class TestSystemCog(commands.Cog):
                 }
             }
             
-            await self.update_progress(progress_embed, "第一階段：重新載入所有 Cogs", 100, 
+            await self.update_progress(progress_message, "第一階段：重新載入所有 Cogs", 100, 
                                       f"✅ 成功: {len(reload_success)}/{len(loaded_cogs)}")
             await asyncio.sleep(1)
             
             # ========== 第二階段：檢查所有 Cogs 是否正常載入 ==========
-            await self.update_progress(progress_embed, "第二階段：檢查 Cogs 載入狀態", 0)
+            await self.update_progress(progress_message, "第二階段：檢查 Cogs 載入狀態", 0)
             self.log("\n" + "=" * 60)
             self.log("開始測試：檢查 Cogs 載入狀態")
             
@@ -122,12 +122,12 @@ class TestSystemCog(commands.Cog):
                 }
             }
             
-            await self.update_progress(progress_embed, "第二階段：檢查 Cogs 載入狀態", 100,
+            await self.update_progress(progress_message, "第二階段：檢查 Cogs 載入狀態", 100,
                                       f"✅ 已載入: {loaded_count}/{len(expected_cogs)}")
             await asyncio.sleep(1)
             
             # ========== 第三階段：測試關鍵指令 ==========
-            await self.update_progress(progress_embed, "第三階段：測試關鍵指令", 0)
+            await self.update_progress(progress_message, "第三階段：測試關鍵指令", 0)
             self.log("\n" + "=" * 60)
             self.log("開始測試：關鍵指令檢查")
             
@@ -175,12 +175,12 @@ class TestSystemCog(commands.Cog):
                 }
             }
             
-            await self.update_progress(progress_embed, "第三階段：測試關鍵指令", 100,
+            await self.update_progress(progress_message, "第三階段：測試關鍵指令", 100,
                                       f"✅ 通過: {passed_commands}/{len(command_tests)}")
             await asyncio.sleep(1)
             
             # ========== 第四階段：檢查 API 連接 ==========
-            await self.update_progress(progress_embed, "第四階段：檢查 API 連接", 0)
+            await self.update_progress(progress_message, "第四階段：檢查 API 連接", 0)
             self.log("\n" + "=" * 60)
             self.log("開始測試：API 連接檢查")
             
@@ -215,12 +215,12 @@ class TestSystemCog(commands.Cog):
                 }
             }
             
-            await self.update_progress(progress_embed, "第四階段：檢查 API 連接", 100,
+            await self.update_progress(progress_message, "第四階段：檢查 API 連接", 100,
                                       f"✅ 通過: {passed_apis}/{len(api_tests)}")
             await asyncio.sleep(1)
             
             # ========== 第五階段：檢查資料儲存 ==========
-            await self.update_progress(progress_embed, "第五階段：檢查資料儲存系統", 0)
+            await self.update_progress(progress_message, "第五階段：檢查資料儲存系統", 0)
             self.log("\n" + "=" * 60)
             self.log("開始測試：資料儲存系統")
             
@@ -270,12 +270,12 @@ class TestSystemCog(commands.Cog):
                 }
             }
             
-            await self.update_progress(progress_embed, "第五階段：檢查資料儲存系統", 100,
+            await self.update_progress(progress_message, "第五階段：檢查資料儲存系統", 100,
                                       f"✅ 通過: {passed_db}/{len(db_tests)}")
             await asyncio.sleep(1)
             
             # ========== 生成最終報告 ==========
-            await self.update_progress(progress_embed, "生成測試報告", 100)
+            await self.update_progress(progress_message, "生成測試報告", 100)
             self.log("\n" + "=" * 60)
             self.log("測試完成，生成報告...")
             
@@ -379,11 +379,12 @@ class TestSystemCog(commands.Cog):
             )
             await progress_message.edit(embed=error_embed)
     
-    async def update_progress(self, embed, stage, progress, detail=""):
+    async def update_progress(self, message, stage, progress, detail=""):
         """更新進度條"""
         progress_bar = self.create_progress_bar(progress)
+        embed = message.embeds[0]
         embed.description = f"**{stage}**\n{progress_bar} {progress}%\n{detail}"
-        await embed.edit(embed=embed)
+        await message.edit(embed=embed)
     
     def create_progress_bar(self, progress, length=20):
         """建立進度條"""
