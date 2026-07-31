@@ -275,9 +275,9 @@ class BotSettingsView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="✏️ 修改暱稱", style=discord.ButtonStyle.primary, row=0, custom_id="bot_change_nick")
-    async def change_nick(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modal = NicknameModal(self.bot)
+    @discord.ui.button(label="✏️ 修改使用者名稱", style=discord.ButtonStyle.primary, row=0, custom_id="bot_change_username")
+    async def change_username(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = UsernameModal(self.bot)
         await interaction.response.send_modal(modal)
 
     @discord.ui.button(label="🖼️ 更換頭貼", style=discord.ButtonStyle.primary, row=0, custom_id="bot_change_avatar")
@@ -289,29 +289,29 @@ class BotSettingsView(discord.ui.View):
     async def back_main(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(content="🔧 請選擇你要修改的設定類別：", view=self.parent_view)
 
-class NicknameModal(discord.ui.Modal, title="✏️ 修改 Bot 暱稱"):
+class UsernameModal(discord.ui.Modal, title="✏️ 修改 Bot 使用者名稱"):
     def __init__(self, bot):
         super().__init__()
         self.bot = bot
-        self.nick_input = discord.ui.TextInput(
-            label="新暱稱",
-            placeholder="輸入新的 Bot 暱稱...",
+        self.name_input = discord.ui.TextInput(
+            label="新名稱",
+            placeholder="輸入新的 Bot 名稱（全域）...",
             required=True,
             max_length=32,
         )
-        self.add_item(self.nick_input)
+        self.add_item(self.name_input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        new_nick = self.nick_input.value.strip()
-        if not new_nick:
-            return await interaction.response.send_message("❌ 暱稱不能為空！", ephemeral=True)
+        new_name = self.name_input.value.strip()
+        if not new_name:
+            return await interaction.response.send_message("❌ 名稱不能為空！", ephemeral=True)
         
         try:
-            # 修改當前伺服器暱稱
-            await interaction.guild.me.edit(nick=new_nick)
-            await interaction.response.send_message(f"✅ 已將 Bot 暱稱修改為：**{new_nick}**", ephemeral=True)
+            # 修改 Bot 全域使用者名稱
+            await self.bot.user.edit(username=new_name)
+            await interaction.response.send_message(f"✅ 已將 Bot 全域名稱修改為：**{new_name}**", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ 修改暱稱失敗：{e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ 修改名稱失敗：{e}\n\n💡 提示：Discord API 限制每小時只能修改 2 次名稱", ephemeral=True)
 
 class AvatarModal(discord.ui.Modal, title="🖼️ 更換 Bot 頭貼"):
     def __init__(self, bot):
