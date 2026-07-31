@@ -116,17 +116,9 @@ PI_IP=192.168.1.100
 當主伺服器離線時，Raspberry Pi Zero 2W 會自動啟動備援機器人，確保服務不中斷。
 
 ### 運作流程
-1. **主伺服器**在埠 8080 提供狀態查詢服務
-2. **Pi 每 30 秒**檢查主伺服器狀態（主動輪詢）
-3. **連續 4 次失敗**（120 秒）→ Pi 自動啟動備援機器人
-4. **主伺服器恢復** → Pi 檢測到後自動關閉備援
-
-### 特色功能
-- ✅ **跨地區支援** - Pi 主動輪詢，不限區域網路
-- ✅ **自動偵測** - 120 秒無回應自動啟動備援
-- ✅ **自動恢復** - 主伺服器恢復後自動關閉備援
-- ✅ **開機自啟** - systemd 服務實現開機自動啟動
-- ✅ **狀態監控** - HTTP 端點提供狀態查詢
+1. 主伺服器每 30 秒發送心跳到 Pi
+2. Pi 超過 120 秒未收到心跳 → 自動啟動備援
+3. 主伺服器恢復 → Pi 自動關閉備援
 
 ### 快速部署
 
@@ -134,14 +126,8 @@ PI_IP=192.168.1.100
 # 在 Pi 上執行
 git clone https://github.com/colacat878787/yokarobro.git /opt/yokaro-backup
 cd /opt/yokaro-backup
-sudo bash pi_setup.sh
-```
-
-### 主伺服器設定
-
-在主伺服器的 `.env` 中加入：
-```env
-MAIN_SERVER_URL=https://你的主伺服器網址
+chmod +x pi_setup.sh
+sudo ./pi_setup.sh
 ```
 
 📖 **詳細說明**：請參考 [PI_DEPLOYMENT.md](PI_DEPLOYMENT.md)
@@ -345,9 +331,6 @@ sudo journalctl -u yokaro-failover -n 100
 
 # 執行檢查腳本
 python3 pi_check.py
-
-# 測試主伺服器連線
-curl https://你的主伺服器網址/status
 ```
 
 ### 音樂播放失敗
@@ -439,8 +422,7 @@ df -h
 ## 📞 聯絡方式
 
 - **GitHub Issues**: [回報問題](https://github.com/colacat878787/yokarobro/issues)
-- **Discord**: 邀請機器人到你的伺服器
-
+- **Discord**: 邀請機器人到你的伺服器 培根的Discord:bacon710022
 ---
 
 **🍓 讓幽芙優(小幽)陪伴你的伺服器，永不離線！**
