@@ -7,6 +7,7 @@ import asyncio
 import difflib
 import importlib
 import subprocess
+import aiohttp
 from dotenv import load_dotenv
 
 # 載入設定
@@ -116,10 +117,22 @@ class YokaroBot(commands.Bot):
         elif os.getenv("OPENAI_API_KEY"): ai_mode = "OpenAI GPT 模式"
         
         print("====================================")
-        print(f"🤖 祈星‧優卡洛 (Yokaro) 啟動成功！")
+        print(f"🤖 幽芙優 (小幽) / Yokaro 啟動成功！")
         print(f"👤 登入身分: {self.user.name} (ID: {self.user.id})")
         print(f"🧠 AI 核心: {ai_mode}")
-        print(f"📦 版本狀態: 2026-05-10 核心升級 (Gemini 驅動)")
+        print(f"📦 版本狀態: 2026-07-31 全面改版 (幽芙優)")
+        
+        # 備援心跳系統
+        pi_ip = os.getenv("PI_IP")
+        if pi_ip:
+            print(f"🍓 備援系統: 已設定 Pi 心跳目標 ({pi_ip}:8888)")
+            # 啟動心跳發送任務
+            self.loop.create_task(self._heartbeat_loop(pi_ip))
+            # 立即發送一次心跳，告訴 Pi 主伺服器已上線
+            self.loop.create_task(self._send_heartbeat(pi_ip))
+        else:
+            print("🍓 備援系統: 未設定 PI_IP，備援心跳功能停用")
+        
         print("====================================")
         
         # 設定原神 Rich Presence 狀態
@@ -143,6 +156,32 @@ class YokaroBot(commands.Bot):
         )
         await self.change_presence(status=discord.Status.online, activity=activity)
 
+    async def _send_heartbeat(self, pi_ip):
+        """發送心跳到 Raspberry Pi"""
+        try:
+            url = f"http://{pi_ip}:8888/heartbeat"
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if data.get("backup_running"):
+                            print("🍓 Pi 回報：備援機器人正在運行中，已通知停止")
+                        else:
+                            pass  # 正常，不需要每次都印
+                    else:
+                        print(f"⚠️ Pi 心跳回應異常: HTTP {resp.status}")
+        except asyncio.TimeoutError:
+            pass  # 超時就跳過，下次再試
+        except Exception as e:
+            print(f"⚠️ 無法發送心跳到 Pi ({pi_ip}): {e}")
+    
+    async def _heartbeat_loop(self, pi_ip):
+        """每 30 秒發送一次心跳到 Raspberry Pi"""
+        await self.wait_until_ready()
+        while not self.is_closed():
+            await self._send_heartbeat(pi_ip)
+            await asyncio.sleep(30)
+    
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CommandNotFound):
             # 取得用戶輸入的指令名稱
