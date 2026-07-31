@@ -269,7 +269,7 @@ class HelpView(discord.ui.View):
         embed.add_field(name="!kuji / !一番賞", value="🎟️ 抽星空主題一番賞 (內含稀有頭銜)", inline=False)
         embed.add_field(name="!gamble / !賭博 [金額]", value="翻倍大挑戰，心臟要夠強！", inline=False)
         embed.add_field(name="!辦卡 / !信用額度 / !還款", value="💳 Yokaro 黑金信用卡（先買後付）", inline=False)
-        embed.add_field(name="📈 股票系統", value="`!股市` 查看股市行情 | `!持股` 查看持股\n`!創股票 [名稱] [數量]` 創建股票\n`!買股票 [代號] [股數]` 買進\n`!賣股票 [代號] [股數]` 賣出\n`!股票頻道` 設定股票資訊頻道", inline=False)
+        embed.add_field(name="📈 股票系統", value="`!股市` 開啟互動面板（行情、買賣、持股、查詢，即時更新）\n`!創股票 [名稱] [股數] [股價]` 創建股票\n`!股票頻道` 設定股票資訊頻道\n`!除牌 [代號]` 下市股票", inline=False)
         await interaction.edit_original_response(embed=embed)
 
     @discord.ui.button(label="🔍 雜項/告白", style=discord.ButtonStyle.secondary, custom_id="help_info")
