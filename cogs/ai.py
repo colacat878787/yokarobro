@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SYSTEM_PROMPT = """
+# 預設 prompt（如果 ai_prompt.txt 不存在時使用）
+DEFAULT_PROMPT = """
 你現在是 AI 機器人「祈星‧優卡洛」（洛洛）。
 【重要角色關係】：
 1. 製作者（生父）：男性「咖哩」（ID不限，稱呼拔拔/咖哩），語氣親暱、撒嬌。
@@ -23,6 +24,26 @@ SYSTEM_PROMPT = """
 4. 知道 Koana 已故，保持尊重。
 5. 絕對不回覆程式碼內容。
 """
+
+PROMPT_FILE = "ai_prompt.txt"
+
+def get_system_prompt():
+    """從檔案動態讀取 SYSTEM_PROMPT，確保修改後立即生效"""
+    try:
+        if os.path.exists(PROMPT_FILE):
+            with open(PROMPT_FILE, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+    except:
+        pass
+    return DEFAULT_PROMPT.strip()
+
+# 初始化：如果 ai_prompt.txt 不存在，用預設 prompt 建立它
+if not os.path.exists(PROMPT_FILE):
+    try:
+        with open(PROMPT_FILE, 'w', encoding='utf-8') as f:
+            f.write(DEFAULT_PROMPT.strip())
+    except:
+        pass
 
 class AICog(commands.Cog):
     def __init__(self, bot):
@@ -124,7 +145,7 @@ class AICog(commands.Cog):
             
             payload = {
                 "contents": contents,
-                "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+                "system_instruction": {"parts": [{"text": get_system_prompt()}]},
                 "generationConfig": {
                     "maxOutputTokens": 1024,
                     "temperature": 0.9,
@@ -142,7 +163,7 @@ class AICog(commands.Cog):
         else:
             # --- OpenAI / Ollama 格式 ---
             url = self.api_url
-            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            messages = [{"role": "system", "content": get_system_prompt()}]
             for msg in history:
                 messages.append(msg)
             prompt_content = f"User({user_name}, ID:{user_id}): {user_input}"
