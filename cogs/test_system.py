@@ -146,13 +146,13 @@ class TestSystemCog(commands.Cog):
             
             # 測試各 cog 的主要指令
             cog_commands = {
-                'AICog': ['ai', 'set_ai'],
+                'AICog': ['set_ai'],
                 'MusicCog': ['play', 'skip', 'stop'],
                 'AdminCog': ['panel', 'webpanel'],
-                'EconomyCog': ['balance', 'work', 'gamble'],
-                'LevelsCog': ['profile', 'rank'],
+                'EconomyCog': ['balance', 'work', 'ATM'],
+                'LevelsCog': ['profile'],
                 'TicketsCog': ['ticket'],
-                'ModmailCog': ['modmail']
+                'ModmailCog': []  # Modmail 是透過 listener 運作，沒有單一觸發指令
             }
             
             for cog_name, commands in cog_commands.items():
@@ -230,8 +230,8 @@ class TestSystemCog(commands.Cog):
             data_files = [
                 ('ai_channels.json', 'AI 頻道設定'),
                 ('ai_prompt.txt', 'AI 提示詞'),
-                ('kuji_data.json', '一番賞資料'),
-                ('economy_data.json', '經濟系統資料'),
+                ('kuji.json', '一番賞資料'),
+                ('economy.json', '經濟系統資料'),
                 ('levels.json', '等級系統資料')
             ]
             
