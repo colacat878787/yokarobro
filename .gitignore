@@ -1,28 +1,96 @@
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Discord bot specific
-*.db
-*.sqlite3
+# 環境變數（敏感資訊）
+.env
+.env.local
+.env.*.local
+!.env.pi.example
 
-# OS generated files
+# 日誌檔案
+*.log
+pi_failover.log
+
+# 系統檔案
 .DS_Store
 Thumbs.db
-*.zip
-*.7z
-ai_channels.json
-welcome_channels.json
-economy.json
-kuji.json
-changelog_channel.json
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# 音樂快取
+music_cache/
+*.mp3
+*.wav
+*.ogg
+*.m4a
+
+# 資料庫
+*.db
+*.sqlite
+*.sqlite3
+
+# 節點模組（如果有）
+node_modules/
+package-lock.json
+yarn.lock
+
+# 備份檔案
+*.bak
+*.backup
+*~
+
+# 測試覆蓋率
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# 臨時檔案
+tmp/
+temp/
+*.tmp
+
+# 舊版本備份
+old_*.py
+
+# 音訊處理暫存
+scratch/
+# test_*.py  # 註解掉以允許 test_system.py
+
+# 系統服務檔案（已部署後生成）
+/etc/systemd/system/yokaro-failover.service
+
+# 工作目錄（Pi 部署用）
+/opt/yokaro-backup/

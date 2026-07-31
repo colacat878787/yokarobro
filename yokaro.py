@@ -8,6 +8,8 @@ import difflib
 import importlib
 import subprocess
 import aiohttp
+import json
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from dotenv import load_dotenv
 
 # 載入設定
@@ -26,6 +28,29 @@ from utils import mobile_status # 啟用手機在線模式
 # 設定基礎日誌，這樣我們就能看到報錯詳情
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
 logger = logging.getLogger("Yokaro")
+
+class StatusServerHandler(BaseHTTPRequestHandler):
+    """處理 Pi 的狀態查詢請求"""
+    
+    def do_GET(self):
+        if self.path == "/status":
+            status = {
+                "status": "ok",
+                "bot_name": bot.user.name if bot.user else "starting",
+                "guilds": len(bot.guilds) if bot.guilds else 0,
+                "latency": round(bot.latency * 1000) if bot.latency else None,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(status, ensure_ascii=False).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+    
+    def log_message(self, format, *args):
+        pass  # 靜默 HTTP 日誌
 
 class YokaroBot(commands.Bot):
     def __init__(self):
@@ -63,6 +88,7 @@ class YokaroBot(commands.Bot):
             'cogs.mcstatus',
             'cogs.reloader',
             'cogs.delete_log',
+            'cogs.test_system',        # 🔍 系統測試工具
             # ===== 新功能模組 =====
             'cogs.greeting_buttons',   # 🤝 互動打招呼按鈕
             'cogs.checkin_cards',      # 🎮 每日簽到+抽卡
@@ -122,16 +148,16 @@ class YokaroBot(commands.Bot):
         print(f"🧠 AI 核心: {ai_mode}")
         print(f"📦 版本狀態: 2026-07-31 全面改版 (幽芙優)")
         
-        # 備援心跳系統
-        pi_ip = os.getenv("PI_IP")
-        if pi_ip:
-            print(f"🍓 備援系統: 已設定 Pi 心跳目標 ({pi_ip}:8888)")
-            # 啟動心跳發送任務
-            self.loop.create_task(self._heartbeat_loop(pi_ip))
-            # 立即發送一次心跳，告訴 Pi 主伺服器已上線
-            self.loop.create_task(self._send_heartbeat(pi_ip))
+        # 備援系統：啟動狀態查詢伺服器
+        main_server_url = os.getenv("MAIN_SERVER_URL")
+        if main_server_url:
+            # 啟動狀態查詢伺服器（讓 Pi 可以檢查主伺服器狀態）
+            status_thread = threading.Thread(target=self._run_status_server, daemon=True)
+            status_thread.start()
+            print(f"🍓 備援系統: 狀態查詢伺服器已啟動")
+            print(f"   Pi 可透過 {main_server_url}/status 檢查狀態")
         else:
-            print("🍓 備援系統: 未設定 PI_IP，備援心跳功能停用")
+            print("🍓 備援系統: 未設定 MAIN_SERVER_URL，Pi 無法檢查主伺服器狀態")
         
         print("====================================")
         
@@ -155,32 +181,17 @@ class YokaroBot(commands.Bot):
             ]
         )
         await self.change_presence(status=discord.Status.online, activity=activity)
-
-    async def _send_heartbeat(self, pi_ip):
-        """發送心跳到 Raspberry Pi"""
-        try:
-            url = f"http://{pi_ip}:8888/heartbeat"
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("backup_running"):
-                            print("🍓 Pi 回報：備援機器人正在運行中，已通知停止")
-                        else:
-                            pass  # 正常，不需要每次都印
-                    else:
-                        print(f"⚠️ Pi 心跳回應異常: HTTP {resp.status}")
-        except asyncio.TimeoutError:
-            pass  # 超時就跳過，下次再試
-        except Exception as e:
-            print(f"⚠️ 無法發送心跳到 Pi ({pi_ip}): {e}")
     
-    async def _heartbeat_loop(self, pi_ip):
-        """每 30 秒發送一次心跳到 Raspberry Pi"""
-        await self.wait_until_ready()
-        while not self.is_closed():
-            await self._send_heartbeat(pi_ip)
-            await asyncio.sleep(30)
+    def _run_status_server(self):
+        """啟動狀態查詢伺服器（背景執行緒）"""
+        try:
+            server = HTTPServer(("0.0.0.0", 8080), StatusServerHandler)
+            print("🍓 狀態查詢伺服器運行在埠 8080")
+            server.serve_forever()
+        except Exception as e:
+            print(f"⚠️ 狀態查詢伺服器啟動失敗: {e}")
+
+    # 已移除心跳發送功能，改為 Pi 主動輪詢
     
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CommandNotFound):
