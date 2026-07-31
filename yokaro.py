@@ -66,6 +66,7 @@ class YokaroBot(commands.Bot):
             'cogs.greeting_buttons',   # 🤝 互動打招呼按鈕
             'cogs.checkin_cards',      # 🎮 每日簽到+抽卡
             'cogs.confession',         # 🗣️ 匿名告白牆
+            'cogs.stocks',             # 📈 股票市場系統
         ]
 
     async def setup_hook(self):
@@ -255,10 +256,10 @@ class HelpView(discord.ui.View):
         embed.set_footer(text="錄影完成後，影片會自動傳送到當前文字頻道。嗷嗷嗷～")
         await interaction.edit_original_response(embed=embed)
 
-    @discord.ui.button(label="💰 經濟/遊戲", style=discord.ButtonStyle.success, custom_id="help_economy")
+    @discord.ui.button(label="💰 經濟/股票", style=discord.ButtonStyle.success, custom_id="help_economy")
     async def economy(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
-        embed = discord.Embed(title="💰 經濟、一番賞與博弈系統", color=0xf1c40f)
+        embed = discord.Embed(title="💰 經濟、股票與博弈系統", color=0xf1c40f)
         embed.add_field(name="!balance / !錢包", value="查看自己的現金與銀行存摺", inline=True)
         embed.add_field(name="!ATM / !銀行", value="💡 圖形化 ATM 系統 (存提款)", inline=True)
         embed.add_field(name="!work / !打工", value="賺取洛洛幣，有冷卻時間喔！", inline=True)
@@ -267,17 +268,20 @@ class HelpView(discord.ui.View):
         embed.add_field(name="!我的卡片 / !卡片背包", value="📦 查看你擁有的所有卡片收藏", inline=False)
         embed.add_field(name="!kuji / !一番賞", value="🎟️ 抽星空主題一番賞 (內含稀有頭銜)", inline=False)
         embed.add_field(name="!gamble / !賭博 [金額]", value="翻倍大挑戰，心臟要夠強！", inline=False)
+        embed.add_field(name="!辦卡 / !信用額度 / !還款", value="💳 Yokaro 黑金信用卡（先買後付）", inline=False)
+        embed.add_field(name="📈 股票系統", value="`!股市` 查看股市行情 | `!持股` 查看持股\n`!創股票 [名稱] [數量]` 創建股票\n`!買股票 [代號] [股數]` 買進\n`!賣股票 [代號] [股數]` 賣出\n`!股票頻道` 設定股票資訊頻道", inline=False)
         await interaction.edit_original_response(embed=embed)
 
-    @discord.ui.button(label="🔍 雜項/資訊", style=discord.ButtonStyle.secondary, custom_id="help_info")
+    @discord.ui.button(label="🔍 雜項/告白", style=discord.ButtonStyle.secondary, custom_id="help_info")
     async def info(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
-        embed = discord.Embed(title="🔍 實用工具、等級與運勢", color=0x95a5a6)
+        embed = discord.Embed(title="🔍 實用工具、等級與告白", color=0x95a5a6)
         embed.add_field(name="!weather / !天氣 [城市]", value="即時天氣訊號監測", inline=True)
         embed.add_field(name="!stock / !股價 [代號]", value="查詢美股/台股即時報價", inline=True)
         embed.add_field(name="!wiki / !查 [關鍵字]", value="維基百科深度搜尋", inline=True)
         embed.add_field(name="!profile / !等級", value="查看你的等級與 XP 經驗值卡片", inline=True)
         embed.add_field(name="!fortune / !運勢", value="抽一張每日靈感籤詩", inline=True)
+        embed.add_field(name="!告白", value="💌 匿名告白（免審核，直接發在當前頻道）", inline=False)
         embed.set_footer(text="聊天、升級、跟洛洛互動吧！")
         await interaction.edit_original_response(embed=embed)
 
