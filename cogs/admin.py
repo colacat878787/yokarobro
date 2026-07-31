@@ -285,9 +285,79 @@ class BotSettingsView(discord.ui.View):
         modal = AvatarModal(self.bot)
         await interaction.response.send_modal(modal)
 
+    @discord.ui.button(label="🧠 AI 提示詞", style=discord.ButtonStyle.success, row=1, custom_id="bot_edit_prompt")
+    async def edit_prompt(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = PromptModal(self.bot)
+        await interaction.response.send_modal(modal)
+
     @discord.ui.button(label="⬅️ 返回主選單", style=discord.ButtonStyle.secondary, row=4, custom_id="bot_back_main")
     async def back_main(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(content="🔧 請選擇你要修改的設定類別：", view=self.parent_view)
+
+class PromptModal(discord.ui.Modal, title="🧠 編輯 AI 提示詞"):
+    def __init__(self, bot):
+        super().__init__()
+        self.bot = bot
+        # 讀取當前 prompt
+        current_prompt = ""
+        try:
+            with open('cogs/ai.py', 'r', encoding='utf-8') as f:
+                content = f.read()
+                # 取出 SYSTEM_PROMPT 的內容
+                import re
+                match = re.search(r'SYSTEM_PROMPT\s*=\s*"""(.+?)"""', content, re.DOTALL)
+                if match:
+                    current_prompt = match.group(1).strip()
+        except:
+            current_prompt = "無法讀取當前提示詞"
+        
+        self.prompt_input = discord.ui.TextInput(
+            label="AI 提示詞 (SYSTEM_PROMPT)",
+            style=discord.TextStyle.long,
+            placeholder="輸入 AI 的系統提示詞...",
+            default=current_prompt,
+            required=True,
+            max_length=2000,
+        )
+        self.add_item(self.prompt_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        new_prompt = self.prompt_input.value.strip()
+        if not new_prompt:
+            return await interaction.response.send_message("❌ 提示詞不能為空！", ephemeral=True)
+        
+        try:
+            # 讀取 ai.py 並替換 SYSTEM_PROMPT
+            with open('cogs/ai.py', 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            import re
+            # 替換 SYSTEM_PROMPT 內容
+            new_content = re.sub(
+                r'SYSTEM_PROMPT\s*=\s*""".+?"""',
+                f'SYSTEM_PROMPT = """\n{new_prompt}\n"""',
+                content,
+                count=1,
+                flags=re.DOTALL
+            )
+            
+            with open('cogs/ai.py', 'w', encoding='utf-8') as f:
+                f.write(new_content)
+            
+            # 重新載入 AI cog 讓新提示詞生效
+            try:
+                self.bot.reload_extension('cogs.ai')
+                await interaction.response.send_message(
+                    f"✅ AI 提示詞已更新並重新載入！\n\n**新提示詞：**\n```\n{new_prompt[:200]}...\n```",
+                    ephemeral=True
+                )
+            except:
+                await interaction.response.send_message(
+                    f"✅ 提示詞已儲存！但重新載入失敗，請重啟機器人。\n\n**新提示詞：**\n```\n{new_prompt[:200]}...\n```",
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ 修改提示詞失敗：{e}", ephemeral=True)
 
 class UsernameModal(discord.ui.Modal, title="✏️ 修改 Bot 使用者名稱"):
     def __init__(self, bot):
