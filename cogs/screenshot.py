@@ -66,6 +66,8 @@ class ScreenshotCog(commands.Cog):
     async def _try_screenshot_apis(self, url: str) -> bytes:
         """嘗試多個截圖 API"""
         apis = [
+            # 嘗試免費的截圖服務 (不需要 API key)
+            lambda: self._screenshot_free_service(url),
             # API 1: 使用 screenshotapi.net (需要 API key)
             lambda: self._screenshot_api_net(url),
             # API 2: 使用 apiflash.com (需要 API key)
@@ -82,6 +84,17 @@ class ScreenshotCog(commands.Cog):
             except:
                 continue
         
+        return None
+    
+    async def _screenshot_free_service(self, url: str) -> bytes:
+        """使用免費的截圖服務 (不需要 API key)"""
+        # 使用 thum.io 免費截圖服務
+        api_url = f"https://image.thum.io/get/width/1920/crop/800/noanimate/{url}"
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status == 200:
+                    return await response.read()
         return None
     
     async def _screenshot_api_net(self, url: str) -> bytes:
