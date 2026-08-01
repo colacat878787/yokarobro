@@ -10,8 +10,6 @@ class ProfanityCog(commands.Cog):
         self.bot = bot
         self.profanity_file = "profanity_list.json"
         self.warnings_file = "profanity_warnings.json"
-        self.profanity_list = self._load_profanity()
-        self.warnings = self._load_warnings()
         
         # 預設髒話庫（多國語言）
         self.default_profanity = {
@@ -21,6 +19,9 @@ class ProfanityCog(commands.Cog):
             "ja": ["クソ", "死ね", "バカ", "アホ", "くたばれ", "ちくしょう", "くそ", "カス", "ゴミ"],
             "ko": ["씨발", "좆", "병신", "개새끼", "미친", "죽어", "꺼져", "븅신", "호로"]
         }
+        
+        self.profanity_list = self._load_profanity()
+        self.warnings = self._load_warnings()
     
     def _load_profanity(self):
         """載入髒話庫"""
