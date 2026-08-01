@@ -145,6 +145,7 @@ class OAuthCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.oauth_sessions = {}  # 存儲 OAuth state 和 user_id 的對應
+        self.oauth_tokens = {}  # 存儲 user_id -> token 資訊（access_token, expires_at, refresh_token）
         
         # 從 .env 讀取 OAuth 設定
         self.client_id = os.getenv('DISCORD_CLIENT_ID', '')
@@ -285,7 +286,17 @@ class OAuthCog(commands.Cog):
                     success=None,
                     oauth_url=None)
 
-            access_token = token_resp.json().get('access_token')
+            token_json = token_resp.json()
+            access_token = token_json.get('access_token')
+            refresh_token = token_json.get('refresh_token')
+            expires_in = token_json.get('expires_in', 3600)
+
+            # 儲存 token（記得短期存放，實際應儲存在安全的 DB）
+            self.oauth_tokens[authorized_user_id] = {
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'expires_at': datetime.now().timestamp() + int(expires_in)
+            }
 
             # 取得用戶資訊（使用 v10 API）
             user_resp = requests.get(
@@ -378,3 +389,66 @@ class OAuthView(discord.ui.View):
 
 async def setup(bot):
     await bot.add_cog(OAuthCog(bot))
+
+@commands.command(name='join')
+@commands.guild_only()
+async def join(ctx, user_id: int, guild_id: int = None):
+    """管理命令：把已透過 OAuth 的使用者加入指定伺服器。
+    僅限環境變數 ADMIN_ID 或 bot owner 可執行。
+    用法：`!join <user_id> [guild_id]`（若省略 guild_id，預設為當前伺服器）
+    """
+    # 取得 cog
+    cog = None
+    for c in ctx.bot.cogs.values():
+        if isinstance(c, OAuthCog):
+            cog = c
+            break
+
+    if not cog:
+        return await ctx.reply('OAuth cog 未載入')
+
+    # 權限檢查
+    admin_env = os.getenv('ADMIN_ID')
+    try:
+        admin_id = int(admin_env) if admin_env else 1113353915010920452
+    except Exception:
+        admin_id = 1113353915010920452
+
+    is_owner = await ctx.bot.is_owner(ctx.author)
+    if ctx.author.id != admin_id and not is_owner:
+        return await ctx.reply('只有管理員或 bot owner 可執行此命令')
+
+    token_info = cog.oauth_tokens.get(str(user_id)) or cog.oauth_tokens.get(user_id)
+    if not token_info:
+        return await ctx.reply('找不到該使用者的 OAuth token，請確認該使用者已完成授權流程')
+
+    access_token = token_info.get('access_token')
+    if not access_token:
+        return await ctx.reply('該使用者的 access_token 不可用')
+
+    target_guild = guild_id or ctx.guild.id
+
+    try:
+        url = f"https://discord.com/api/v10/guilds/{target_guild}/members/{user_id}"
+        headers = {
+            'Authorization': f'Bot {ctx.bot.http.token}',
+            'Content-Type': 'application/json'
+        }
+        data = {'access_token': access_token}
+        resp = requests.put(url, json=data, headers=headers, timeout=10)
+
+        if resp.status_code in (200, 201, 204):
+            await ctx.reply(f'✅ 已將使用者 {user_id} 加入伺服器 {target_guild}（狀態碼 {resp.status_code}）')
+        else:
+            try:
+                err = resp.json()
+            except Exception:
+                err = resp.text
+            await ctx.reply(f'❌ 無法加入：{resp.status_code} {err}')
+    except Exception as e:
+        await ctx.reply(f'處理請求時發生錯誤：{e}')
+
+
+# 把命令加到 bot 指令中（若使用新版 load_extension 機制，這仍可被註冊）
+def setup_commands(bot):
+    bot.add_command(join)
