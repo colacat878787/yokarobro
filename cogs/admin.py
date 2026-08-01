@@ -1479,7 +1479,7 @@ class AdminCog(commands.Cog):
         if before.channel and before.channel.category_id == category_id:
             # Check if channel is now empty
             if len(before.channel.members) == 0:
-                # Delete the voice channel if it's a dynamic one
+                # Only delete if it's a dynamic voice channel (not trigger channel or static channels)
                 if before.channel.id in self.bot.dynamic_voice_channels:
                     text_channel_id = self.bot.dynamic_voice_channels[before.channel.id]
                     
@@ -1492,16 +1492,15 @@ class AdminCog(commands.Cog):
                             except:
                                 pass
                     
-                    # Delete from tracking
-                    del self.bot.dynamic_voice_channels[before.channel.id]
-                
-                # Delete the voice channel (but not the trigger channel)
-                if before.channel.id != trigger_channel_id:
+                    # Delete the voice channel
                     try:
                         await before.channel.delete(reason="Dynamic voice channel empty")
                         print(f"🗑️ [動態語音] 已刪除空白的語音頻道: {before.channel.name}")
                     except Exception as e:
                         print(f"⚠️ [動態語音] 刪除頻道失敗: {e}")
+                    
+                    # Delete from tracking
+                    del self.bot.dynamic_voice_channels[before.channel.id]
 
     @commands.hybrid_command(name='serverlist')
     async def serverlist(self, ctx):

@@ -767,11 +767,6 @@ def music_tts(guild_id):
                 guild.voice_client.play(source, after=lambda e: os.unlink(temp_path) if os.path.exists(temp_path) else None)
             except Exception as e:
                 print(f"❌ [TTS] 失敗: {e}")
-    asyncio.run_coroutine_threadsafe(do_tts(), loop_instance)
-    return jsonify({"status": "ok"})
-
-class MusicWebPanelCog(commands.Cog):
-    def __init__(self, bot):
         self.bot = bot
         global bot_instance, loop_instance
         bot_instance = bot

@@ -7,7 +7,7 @@
 使用方式：
 1. 在 Pi 上執行: python3 pi_failover.py
 2. 確保 .env 中有 DISCORD_TOKEN（備援用的 token）
-3. 主伺服器會每 30 秒發送心跳訊號到這台 Pi
+3. 確保 .env 中有 MAIN_SERVER_URL（主伺服器的狀態查詢網址）
 
 建議搭配 systemd 服務自動啟動
 """
@@ -19,20 +19,20 @@ import json
 import subprocess
 import threading
 import signal
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import urllib.request
+import urllib.error
 from datetime import datetime
 
 # ===== 設定 =====
-HEARTBEAT_PORT = 8888           # 心跳監聽埠
-HEARTBEAT_TIMEOUT = 120         # 心跳超時（秒），超過此時間未收到心跳就啟動備援
-HEARTBEAT_INTERVAL = 30         # 主伺服器發送心跳的間隔（秒）
+POLL_INTERVAL = 30              # 輪詢主伺服器的間隔（秒）
+FAILOVER_THRESHOLD = 4          # 連續失敗次數後啟動備援（30秒 * 4 = 120秒）
 BOT_STARTUP_DELAY = 5           # 啟動備援前的延遲（秒）
 LOG_FILE = "pi_failover.log"    # 日誌檔案
 
 # ===== 全域狀態 =====
-last_heartbeat = time.time()
 backup_process = None
 is_backup_running = False
+consecutive_failures = 0
 main_server_online = False
 
 def log(msg):
@@ -124,37 +124,16 @@ def stop_backup_bot():
         backup_process = None
         is_backup_running = False
 
-class HeartbeatHandler(BaseHTTPRequestHandler):
-    """處理來自主伺服器的心跳訊號"""
-    
-    def do_POST(self):
-        global last_heartbeat, main_server_online
-        
-        if self.path == "/heartbeat":
-            last_heartbeat = time.time()
-            main_server_online = True
-            
-            # 如果備援正在運行，停止它
-            if is_backup_running:
-                log("📡 收到主伺服器心跳，正在停止備援...")
-                stop_backup_bot()
-            
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "backup_running": is_backup_running}).encode())
-        else:
-            self.send_response(404)
-            self.end_headers()
+class StatusHandler(BaseHTTPRequestHandler):
+    """處理狀態查詢（用於主伺服器檢查 Pi 狀態）"""
     
     def do_GET(self):
         """提供狀態查詢"""
         if self.path == "/status":
             status = {
-                "main_server_online": main_server_online,
                 "backup_running": is_backup_running,
-                "last_heartbeat": datetime.fromtimestamp(last_heartbeat).strftime("%Y-%m-%d %H:%M:%S"),
-                "uptime": int(time.time() - last_heartbeat),
+                "main_server_online": main_server_online,
+                "consecutive_failures": consecutive_failures,
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             self.send_response(200)
@@ -168,33 +147,73 @@ class HeartbeatHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # 靜默 HTTP 日誌
 
-def run_heartbeat_server():
-    """啟動心跳監聽伺服器"""
-    server = HTTPServer(("0.0.0.0", HEARTBEAT_PORT), HeartbeatHandler)
-    log(f"🍓 心跳監聽伺服器已啟動 (埠: {HEARTBEAT_PORT})")
-    server.serve_forever()
+def run_status_server():
+    """啟動狀態查詢伺服器（可選）"""
+    try:
+        server = HTTPServer(("0.0.0.0", 8888), StatusHandler)
+        log(f"🍓 狀態查詢伺服器已啟動 (埠: 8888)")
+        server.serve_forever()
+    except:
+        log("⚠️ 狀態查詢伺服器啟動失敗（埠可能已被佔用）")
+
+def check_main_server():
+    """檢查主伺服器是否在線"""
+    global consecutive_failures, main_server_online
+    
+    main_server_url = os.getenv("MAIN_SERVER_URL")
+    if not main_server_url:
+        log("❌ 未設定 MAIN_SERVER_URL，無法檢查主伺服器狀態")
+        return False
+    
+    try:
+        # 發送請求到主伺服器的狀態端點
+        req = urllib.request.Request(f"{main_server_url}/status")
+        with urllib.request.urlopen(req, timeout=10) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode('utf-8'))
+                return data.get("status") == "ok"
+    except urllib.error.URLError as e:
+        log(f"⚠️ 無法連接主伺服器: {e}")
+    except urllib.error.HTTPError as e:
+        log(f"⚠️ 主伺服器回應錯誤: HTTP {e.code}")
+    except Exception as e:
+        log(f"⚠️ 檢查主伺服器時發生錯誤: {e}")
+    
+    return False
 
 def monitor_loop():
-    """監控迴圈：檢查心跳是否超時"""
-    global main_server_online
+    """監控迴圈：定期檢查主伺服器狀態"""
+    global consecutive_failures, main_server_online
     
     log("🔍 監控迴圈已啟動")
+    log(f"📡 輪詢間隔: {POLL_INTERVAL}秒")
+    log(f"⚠️  備援觸發閥值: {FAILOVER_THRESHOLD}次連續失敗")
     
     while True:
-        current_time = time.time()
-        elapsed = current_time - last_heartbeat
+        # 檢查主伺服器狀態
+        is_online = check_main_server()
         
-        if elapsed > HEARTBEAT_TIMEOUT and not is_backup_running:
-            # 心跳超時，主伺服器可能離線
-            log(f"⚠️ 心跳超時 ({elapsed:.0f}秒)，主伺服器可能離線！")
+        if is_online:
+            consecutive_failures = 0
+            if not main_server_online:
+                log("✅ 主伺服器已上線")
+                main_server_online = True
+            
+            # 如果備援正在運行，停止它
+            if is_backup_running:
+                log("📡 主伺服器已恢復，正在停止備援...")
+                stop_backup_bot()
+        else:
+            consecutive_failures += 1
+            log(f"⚠️  主伺服器無回應 (連續失敗: {consecutive_failures}/{FAILOVER_THRESHOLD})")
             main_server_online = False
-            start_backup_bot()
-        elif elapsed <= HEARTBEAT_TIMEOUT and is_backup_running:
-            # 收到心跳，但備援還在運行
-            log("📡 主伺服器已恢復，正在停止備援...")
-            stop_backup_bot()
+            
+            # 如果連續失敗達到閥值，啟動備援
+            if consecutive_failures >= FAILOVER_THRESHOLD and not is_backup_running:
+                log(f"🚨 主伺服器離線！連續失敗 {consecutive_failures} 次")
+                start_backup_bot()
         
-        time.sleep(10)  # 每 10 秒檢查一次
+        time.sleep(POLL_INTERVAL)
 
 def signal_handler(sig, frame):
     """處理 Ctrl+C"""
@@ -206,24 +225,34 @@ def signal_handler(sig, frame):
 def main():
     log("=" * 50)
     log("🍓 幽芙優(小幽) Raspberry Pi 備援系統")
-    log(f"📡 心跳埠: {HEARTBEAT_PORT}")
-    log(f"⏱️ 超時設定: {HEARTBEAT_TIMEOUT}秒")
+    log(f"📡 輪詢間隔: {POLL_INTERVAL}秒")
+    log(f"⏱️ 備援觸發: {FAILOVER_THRESHOLD}次連續失敗")
     log(f"📁 工作目錄: {os.getcwd()}")
     log("=" * 50)
     
     # 檢查 .env 檔案
     if not os.path.exists(".env"):
         log("❌ 找不到 .env 檔案！請確保在正確的目錄中執行")
-        log("💡 提示：請在此目錄建立 .env 並設定 DISCORD_TOKEN")
+        log("💡 提示：請在此目錄建立 .env 並設定 DISCORD_TOKEN 和 MAIN_SERVER_URL")
         return
+    
+    # 檢查 MAIN_SERVER_URL
+    main_server_url = os.getenv("MAIN_SERVER_URL")
+    if not main_server_url:
+        log("❌ 未設定 MAIN_SERVER_URL！")
+        log("💡 請在 .env 中加入主伺服器的狀態查詢網址")
+        log("   例如: MAIN_SERVER_URL=https://yokaro.wayna1015.ccwu.cc")
+        return
+    
+    log(f"🌐 主伺服器: {main_server_url}")
     
     # 註冊信號處理
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    # 啟動心跳監聽伺服器（背景執行緒）
-    heartbeat_thread = threading.Thread(target=run_heartbeat_server, daemon=True)
-    heartbeat_thread.start()
+    # 啟動狀態查詢伺服器（背景執行緒，可選）
+    status_thread = threading.Thread(target=run_status_server, daemon=True)
+    status_thread.start()
     
     # 等待伺服器啟動
     time.sleep(1)

@@ -52,15 +52,23 @@ if [ ! -f ".env" ]; then
     echo "⚠️ 找不到 .env 檔案！"
     echo "請建立 .env 並設定以下內容："
     echo "  DISCORD_TOKEN=你的備援機器人token"
-    echo "  GEMINI_API_KEY=你的gemini_key"
-    echo "  GENIUS_ACCESS_TOKEN=你的genius_token"
+    echo "  MAIN_SERVER_URL=https://你的主伺服器網址"
     echo ""
-    echo "💡 你可以從主伺服器複製 .env 過來"
+    echo "💡 複製 .env.pi.example 為 .env 並填入設定"
+    echo "   或從主伺服器複製 .env 過來（需要加上 MAIN_SERVER_URL）"
     exit 1
 fi
 
 echo ""
 echo "✅ 安裝完成！"
+
+# 顯示重要提醒
+echo ""
+echo "⚠️  重要提醒："
+echo "  1. 請確保 .env 中有設定 MAIN_SERVER_URL"
+echo "  2. 請確保主伺服器的 .env 中有設定 MAIN_SERVER_URL（指向 Pi 的網址）"
+echo "  3. 主伺服器需要啟動狀態查詢伺服器（埠 8080）"
+echo ""
 
 # 建立 systemd 服務
 echo "🔧 建立 systemd 服務..."
@@ -97,7 +105,6 @@ echo "  查看日誌: sudo journalctl -u yokaro-failover -f"
 echo "  重啟服務: sudo systemctl restart yokaro-failover"
 echo "  停止服務: sudo systemctl stop yokaro-failover"
 echo ""
-echo "📡 心跳監聽埠: 8888"
 echo "🔍 狀態查詢: http://<Pi_IP>:8888/status"
 echo ""
 echo "🍓 備援系統已就緒！當主伺服器離線時會自動接管！"
