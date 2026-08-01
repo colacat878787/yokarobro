@@ -243,15 +243,19 @@ class RestoreView(discord.ui.View):
     async def _restore_server(self, interaction: discord.Interaction, overwrite: bool):
         """執行還原"""
         guild = interaction.guild
+        command_channel = interaction.channel  # 記錄指令頻道，避免被刪除
         
         # 發送一個新的狀態訊息到頻道
         status_msg = await interaction.channel.send("🔄 正在還原伺服器結構...")
         
         try:
-            # 如果選擇覆蓋模式，刪除現有頻道（保留預設頻道）
+            # 如果選擇覆蓋模式，刪除現有頻道（保留指令頻道和預設頻道）
             if overwrite:
                 await status_msg.edit(content="🗑️ 正在刪除現有頻道...")
                 for channel in guild.channels:
+                    # 保留指令頻道，避免無法發送訊息
+                    if channel.id == command_channel.id:
+                        continue
                     try:
                         await channel.delete()
                     except:
