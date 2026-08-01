@@ -243,7 +243,12 @@ class RestoreView(discord.ui.View):
     async def _restore_server(self, interaction: discord.Interaction, overwrite: bool):
         """執行還原"""
         guild = interaction.guild
-        status_msg = await interaction.edit_original_response(content="🔄 正在還原伺服器結構...", embed=None, view=None)
+        
+        # 先回覆互動，避免超時
+        await interaction.response.edit_message(content="🔄 正在還原伺服器結構...", embed=None, view=None)
+        
+        # 發送一個新的狀態訊息到頻道
+        status_msg = await interaction.channel.send("🔄 正在還原伺服器結構...")
         
         try:
             # 如果選擇覆蓋模式，刪除現有頻道（保留預設頻道）
