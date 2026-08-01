@@ -168,7 +168,11 @@ class OAuthCog(commands.Cog):
                 if not state or state not in self.oauth_sessions:
                     error = "無效的授權請求，請重新使用 !oauth 指令"
                     return render_template_string(OAUTH_HTML_TEMPLATE, error=error, success=None, oauth_url=None)
-                
+                # 檢查是否已設置 client_id
+                if not self.client_id:
+                    error = "伺服器尚未設定 Discord OAuth client_id，請設定環境變數 DISCORD_CLIENT_ID 並重啟"
+                    return render_template_string(OAUTH_HTML_TEMPLATE, error=error, success=None, oauth_url=None)
+
                 params = {
                     'client_id': self.client_id,
                     'redirect_uri': self.redirect_uri,
@@ -177,11 +181,14 @@ class OAuthCog(commands.Cog):
                     'state': state
                 }
                 oauth_url = f"https://discord.com/oauth2/authorize?{urllib.parse.urlencode(params)}"
+                print(f"[OAuth] 產生 oauth_url: {oauth_url}")
                 
                 return render_template_string(OAUTH_HTML_TEMPLATE, error=None, success=None, oauth_url=oauth_url)
             
             # 處理 OAuth callback（根路徑由 webpanel 處理）
+            # 接受有無尾斜線的 callback
             @app.route('/oauth/callback')
+            @app.route('/oauth/callback/')
             def oauth_callback():
                 return self.oauth_callback_handler()
             
