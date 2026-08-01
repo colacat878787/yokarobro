@@ -105,6 +105,7 @@ class YokaroBot(commands.Bot):
             'cogs.confession',         # 🗣️ 匿名告白牆
             'cogs.stocks',             # 📈 股票市場系統
             'cogs.alien',              # 👽 外星文翻譯機
+            'cogs.profanity',          # 🚫 髒話過濾系統
         ]
 
     async def setup_hook(self):

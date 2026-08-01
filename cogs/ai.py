@@ -24,6 +24,23 @@ DEFAULT_PROMPT = """
 4. 知道 Koana 已故，保持尊重。
 5. 絕對不回覆程式碼內容。
 6. 你的名字已從「優卡洛」改為「幽芙優（小幽）」，但培根把拔還是習慣叫你優卡洛或洛洛，這沒關係。
+
+【指令執行能力】：
+你可以執行以下管理指令，當用戶要求你執行這些操作時，請回覆「[EXECUTE_CMD]!指令名稱 參數」格式：
+- !踢出 @用戶 - 踢出成員
+- !停權 @用戶 - 停權（ban）成員
+- !mute @用戶 分鐘數 - 禁言成員
+- !警告 @用戶 原因 - 警告成員
+- !记过 @用戶 警告/小過/大過 點數 - 記錄違規
+
+範例：
+用戶：「幫我ban掉 @咖哩」
+你：「[EXECUTE_CMD]!停權 <@501251225715474433> 違規操作」
+
+注意：
+1. 只有管理員才能執行這些指令
+2. 執行前請確認用戶有權限
+3. 執行後請簡短說明結果
 """
 
 PROMPT_FILE = "ai_prompt.txt"
@@ -182,7 +199,14 @@ class AICog(commands.Cog):
                             reply = data['candidates'][0]['content']['parts'][0]['text'].strip()
                         else:
                             reply = data['choices'][0]['message']['content'].strip()
-                            
+                        
+                        # 檢查是否包含指令執行標記
+                        if "[EXECUTE_CMD]" in reply:
+                            # 執行指令
+                            cmd_result = await self._execute_ai_command(reply, message if 'message' in dir() else None)
+                            if cmd_result:
+                                return cmd_result
+                        
                         history.append({"role": "user", "content": prompt_content})
                         history.append({"role": "assistant" if not is_gemini else "model", "content": reply})
                         return reply
@@ -193,6 +217,68 @@ class AICog(commands.Cog):
         except Exception as e:
             print(f"AI Error: {e}")
             return "嗷嗷嗷～洛洛的小腦袋現在連不上線，可能是網路塞車了..."
+    
+    async def _execute_ai_command(self, ai_reply, message):
+        """執行 AI 回覆中的指令"""
+        try:
+            # 解析指令
+            cmd_match = ai_reply.split("[EXECUTE_CMD]")
+            if len(cmd_match) < 2:
+                return None
+            
+            cmd_text = cmd_match[1].strip()
+            # 移除多餘的說明文字（只保留第一行指令）
+            cmd_line = cmd_text.split('\n')[0].strip()
+            
+            # 解析指令名稱和參數
+            if not cmd_line.startswith('!'):
+                return None
+            
+            # 取得指令名稱和參數
+            parts = cmd_line[1:].split(maxsplit=1)
+            cmd_name = parts[0]
+            cmd_args = parts[1] if len(parts) > 1 else ""
+            
+            # 檢查是否有對應的指令
+            cmd = self.bot.get_command(cmd_name)
+            if not cmd:
+                return f"❌ 找不到指令：!{cmd_name}"
+            
+            # 檢查權限
+            if not message:
+                return "❌ 無法執行指令：缺少上下文"
+            
+            # 建立假的 context
+            ctx = await self.bot.get_context(message)
+            ctx.author = message.author
+            ctx.channel = message.channel
+            ctx.guild = message.guild
+            
+            # 檢查使用者是否有權限執行指令
+            try:
+                # 嘗試取得權限檢查
+                can_run = await cmd.can_run(ctx)
+                if not can_run:
+                    return f"❌ 你沒有權限執行 !{cmd_name}"
+            except:
+                # 如果無法檢查，假設有權限
+                pass
+            
+            # 執行指令
+            try:
+                # 解析參數
+                if cmd_args:
+                    # 處理 @用戶 格式
+                    cmd_args = cmd_args.replace('<@', '').replace('>', '')
+                
+                await ctx.invoke(cmd, *cmd_args.split())
+                return f"✅ 已執行指令：!{cmd_name}"
+            except Exception as e:
+                return f"❌ 執行指令失敗：{e}"
+        
+        except Exception as e:
+            print(f"Execute AI Command Error: {e}")
+            return None
 
     def load_ai_channels(self):
         if os.path.exists('ai_channels.json'):
