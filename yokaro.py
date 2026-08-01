@@ -109,6 +109,7 @@ class YokaroBot(commands.Bot):
             'cogs.backup',             # 💾 伺服器備份系統
             'cogs.screenshot',         # 📸 網頁截圖功能
             'cogs.reaction',           # 😀 表情符號反應系統
+            'cogs.oauth',              # 🔐 OAuth 加入伺服器系統
         ]
 
     async def setup_hook(self):
