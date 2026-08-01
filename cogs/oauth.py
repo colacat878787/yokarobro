@@ -291,13 +291,6 @@ class OAuthCog(commands.Cog):
             refresh_token = token_json.get('refresh_token')
             expires_in = token_json.get('expires_in', 3600)
 
-            # 儲存 token（記得短期存放，實際應儲存在安全的 DB）
-            self.oauth_tokens[authorized_user_id] = {
-                'access_token': access_token,
-                'refresh_token': refresh_token,
-                'expires_at': datetime.now().timestamp() + int(expires_in)
-            }
-
             # 取得用戶資訊（使用 v10 API）
             user_resp = requests.get(
                 'https://discord.com/api/v10/users/@me',
@@ -317,6 +310,15 @@ class OAuthCog(commands.Cog):
 
             user_data = user_resp.json()
             authorized_user_id = str(user_data.get('id'))
+
+            # 儲存 token 與顯示名稱（記得短期存放，實際應儲存在安全的 DB）
+            display_name = user_data.get('global_name') or f"{user_data.get('username')}#{user_data.get('discriminator')}"
+            self.oauth_tokens[authorized_user_id] = {
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'expires_at': datetime.now().timestamp() + int(expires_in),
+                'display_name': display_name
+            }
             
             # 驗證用戶 ID 是否匹配
             if authorized_user_id != str(user_id):
@@ -389,10 +391,15 @@ class OAuthView(discord.ui.View):
 
 async def setup(bot):
     await bot.add_cog(OAuthCog(bot))
+    # 註冊 module-level 命令（join, joinlist）
+    try:
+        setup_commands(bot)
+    except Exception:
+        pass
 
 @commands.command(name='join')
 @commands.guild_only()
-async def join(ctx, user_id: int, guild_id: int = None):
+async def join(ctx, user_id: int = None, guild_id: int = None):
     """管理命令：把已透過 OAuth 的使用者加入指定伺服器。
     僅限環境變數 ADMIN_ID 或 bot owner 可執行。
     用法：`!join <user_id> [guild_id]`（若省略 guild_id，預設為當前伺服器）
@@ -418,6 +425,55 @@ async def join(ctx, user_id: int, guild_id: int = None):
     if ctx.author.id != admin_id and not is_owner:
         return await ctx.reply('只有管理員或 bot owner 可執行此命令')
 
+    target_guild = guild_id or ctx.guild.id
+
+    # 如果沒有提供 user_id，則處理所有已授權的使用者
+    if user_id is None:
+        if not cog.oauth_tokens:
+            return await ctx.reply('目前沒有已授權的使用者')
+
+        success = 0
+        fail = []
+        for uid, token_info in list(cog.oauth_tokens.items()):
+            access_token = token_info.get('access_token')
+            if not access_token:
+                fail.append((uid, 'no access_token'))
+                continue
+
+            try:
+                url = f"https://discord.com/api/v10/guilds/{target_guild}/members/{uid}"
+                headers = {
+                    'Authorization': f'Bot {ctx.bot.http.token}',
+                    'Content-Type': 'application/json'
+                }
+                data = {'access_token': access_token}
+                resp = requests.put(url, json=data, headers=headers, timeout=10)
+
+                if resp.status_code in (200, 201, 204):
+                    success += 1
+                else:
+                    try:
+                        err = resp.json()
+                    except Exception:
+                        err = resp.text
+                    fail.append((uid, f'{resp.status_code} {err}'))
+            except Exception as e:
+                fail.append((uid, str(e)))
+
+            await asyncio.sleep(1)
+
+        msg = f'✅ 完成：成功加入 {success} 位使用者'
+        if fail:
+            msg += f'，失敗 {len(fail)} 位 (詳情見下方)'
+            await ctx.reply(msg)
+            details = '\n'.join([f"{u} -> {r}" for u, r in fail])
+            await ctx.send(f"``\n{details}\n``")
+        else:
+            await ctx.reply(msg)
+
+        return
+
+    # 單一使用者加入（保留舊行為）
     token_info = cog.oauth_tokens.get(str(user_id)) or cog.oauth_tokens.get(user_id)
     if not token_info:
         return await ctx.reply('找不到該使用者的 OAuth token，請確認該使用者已完成授權流程')
@@ -425,8 +481,6 @@ async def join(ctx, user_id: int, guild_id: int = None):
     access_token = token_info.get('access_token')
     if not access_token:
         return await ctx.reply('該使用者的 access_token 不可用')
-
-    target_guild = guild_id or ctx.guild.id
 
     try:
         url = f"https://discord.com/api/v10/guilds/{target_guild}/members/{user_id}"
@@ -452,3 +506,35 @@ async def join(ctx, user_id: int, guild_id: int = None):
 # 把命令加到 bot 指令中（若使用新版 load_extension 機制，這仍可被註冊）
 def setup_commands(bot):
     bot.add_command(join)
+    bot.add_command(joinlist)
+
+
+@commands.command(name='joinlist')
+async def joinlist(ctx):
+    """列出所有已授權的使用者，顯示 display name。"""
+    cog = None
+    for c in ctx.bot.cogs.values():
+        if isinstance(c, OAuthCog):
+            cog = c
+            break
+
+    if not cog:
+        return await ctx.reply('OAuth cog 未載入')
+
+    if not cog.oauth_tokens:
+        return await ctx.reply('目前沒有已授權的使用者')
+
+    lines = []
+    for uid, info in cog.oauth_tokens.items():
+        display = info.get('display_name') or str(uid)
+        lines.append(f"{display} — {uid}")
+
+    # 分段發送以防超過字數限制
+    chunk = ''
+    for line in lines:
+        if len(chunk) + len(line) + 1 > 1900:
+            await ctx.send(f"``\n{chunk}\n``")
+            chunk = ''
+        chunk += line + '\n'
+    if chunk:
+        await ctx.send(f"``\n{chunk}\n``")
