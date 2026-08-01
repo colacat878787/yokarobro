@@ -178,10 +178,11 @@ class BackupCog(commands.Cog):
             overwrites = {}
             for target, overwrite in channel.overwrites.items():
                 if isinstance(target, discord.Role):
+                    allow, deny = overwrite.pair()
                     overwrites[str(target.id)] = {
                         "role_name": target.name,
-                        "allow": overwrite.allow.value if overwrite.allow else 0,
-                        "deny": overwrite.deny.value if overwrite.deny else 0
+                        "allow": allow.value if allow else 0,
+                        "deny": deny.value if deny else 0
                     }
             channel_data["permission_overwrites"] = overwrites
             channel_data["topic"] = channel.topic or ""
@@ -192,10 +193,11 @@ class BackupCog(commands.Cog):
             overwrites = {}
             for target, overwrite in channel.overwrites.items():
                 if isinstance(target, discord.Role):
+                    allow, deny = overwrite.pair()
                     overwrites[str(target.id)] = {
                         "role_name": target.name,
-                        "allow": overwrite.allow.value if overwrite.allow else 0,
-                        "deny": overwrite.deny.value if overwrite.deny else 0
+                        "allow": allow.value if allow else 0,
+                        "deny": deny.value if deny else 0
                     }
             channel_data["permission_overwrites"] = overwrites
             channel_data["bitrate"] = channel.bitrate
@@ -337,11 +339,11 @@ class RestoreView(discord.ui.View):
                     for role_id, perm_data in channel_data["permission_overwrites"].items():
                         role = role_map.get(perm_data["role_name"])
                         if role:
-                            overwrite = discord.PermissionOverwrite(
+                            await channel.set_permissions(
+                                role,
                                 allow=discord.Permissions(perm_data["allow"]),
                                 deny=discord.Permissions(perm_data["deny"])
                             )
-                            await channel.set_permissions(role, overwrite=overwrite)
                 
                 # 設定其他屬性
                 if channel_data.get("topic"):
@@ -360,11 +362,11 @@ class RestoreView(discord.ui.View):
                     for role_id, perm_data in channel_data["permission_overwrites"].items():
                         role = role_map.get(perm_data["role_name"])
                         if role:
-                            overwrite = discord.PermissionOverwrite(
+                            await channel.set_permissions(
+                                role,
                                 allow=discord.Permissions(perm_data["allow"]),
                                 deny=discord.Permissions(perm_data["deny"])
                             )
-                            await channel.set_permissions(role, overwrite=overwrite)
                 
                 # 設定其他屬性
                 if "bitrate" in channel_data:
