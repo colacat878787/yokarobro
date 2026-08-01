@@ -308,6 +308,17 @@ HTML_TEMPLATE = """
 
 @app.route('/')
 def index():
+    # 檢查是否有 OAuth callback 參數
+    code = request.args.get('code')
+    state = request.args.get('state')
+    error = request.args.get('error')
+    if code or state or error:
+        # 委派給 OAuth cog 處理
+        oauth_cog = bot_instance.get_cog('OAuthCog') if bot_instance else None
+        if oauth_cog:
+            return oauth_cog.oauth_callback_handler()
+        return "OAuth module not loaded", 500
+    
     auth = request.args.get("token")
     if auth != panel_token: return "Unauthorized", 403
     return render_template_string(HTML_TEMPLATE)

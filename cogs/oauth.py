@@ -178,29 +178,12 @@ class OAuthCog(commands.Cog):
                 
                 return render_template_string(OAUTH_HTML_TEMPLATE, error=None, success=None, oauth_url=oauth_url)
             
-            # 處理 OAuth callback（根路徑）
+            # 處理 OAuth callback（根路徑由 webpanel 處理）
             @app.route('/oauth/callback')
             def oauth_callback():
                 return self.oauth_callback_handler()
             
-            # 也在根路徑處理 OAuth callback
-            @app.route('/')
-            def oauth_root_callback():
-                # 檢查是否有 OAuth callback 參數
-                code = request.args.get('code')
-                state = request.args.get('state')
-                error = request.args.get('error')
-                if code or state or error:
-                    return self.oauth_callback_handler()
-                # 否則返回正常的 webpanel 頁面
-                from cogs.webpanel import panel_token
-                auth = request.args.get("token")
-                if auth != panel_token:
-                    return "Unauthorized", 403
-                from cogs.webpanel import HTML_TEMPLATE
-                return render_template_string(HTML_TEMPLATE)
-            
-            print("✅ [OAuth] Flask 路由已註冊 (/oauth, /oauth/callback, /)")
+            print("✅ [OAuth] Flask 路由已註冊 (/oauth, /oauth/callback)")
         except Exception as e:
             print(f"❌ [OAuth] 路由註冊失敗: {e}")
     
