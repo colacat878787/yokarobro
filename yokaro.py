@@ -108,6 +108,7 @@ class YokaroBot(commands.Bot):
             'cogs.profanity',          # 🚫 髒話過濾系統
             'cogs.backup',             # 💾 伺服器備份系統
             'cogs.screenshot',         # 📸 網頁截圖功能
+            'cogs.reaction',           # 😀 表情符號反應系統
         ]
 
     async def setup_hook(self):
