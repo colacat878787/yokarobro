@@ -171,15 +171,28 @@ class YokaroBot(commands.Bot):
         
         print("====================================")
         
-        # 啟動狀態輪播任務
-        self.status_task = self.loop.create_task(self._status_cycler())
+        # 立即設定一個初始狀態（確保有狀態顯示）
+        try:
+            activity = discord.Activity(
+                type=discord.ActivityType.playing,
+                name="🚀 啟動中..."
+            )
+            await self.change_presence(status=discord.Status.online, activity=activity)
+            print("✅ 初始狀態已設定")
+        except Exception as e:
+            print(f"⚠️ 設定初始狀態失敗: {e}")
         
-        # 設定初始狀態
-        await self._update_status()
+        # 啟動狀態輪播任務
+        if not self.status_task or self.status_task.done():
+            self.status_task = self.loop.create_task(self._status_cycler())
+            print("✅ 狀態輪播任務已啟動")
+        else:
+            print("⚠️ 狀態輪播任務已在運行中")
     
     async def _status_cycler(self):
         """背景任務：輪播狀態訊息"""
         await self.wait_until_ready()
+        print("🔄 狀態輪播任務開始運行")
         
         status_list = [
             (discord.Status.phone, "でも　そんなんじゃ　だめ"),
@@ -194,18 +207,25 @@ class YokaroBot(commands.Bot):
             try:
                 if not self.music_mode:
                     status, message = status_list[status_idx]
+                    print(f"📊 更新狀態: {status} - {message}")
                     activity = discord.Activity(
                         type=discord.ActivityType.playing,
                         name=message
                     )
                     await self.change_presence(status=status, activity=activity)
                     status_idx = (status_idx + 1) % len(status_list)
+                else:
+                    print("🎵 音樂模式中，跳過狀態輪播")
                 
                 # 每 10 秒切換一次
                 await asyncio.sleep(10)
             except Exception as e:
                 print(f"⚠️ 狀態輪播錯誤: {e}")
+                import traceback
+                traceback.print_exc()
                 await asyncio.sleep(10)
+        
+        print("🛑 狀態輪播任務已停止")
     
     async def _update_status(self):
         """更新狀態（音樂模式或一般模式）"""
