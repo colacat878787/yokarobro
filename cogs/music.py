@@ -16,6 +16,20 @@ import logging
 from datetime import datetime
 import importlib
 
+# 嘗試匯入翻譯和網易雲相關套件
+try:
+    from deep_translator import GoogleTranslator
+    TRANSLATOR_AVAILABLE = True
+except ImportError:
+    TRANSLATOR_AVAILABLE = False
+
+try:
+    import pyncm
+    from pyncm import apis
+    PYNC_AVAILABLE = True
+except ImportError:
+    PYNC_AVAILABLE = False
+
 # --- YTDL 設定 ---
 YTDL_OPTIONS = {
     'format': 'bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best',
@@ -670,6 +684,148 @@ class MusicCog(commands.Cog):
             return None
         return None
 
+    async def fetch_netease_lyrics(self, song_name, artist_name=""):
+        """從網易雲音樂獲取歌詞（包含逐字歌詞）"""
+        if not PYNC_AVAILABLE:
+            return None
+        
+        try:
+            # 登入網易雲（使用匿名登入）
+            if not hasattr(self, '_netease_logged_in'):
+                try:
+                    # 嘗試登入，如果失敗就使用訪客模式
+                    pyncm.login.LoginViaCellphone(phone="", password="")
+                    self._netease_logged_in = True
+                except:
+                    # 訪客模式可能無法獲取所有歌詞，但至少可以嘗試
+                    self._netease_logged_in = False
+            
+            # 搜尋歌曲
+            search_result = pyncm.CloudSearch.search(song_name, limit=5)
+            if not search_result or 'result' not in search_result:
+                return None
+            
+            songs = search_result['result'].get('songs', [])
+            if not songs:
+                return None
+            
+            # 找到最匹配的歌曲
+            best_match = songs[0]
+            song_id = best_match['id']
+            
+            # 獲取歌詞
+            lyric_data = pyncm.Lyric.getLyric(song_id)
+            if not lyric_data or 'lrc' not in lyric_data:
+                return None
+            
+            lrc_data = lyric_data['lrc']
+            lyrics_text = lrc_data.get('lyric', '')
+            
+            # 檢查是否有逐字歌詞 (tlyric)
+            translated_lyrics = ""
+            if 'tlyric' in lyric_data and lyric_data['tlyric']:
+                translated_lyrics = lyric_data['tlyric'].get('lyric', '')
+            
+            # 解析 LRC 格式歌詞
+            parsed_lyrics = []
+            for line in lyrics_text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                # 匹配時間標籤 [00:00.00]
+                time_match = re.match(r"\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\](.*)", line)
+                if time_match:
+                    minutes = int(time_match.group(1))
+                    seconds = int(time_match.group(2))
+                    millis = int((time_match.group(3) or "0").ljust(3, "0"))
+                    timestamp = minutes * 60 + seconds + millis / 1000.0
+                    text = time_match.group(4).strip()
+                    if text:
+                        parsed_lyrics.append((timestamp, text))
+            
+            # 如果有逐字歌詞，優先使用
+            if translated_lyrics and TRANSLATOR_AVAILABLE:
+                # 解析翻譯歌詞
+                trans_dict = {}
+                for line in translated_lyrics.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    time_match = re.match(r"\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\](.*)", line)
+                    if time_match:
+                        minutes = int(time_match.group(1))
+                        seconds = int(time_match.group(2))
+                        millis = int((time_match.group(3) or "0").ljust(3, "0"))
+                        timestamp = minutes * 60 + seconds + millis / 1000.0
+                        text = time_match.group(4).strip()
+                        if text:
+                            trans_dict[timestamp] = text
+                
+                # 合併原文和翻譯
+                final_lyrics = []
+                for ts, text in parsed_lyrics:
+                    # 檢查是否為簡體中文
+                    if self._is_simplified_chinese(text):
+                        # 如果有對應的翻譯，使用翻譯；否則翻譯原文
+                        if ts in trans_dict:
+                            final_lyrics.append((ts, trans_dict[ts]))
+                        else:
+                            translated = await self._translate_text(text)
+                            final_lyrics.append((ts, translated))
+                    else:
+                        # 非簡體中文，保持原文
+                        final_lyrics.append((ts, text))
+                
+                parsed_lyrics = final_lyrics
+            
+            if parsed_lyrics:
+                return {
+                    "song": best_match['name'],
+                    "artist": best_match['ar'][0]['name'] if best_match.get('ar') else artist_name,
+                    "lines": parsed_lyrics,
+                    "format": "netease",
+                    "confidence": "high",
+                    "netease_id": song_id
+                }
+            
+            return None
+            
+        except Exception as e:
+            print(f"[DEBUG NetEase] Error fetching lyrics: {e}")
+            return None
+
+    def _is_simplified_chinese(self, text):
+        """檢測是否為簡體中文"""
+        if not text:
+            return False
+        
+        # 常見簡體字特徵
+        simplified_chars = set('国为这来们说时过对几长发么动向好把没进很开给从被些')
+        
+        # 計算文本中簡體字的比例
+        chinese_chars = [c for c in text if '\u4e00' <= c <= '\u9fff']
+        if not chinese_chars:
+            return False
+        
+        simplified_count = sum(1 for c in chinese_chars if c in simplified_chars)
+        return simplified_count / len(chinese_chars) > 0.3
+
+    async def _translate_text(self, text):
+        """使用 deep-translator 翻譯文本（簡體到繁體）"""
+        if not TRANSLATOR_AVAILABLE:
+            return text
+        
+        try:
+            # 使用 Google 翻譯（deep-translator）
+            translator = GoogleTranslator(source='zh-CN', target='zh-TW')
+            # 在執行緒池中執行翻譯（因為是同步函數）
+            loop = asyncio.get_event_loop()
+            translated = await loop.run_in_executor(None, translator.translate, text)
+            return translated if translated else text
+        except Exception as e:
+            print(f"[DEBUG Translator] Translation error: {e}")
+            return text
+
     async def fetch_yt_captions(self, video_id: str):
         """Try to extract automatic captions from YouTube via yt_dlp info dict and fetch the vtt/ttml text."""
         if not video_id:
@@ -732,7 +888,7 @@ class MusicCog(commands.Cog):
 
     async def fetch_all_lyrics(self, query=None, video_id=None, preferred_source=None):
         """Try multiple lyric sources in order and return the first match.
-        Order: Genius -> YouTube auto-captions -> Unison -> lyrics.ovh
+        Order: NetEase -> Genius -> YouTube auto-captions -> Unison -> lyrics.ovh
         If preferred_source is set, try that source first.
         """
         # 0. Try example-provided lyrics integration (third-party friend module)
@@ -742,6 +898,18 @@ class MusicCog(commands.Cog):
                 return example_result
         except Exception:
             pass
+        
+        # 0.5. Try NetEase Cloud Music (優先級最高，因為有逐字歌詞)
+        if preferred_source != 'youtube':
+            try:
+                song, artist = self.parse_song_artist(query)
+                if song:
+                    netease_result = await self.fetch_netease_lyrics(song, artist)
+                    if netease_result:
+                        print(f"[DEBUG Lyrics] NetEase lyrics found for: {song}")
+                        return netease_result
+            except Exception as e:
+                print(f"[DEBUG Lyrics] NetEase error: {e}")
         
         if preferred_source == 'youtube':
             # Try YouTube captions first (has timestamps!)
@@ -1288,7 +1456,7 @@ class MusicCog(commands.Cog):
     async def play(self, ctx, *, search):
         if not ctx.voice_client:
             if not ctx.author.voice: return await ctx.send("❌ 你必須先加入語音頻道！")
-            await ctx.author.voice.channel.connect(timeout=60.0, reconnect=True)
+            await ctx.author.voice.channel.connect(timeout=60.0, reconnect=True, self_deaf=True)
 
         if "open.spotify.com" in search:
             return await self.resolve_spotify(ctx, search)
@@ -1624,7 +1792,7 @@ class MusicCog(commands.Cog):
     async def radio(self, ctx, *, station):
         if not ctx.voice_client:
             if not ctx.author.voice: return await ctx.send("❌ 你必須先加入語音頻道！")
-            await ctx.author.voice.channel.connect(timeout=60.0, reconnect=True)
+            await ctx.author.voice.channel.connect(timeout=60.0, reconnect=True, self_deaf=True)
             
         await ctx.send(f"📻 **正在為您調頻至 {station}...**")
         search = f"ytsearch1: 台灣 {station} 廣播 live"
@@ -1697,7 +1865,7 @@ class MusicCog(commands.Cog):
             if not ctx.voice_client:
                 if not ctx.author.voice:
                     return await ctx.send("❌ 請先加入語音頻道！")
-                await ctx.author.voice.channel.connect(timeout=60.0, reconnect=True)
+                await ctx.author.voice.channel.connect(timeout=60.0, reconnect=True, self_deaf=True)
 
             gid = ctx.guild.id
             if gid not in self.queue: self.queue[gid] = []
@@ -1775,7 +1943,7 @@ class MusicCog(commands.Cog):
             if not ctx.voice_client:
                 if not ctx.author.voice:
                     return await ctx.send("❌ 請先加入語音頻道！")
-                await ctx.author.voice.channel.connect(timeout=60.0, reconnect=True)
+                await ctx.author.voice.channel.connect(timeout=60.0, reconnect=True, self_deaf=True)
 
             gid = ctx.guild.id
             if gid not in self.queue: self.queue[gid] = []

@@ -57,6 +57,16 @@ class YokaroBot(commands.Bot):
         super().__init__(command_prefix='!', intents=intents, help_command=None)
         # Track deleted roles for restore functionality
         self.deleted_roles = {}  # {guild_id: [list of deleted role data]}
+        # Status cycling
+        self.status_messages = [
+            "でも　そんなんじゃ　だめ",
+            "もう　そんなんじゃ　ほら",
+            "心は進化するよ",
+            "もっと　もっと"
+        ]
+        self.status_index = 0
+        self.music_mode = False
+        self.status_task = None
         # ... (其餘部分不變)
         self.initial_extensions = [
             'cogs.ai',
@@ -161,26 +171,58 @@ class YokaroBot(commands.Bot):
         
         print("====================================")
         
-        # 設定原神 Rich Presence 狀態
-        activity = discord.Activity(
-            type=discord.ActivityType.playing,
-            application_id=1403927875819671572,
-            name="原神",
-            details="培根",
-            state="Lv.60 | TW, HK, MO",
-            assets={
-                "large_image": "https://i.ibb.co/ycqVB0qq/1269863",
-                "large_text": "",
-            },
-            timestamps={
-                "start": 91090711,
-            },
-            buttons=[
-                {"label": "Play Now", "url": "https://hoyo.link/2YJkFBAL"},
-                {"label": "Connect Now", "url": "https://act.hoyoverse.com/puzzle/hk4e/pz_O8pNvKBZ8v/index.html?utm_source=sns&utm_medium=discord&utm_campaign=bot"}
-            ]
-        )
-        await self.change_presence(status=discord.Status.online, activity=activity)
+        # 啟動狀態輪播任務
+        self.status_task = self.loop.create_task(self._status_cycler())
+        
+        # 設定初始狀態
+        await self._update_status()
+    
+    async def _status_cycler(self):
+        """背景任務：輪播狀態訊息"""
+        await self.wait_until_ready()
+        
+        status_list = [
+            (discord.Status.phone, "でも　そんなんじゃ　だめ"),
+            (discord.Status.online, "もう　そんなんじゃ　ほら"),
+            (discord.Status.idle, "心は進化するよ"),
+            (discord.Status.dnd, "もっと　もっと"),
+        ]
+        
+        status_idx = 0
+        
+        while not self.is_closed():
+            try:
+                if not self.music_mode:
+                    status, message = status_list[status_idx]
+                    activity = discord.Activity(
+                        type=discord.ActivityType.playing,
+                        name=message
+                    )
+                    await self.change_presence(status=status, activity=activity)
+                    status_idx = (status_idx + 1) % len(status_list)
+                
+                # 每 10 秒切換一次
+                await asyncio.sleep(10)
+            except Exception as e:
+                print(f"⚠️ 狀態輪播錯誤: {e}")
+                await asyncio.sleep(10)
+    
+    async def _update_status(self):
+        """更新狀態（音樂模式或一般模式）"""
+        if self.music_mode:
+            activity = discord.Activity(
+                type=discord.ActivityType.listening,
+                name="🎧 戴上耳機享受音樂中..."
+            )
+            await self.change_presence(status=discord.Status.online, activity=activity)
+        # 否則由 _status_cycler 處理
+    
+    def set_music_mode(self, enabled: bool):
+        """切換音樂模式"""
+        self.music_mode = enabled
+        if enabled:
+            # 音樂模式啟動時立即更新狀態
+            self.loop.create_task(self._update_status())
     
     def _run_status_server(self):
         """啟動狀態查詢伺服器（背景執行緒）"""

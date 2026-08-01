@@ -22,3 +22,5 @@ flask
 lyricsgenius>=3.0.0
 matplotlib
 mcstatus==11.1.0
+pyncm
+deep-translator
