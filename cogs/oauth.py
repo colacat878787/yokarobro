@@ -149,7 +149,9 @@ class OAuthCog(commands.Cog):
         # 從 .env 讀取 OAuth 設定
         self.client_id = os.getenv('DISCORD_CLIENT_ID', '')
         self.client_secret = os.getenv('DISCORD_CLIENT_SECRET', '')
-        self.redirect_uri = "https://yokaro.wayna1015.ccwu.cc/"
+        # callback 必須與 Discord 開發者後台註冊的 Redirect URI 完全相符
+        # 使用 /oauth/callback 以對應下方註冊的回呼路由
+        self.redirect_uri = "https://yokaro.wayna1015.ccwu.cc/oauth/callback"
         
         # 註冊 Flask 路由到 webpanel
         self._register_routes()
@@ -251,9 +253,9 @@ class OAuthCog(commands.Cog):
         del self.oauth_sessions[state]
         
         try:
-            # 用 code 換 access_token
+            # 用 code 換 access_token（使用 v10 API）
             token_resp = requests.post(
-                'https://discord.com/api/v9/oauth2/token',
+                'https://discord.com/api/v10/oauth2/token',
                 data={
                     'grant_type': 'authorization_code',
                     'code': code,
@@ -261,29 +263,40 @@ class OAuthCog(commands.Cog):
                     'client_id': self.client_id,
                     'client_secret': self.client_secret
                 },
-                headers={'Content-Type': 'application/x-www-form-urlencoded'}
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                timeout=10
             )
-            
+
             if token_resp.status_code != 200:
+                # 嘗試讀取回應內容以便除錯
+                try:
+                    err_body = token_resp.json()
+                except Exception:
+                    err_body = token_resp.text
                 return render_template_string(OAUTH_HTML_TEMPLATE,
-                    error=f"Token 交換失敗：{token_resp.status_code}",
+                    error=f"Token 交換失敗：{token_resp.status_code} {err_body}",
                     success=None,
                     oauth_url=None)
-            
+
             access_token = token_resp.json().get('access_token')
-            
-            # 取得用戶資訊
+
+            # 取得用戶資訊（使用 v10 API）
             user_resp = requests.get(
-                'https://discord.com/api/v9/users/@me',
-                headers={'Authorization': f'Bearer {access_token}'}
+                'https://discord.com/api/v10/users/@me',
+                headers={'Authorization': f'Bearer {access_token}'},
+                timeout=10
             )
-            
+
             if user_resp.status_code != 200:
+                try:
+                    err_body = user_resp.json()
+                except Exception:
+                    err_body = user_resp.text
                 return render_template_string(OAUTH_HTML_TEMPLATE,
-                    error="無法取得用戶資訊",
+                    error=f"無法取得用戶資訊：{user_resp.status_code} {err_body}",
                     success=None,
                     oauth_url=None)
-            
+
             user_data = user_resp.json()
             authorized_user_id = str(user_data.get('id'))
             
@@ -319,7 +332,7 @@ class OAuthCog(commands.Cog):
         try:
             for guild in self.bot.guilds:
                 try:
-                    url = f"https://discord.com/api/v9/guilds/{guild.id}/members/{user_id}"
+                    url = f"https://discord.com/api/v10/guilds/{guild.id}/members/{user_id}"
                     headers = {
                         'Authorization': f'Bot {self.bot.http.token}',
                         'Content-Type': 'application/json'
