@@ -171,14 +171,15 @@ class YokaroBot(commands.Bot):
         
         print("====================================")
         
-        # 立即設定一個初始狀態（確保有狀態顯示）
+        # 立即設定第一個輪播狀態（不使用等待，直接設定）
         try:
+            status, message = self.status_messages[0]
             activity = discord.Activity(
                 type=discord.ActivityType.playing,
-                name="🚀 啟動中..."
+                name=message
             )
-            await self.change_presence(status=discord.Status.online, activity=activity)
-            print("✅ 初始狀態已設定")
+            await self.change_presence(status=status, activity=activity)
+            print(f"✅ 初始狀態已設定: {status} - {message}")
         except Exception as e:
             print(f"⚠️ 設定初始狀態失敗: {e}")
         
@@ -201,7 +202,7 @@ class YokaroBot(commands.Bot):
             (discord.Status.dnd, "もっと　もっと"),
         ]
         
-        status_idx = 0
+        status_idx = 0  # 從第一個開始輪播
         
         while not self.is_closed():
             try:
