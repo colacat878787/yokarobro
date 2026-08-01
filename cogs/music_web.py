@@ -767,11 +767,14 @@ def music_tts(guild_id):
                 guild.voice_client.play(source, after=lambda e: os.unlink(temp_path) if os.path.exists(temp_path) else None)
             except Exception as e:
                 print(f"❌ [TTS] 失敗: {e}")
+
+class MusicWebPanelCog(commands.Cog):
+    def __init__(self, bot):
         self.bot = bot
         global bot_instance, loop_instance
         bot_instance = bot
         loop_instance = bot.loop
-        
+    
     @commands.command(name='musiclink')
     async def music_link(self, ctx):
         # 獲取 WebPanel 的隧道網址
