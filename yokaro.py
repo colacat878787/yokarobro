@@ -106,6 +106,7 @@ class YokaroBot(commands.Bot):
             'cogs.stocks',             # 📈 股票市場系統
             'cogs.alien',              # 👽 外星文翻譯機
             'cogs.profanity',          # 🚫 髒話過濾系統
+            'cogs.backup',             # 💾 伺服器備份系統
         ]
 
     async def setup_hook(self):
