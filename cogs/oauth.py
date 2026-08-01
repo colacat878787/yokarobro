@@ -153,7 +153,7 @@ class OAuthCog(commands.Cog):
         # 使用 /oauth/callback 以對應下方註冊的回呼路由
         self.redirect_uri = "https://yokaro.wayna1015.ccwu.cc/oauth/callback"
         
-        # 註冊 Flask 路由到 webpanel
+        # 註冊 Flask 路由到 webpanel (build 20260801)
         self._register_routes()
     
     def _register_routes(self):
