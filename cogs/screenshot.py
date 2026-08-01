@@ -28,65 +28,128 @@ class ScreenshotCog(commands.Cog):
         status_msg = await ctx.send("📸 正在截取網頁截圖，請稍候...")
         
         try:
-            # 使用外部截圖 API (例如: screenshot-api.com 或類似的服務)
-            # 這裡使用一個免費的截圖 API 範例
-            screenshot_url = f"https://api.screenshotone.com/take"
+            # 使用多個備用截圖 API
+            screenshot_data = await self._try_screenshot_apis(url)
             
-            params = {
-                'url': url,
-                'viewport_width': 1920,
-                'viewport_height': 1080,
-                'device_scale_factor': 1,
-                'format': 'png',
-                'block_ads': 'true',
-                'block_cookie_banners': 'true',
-                'block_banners': 'true',
-                'block_trackers': 'true',
-                'delay': 0,
-                'timeout': 30
-            }
-            
-            # 如果有的話，使用 API key
-            api_key = os.getenv('SCREENSHOT_API_KEY')
-            if api_key:
-                params['access_key'] = api_key
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.get(screenshot_url, params=params, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                    if response.status == 200:
-                        # 讀取圖片資料
-                        image_data = await response.read()
-                        
-                        # 儲存截圖
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        filename = f"screenshot_{timestamp}.png"
-                        filepath = os.path.join(self.screenshot_dir, filename)
-                        
-                        with open(filepath, 'wb') as f:
-                            f.write(image_data)
-                        
-                        # 建立嵌入訊息
-                        embed = discord.Embed(
-                            title="📸 網頁截圖",
-                            description=f"網址：{url}",
-                            color=0x3498db,
-                            timestamp=datetime.now()
-                        )
-                        embed.set_image(url=f"attachment://{filename}")
-                        embed.set_footer(text=f"截圖時間：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                        
-                        # 發送截圖
-                        await status_msg.edit(content=None, embed=embed, attachments=[discord.File(filepath, filename=filename)])
-                        
-                        # 清理舊截圖（可選）
-                        await self._cleanup_old_screenshots()
-                    else:
-                        await status_msg.edit(content=f"❌ 截圖失敗：API 返回錯誤 (狀態碼: {response.status})")
+            if screenshot_data:
+                # 儲存截圖
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"screenshot_{timestamp}.png"
+                filepath = os.path.join(self.screenshot_dir, filename)
+                
+                with open(filepath, 'wb') as f:
+                    f.write(screenshot_data)
+                
+                # 建立嵌入訊息
+                embed = discord.Embed(
+                    title="📸 網頁截圖",
+                    description=f"網址：{url}",
+                    color=0x3498db,
+                    timestamp=datetime.now()
+                )
+                embed.set_image(url=f"attachment://{filename}")
+                embed.set_footer(text=f"截圖時間：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                # 發送截圖
+                await status_msg.edit(content=None, embed=embed, attachments=[discord.File(filepath, filename=filename)])
+                
+                # 清理舊截圖
+                await self._cleanup_old_screenshots()
+            else:
+                await status_msg.edit(content="❌ 截圖失敗：所有 API 都無法使用")
         
         except asyncio.TimeoutError:
             await status_msg.edit(content="❌ 截圖逾時：網頁載入時間過長")
         except Exception as e:
             await status_msg.edit(content=f"❌ 截圖失敗：{str(e)}")
+    
+    async def _try_screenshot_apis(self, url: str) -> bytes:
+        """嘗試多個截圖 API"""
+        apis = [
+            # API 1: 使用 screenshotapi.net (需要 API key)
+            lambda: self._screenshot_api_net(url),
+            # API 2: 使用 apiflash.com (需要 API key)
+            lambda: self._screenshot_apiflash(url),
+            # API 3: 使用 screenshot-one.com (需要 API key)
+            lambda: self._screenshot_screenshotone(url),
+        ]
+        
+        for api_func in apis:
+            try:
+                result = await api_func()
+                if result:
+                    return result
+            except:
+                continue
+        
+        return None
+    
+    async def _screenshot_api_net(self, url: str) -> bytes:
+        """使用 screenshotapi.net"""
+        api_key = os.getenv('SCREENSHOT_API_KEY')
+        if not api_key:
+            return None
+        
+        api_url = f"https://api.screenshotapi.net/capture"
+        params = {
+            'token': api_key,
+            'url': url,
+            'width': 1920,
+            'height': 1080,
+            'output': 'image',
+            'format': 'png'
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status == 200:
+                    return await response.read()
+        return None
+    
+    async def _screenshot_apiflash(self, url: str) -> bytes:
+        """使用 apiflash.com"""
+        api_key = os.getenv('SCREENSHOT_API_KEY')
+        if not api_key:
+            return None
+        
+        api_url = "https://api.apiflash.com/v1/urltoimage"
+        params = {
+            'access_key': api_key,
+            'url': url,
+            'width': 1920,
+            'height': 1080,
+            'format': 'png'
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status == 200:
+                    return await response.read()
+        return None
+    
+    async def _screenshot_screenshotone(self, url: str) -> bytes:
+        """使用 screenshot-one.com"""
+        api_key = os.getenv('SCREENSHOT_API_KEY')
+        if not api_key:
+            return None
+        
+        api_url = "https://api.screenshotone.com/take"
+        params = {
+            'access_key': api_key,
+            'url': url,
+            'viewport_width': 1920,
+            'viewport_height': 1080,
+            'device_scale_factor': 1,
+            'format': 'png',
+            'block_ads': 'true',
+            'block_cookie_banners': 'true'
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status == 200:
+                    return await response.read()
+        return None
     
     async def _cleanup_old_screenshots(self, max_files=50):
         """清理舊的截圖檔案"""
