@@ -1,12 +1,11 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
 import os
 import secrets
-import json
 import requests
+import asyncio
 from datetime import datetime
-from flask import render_template_string, request, jsonify, redirect
+from flask import render_template_string, request, redirect
 import urllib.parse
 
 # OAuth HTML 模板
@@ -69,6 +68,25 @@ OAUTH_HTML_TEMPLATE = """
             transform: translateY(-2px);
             box-shadow: 0 10px 25px rgba(88, 101, 242, 0.4);
         }
+        .discord-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #5865F2;
+            color: white;
+            padding: 16px 40px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 30px rgba(88, 101, 242, 0.35);
+        }
+        .discord-btn:hover {
+            background: #4752C4;
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(88, 101, 242, 0.5);
+        }
         .error {
             background: #fee;
             color: #c33;
@@ -82,6 +100,13 @@ OAUTH_HTML_TEMPLATE = """
             padding: 15px;
             border-radius: 10px;
             margin-bottom: 20px;
+        }
+        .discord-logo {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #fff;
+            padding: 4px;
         }
     </style>
 </head>
@@ -102,10 +127,12 @@ OAUTH_HTML_TEMPLATE = """
         {% endif %}
         
         {% if not success %}
-        <h1>🎉 加入伺服器</h1>
+        <h1>🎉 加入 Yokaro 伺服器</h1>
         <p>點擊下方按鈕，透過 Discord OAuth2 授權即可快速加入我們的伺服器！</p>
-        <a href="{{ oauth_url }}" class="btn">
-            <img src="https://cdn.discordapp.com/embed/avatars/0.png" style="width: 24px; height: 24px; vertical-align: middle; margin-right: 8px; border-radius: 50%;">
+        <a href="{{ oauth_url }}" class="discord-btn">
+            <svg class="discord-logo" viewBox="0 0 24 24" fill="#5865F2">
+                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+            </svg>
             透過 Discord 加入
         </a>
         {% endif %}
@@ -118,36 +145,60 @@ class OAuthCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.oauth_sessions = {}  # 存儲 OAuth state 和 user_id 的對應
-        self.invite_link = os.getenv('DISCORD_INVITE_LINK', '')
         
         # 從 .env 讀取 OAuth 設定
         self.client_id = os.getenv('DISCORD_CLIENT_ID', '')
         self.client_secret = os.getenv('DISCORD_CLIENT_SECRET', '')
-        self.redirect_uri = "https://yokaro.wayna1015.ccwu.cc/"
+        self.redirect_uri = "https://yokaro.wayna1015.ccwu.cc/oauth/callback"
         
-        # 如果沒有設定 invite link，嘗試從 bot 建立
-        if not self.invite_link and bot.application_id:
-            self.invite_link = f"https://discord.com/oauth2/authorize?client_id={bot.application_id}&permissions=8&scope=bot"
+        # 註冊 Flask 路由到 webpanel
+        self._register_routes()
+    
+    def _register_routes(self):
+        """註冊 OAuth 路由到 webpanel 的 Flask app"""
+        try:
+            from cogs.webpanel import app
+            from cogs.webpanel import bot_instance
+            
+            @app.route('/oauth')
+            def oauth_page():
+                state = request.args.get('state')
+                if not state or state not in self.oauth_sessions:
+                    error = "無效的授權請求，請重新使用 !oauth 指令"
+                    return render_template_string(OAUTH_HTML_TEMPLATE, error=error, success=None, oauth_url=None)
+                
+                params = {
+                    'client_id': self.client_id,
+                    'redirect_uri': self.redirect_uri,
+                    'response_type': 'code',
+                    'scope': 'identify guilds.join',
+                    'state': state
+                }
+                oauth_url = f"https://discord.com/oauth2/authorize?{urllib.parse.urlencode(params)}"
+                
+                return render_template_string(OAUTH_HTML_TEMPLATE, error=None, success=None, oauth_url=oauth_url)
+            
+            @app.route('/oauth/callback')
+            def oauth_callback():
+                return self.oauth_callback_handler()
+            
+            print("✅ [OAuth] Flask 路由已註冊 (/oauth, /oauth/callback)")
+        except Exception as e:
+            print(f"❌ [OAuth] 路由註冊失敗: {e}")
     
     @commands.command(name='oauth', aliases=['加入'])
     async def oauth_command(self, ctx):
         """顯示 OAuth 加入伺服器面板"""
-        # 建立 OAuth URL
+        # 建立 OAuth state
         state = secrets.token_urlsafe(16)
         self.oauth_sessions[state] = {
             'user_id': ctx.author.id,
+            'username': str(ctx.author),
             'timestamp': datetime.now().timestamp()
         }
         
-        # Discord OAuth2 URL
-        params = {
-            'client_id': self.client_id,
-            'redirect_uri': self.redirect_uri,
-            'response_type': 'code',
-            'scope': 'identify guilds.join',
-            'state': state
-        }
-        oauth_url = f"https://discord.com/oauth2/authorize?{urllib.parse.urlencode(params)}"
+        # 面板連結
+        panel_url = f"https://yokaro.wayna1015.ccwu.cc/oauth?state={state}"
         
         # 建立嵌入訊息
         embed = discord.Embed(
@@ -158,38 +209,37 @@ class OAuthCog(commands.Cog):
         )
         embed.add_field(
             name="📋 使用方式",
-            value="1. 點擊下方連結\n2. 在 Discord 授權頁面點擊「授權」\n3. 系統會自動將你加入伺服器",
+            value="1. 點擊下方「加入」按鈕\n2. 在網頁上點擊「透過 Discord 加入」\n3. 在 Discord 授權頁面點擊「授權」\n4. 系統會自動將你加入伺服器",
             inline=False
         )
-        embed.set_footer(text="Yokaro OAuth System")
+        embed.set_footer(text="Yokaro OAuth 系統")
         
         # 建立按鈕
-        view = OAuthView(oauth_url)
+        view = OAuthView(panel_url)
         await ctx.send(embed=embed, view=view)
     
-    @app_route('/oauth/callback')
-    def oauth_callback(self):
+    def oauth_callback_handler(self):
         """OAuth2 callback 處理"""
         code = request.args.get('code')
         state = request.args.get('state')
         error = request.args.get('error')
         
         if error:
-            return render_template_string(OAUTH_HTML_TEMPLATE, 
+            return render_template_string(OAUTH_HTML_TEMPLATE,
                 error=f"授權失敗：{error}",
                 success=None,
                 oauth_url=None)
         
         if not code or not state:
-            return render_template_string(OAUTH_HTML_TEMPLATE, 
+            return render_template_string(OAUTH_HTML_TEMPLATE,
                 error="無效的授權請求",
                 success=None,
                 oauth_url=None)
         
         # 驗證 state
         if state not in self.oauth_sessions:
-            return render_template_string(OAUTH_HTML_TEMPLATE, 
-                error="無效的 session",
+            return render_template_string(OAUTH_HTML_TEMPLATE,
+                error="授權已過期，請重新使用 !oauth 指令",
                 success=None,
                 oauth_url=None)
         
@@ -201,23 +251,21 @@ class OAuthCog(commands.Cog):
         
         try:
             # 用 code 換 access_token
-            token_data = {
-                'grant_type': 'authorization_code',
-                'code': code,
-                'redirect_uri': self.redirect_uri,
-                'client_id': self.client_id,
-                'client_secret': self.client_secret
-            }
-            
             token_resp = requests.post(
                 'https://discord.com/api/v9/oauth2/token',
-                data=token_data,
+                data={
+                    'grant_type': 'authorization_code',
+                    'code': code,
+                    'redirect_uri': self.redirect_uri,
+                    'client_id': self.client_id,
+                    'client_secret': self.client_secret
+                },
                 headers={'Content-Type': 'application/x-www-form-urlencoded'}
             )
             
             if token_resp.status_code != 200:
-                return render_template_string(OAUTH_HTML_TEMPLATE, 
-                    error="Token 交換失敗",
+                return render_template_string(OAUTH_HTML_TEMPLATE,
+                    error=f"Token 交換失敗：{token_resp.status_code}",
                     success=None,
                     oauth_url=None)
             
@@ -230,123 +278,81 @@ class OAuthCog(commands.Cog):
             )
             
             if user_resp.status_code != 200:
-                return render_template_string(OAUTH_HTML_TEMPLATE, 
+                return render_template_string(OAUTH_HTML_TEMPLATE,
                     error="無法取得用戶資訊",
                     success=None,
                     oauth_url=None)
             
             user_data = user_resp.json()
-            authorized_user_id = user_data.get('id')
+            authorized_user_id = str(user_data.get('id'))
             
             # 驗證用戶 ID 是否匹配
-            if str(authorized_user_id) != str(user_id):
-                return render_template_string(OAUTH_HTML_TEMPLATE, 
-                    error="用戶驗證失敗",
+            if authorized_user_id != str(user_id):
+                return render_template_string(OAUTH_HTML_TEMPLATE,
+                    error="用戶驗證失敗：授權帳號與 Discord 帳號不符",
                     success=None,
                     oauth_url=None)
             
-            # 異步加入伺服器
+            # 將用戶加入伺服器
             asyncio.run_coroutine_threadsafe(
-                self._add_user_to_guild(authorized_user_id, access_token),
+                self._add_user_to_all_guilds(authorized_user_id, access_token),
                 self.bot.loop
             )
             
-            return render_template_string(OAUTH_HTML_TEMPLATE, 
+            return render_template_string(OAUTH_HTML_TEMPLATE,
                 error=None,
-                success="授權成功！正在將你加入伺服器...",
+                success="成功！你已被加入伺服器，現在可以回到 Discord 了！✨",
                 oauth_url=None)
             
         except Exception as e:
             print(f"❌ [OAuth] Callback 錯誤: {e}")
             import traceback
             traceback.print_exc()
-            return render_template_string(OAUTH_HTML_TEMPLATE, 
+            return render_template_string(OAUTH_HTML_TEMPLATE,
                 error=f"處理授權時發生錯誤：{str(e)}",
                 success=None,
                 oauth_url=None)
     
-    async def _add_user_to_guild(self, user_id: str, access_token: str):
-        """將用戶加入伺服器"""
+    async def _add_user_to_all_guilds(self, user_id: str, access_token: str):
+        """將用戶加入所有伺服器"""
         try:
-            # 取得第一個可用的伺服器
-            if not self.bot.guilds:
-                print("❌ [OAuth] 沒有可用的伺服器")
-                return
-            
-            guild = self.bot.guilds[0]
-            
-            # 使用 Discord API 加入用戶到伺服器
-            url = f"https://discord.com/api/v9/guilds/{guild.id}/members/{user_id}"
-            
-            headers = {
-                'Authorization': f'Bot {self.bot.http.token}',
-                'Content-Type': 'application/json'
-            }
-            
-            data = {
-                'access_token': access_token
-            }
-            
-            response = requests.put(url, json=data, headers=headers)
-            
-            if response.status_code in [200, 201]:
-                print(f"✅ [OAuth] 用戶 {user_id} 已成功加入伺服器 {guild.name}")
-            elif response.status_code == 204:
-                print(f"✅ [OAuth] 用戶 {user_id} 已經在伺服器中")
-            else:
-                print(f"❌ [OAuth] 加入伺服器失敗: {response.status_code} - {response.text}")
-                
+            for guild in self.bot.guilds:
+                try:
+                    url = f"https://discord.com/api/v9/guilds/{guild.id}/members/{user_id}"
+                    headers = {
+                        'Authorization': f'Bot {self.bot.http.token}',
+                        'Content-Type': 'application/json'
+                    }
+                    data = {'access_token': access_token}
+                    
+                    response = requests.put(url, json=data, headers=headers)
+                    
+                    if response.status_code in [200, 201]:
+                        print(f"✅ [OAuth] 用戶 {user_id} 已加入伺服器 {guild.name}")
+                    elif response.status_code == 204:
+                        print(f"✅ [OAuth] 用戶 {user_id} 已在伺服器中 ({guild.name})")
+                    else:
+                        print(f"⚠️ [OAuth] 無法加入 {guild.name}: {response.status_code}")
+                except Exception as e:
+                    print(f"❌ [OAuth] 加入 {guild.name} 失敗: {e}")
         except Exception as e:
             print(f"❌ [OAuth] 加入伺服器時發生錯誤: {e}")
-            import traceback
-            traceback.print_exc()
 
 
 class OAuthView(discord.ui.View):
     """OAuth 加入按鈕"""
     
-    def __init__(self, oauth_url: str):
+    def __init__(self, panel_url: str):
         super().__init__(timeout=300)  # 5 分鐘超時
-        self.oauth_url = oauth_url
+        self.panel_url = panel_url
     
-    @discord.ui.button(label="🔐 透過 Discord 加入", style=discord.ButtonStyle.primary, emoji="✨")
+    @discord.ui.button(label="🔐 加入", style=discord.ButtonStyle.primary, emoji="✨")
     async def oauth_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """點擊按鈕開啟 OAuth 授權"""
+        """點擊按鈕開啟 OAuth 授權網頁"""
         await interaction.response.send_message(
-            f"點擊此連結開始授權：\n{self.oauth_url}",
+            f"點擊此連結開始 OAuth 授權：\n{self.panel_url}",
             ephemeral=True
         )
-
-
-# 將 OAuth callback 路由添加到 webpanel
-def setup_oauth_routes(webpanel_cog):
-    """設定 OAuth 路由（需要在 webpanel 啟動後呼叫）"""
-    from cogs.webpanel import app
-    
-    @app.route('/oauth/callback')
-    def oauth_callback_route():
-        return webpanel_cog.oauth_callback()
-    
-    @app.route('/oauth')
-    def oauth_page():
-        state = request.args.get('state')
-        if not state or state not in webpanel_cog.oauth_sessions:
-            return redirect('/oauth/callback?error=invalid_state')
-        
-        # 建立 OAuth URL
-        params = {
-            'client_id': webpanel_cog.client_id,
-            'redirect_uri': webpanel_cog.redirect_uri,
-            'response_type': 'code',
-            'scope': 'identify guilds.join',
-            'state': state
-        }
-        oauth_url = f"https://discord.com/oauth2/authorize?{urllib.parse.urlencode(params)}"
-        
-        return render_template_string(OAUTH_HTML_TEMPLATE, 
-            error=None, 
-            success=None, 
-            oauth_url=oauth_url)
 
 
 async def setup(bot):
