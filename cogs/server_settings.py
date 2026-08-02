@@ -269,19 +269,20 @@ class CogToggleView(discord.ui.View):
                 emoji=emoji
             ))
         
-        # Discord 限制最多 25 個選項
-        self.options_list = options[:25]
-        
-        # 建立下拉選單
-        select = discord.ui.Select(
-            placeholder="選擇要切換的功能模組...",
-            min_values=1,
-            max_values=min(len(self.options_list), 25),
-            options=self.options_list
-        )
-        
-        select.callback = self.select_callback
-        self.add_item(select)
+        # Discord 單一下拉選單最多 25 個選項，改為分批建立多個選單
+        option_chunks = [options[i:i+25] for i in range(0, len(options), 25)]
+
+        for index, chunk in enumerate(option_chunks, start=1):
+            select = discord.ui.Select(
+                placeholder=f"選擇要切換的功能模組... ({index}/{len(option_chunks)})",
+                min_values=1,
+                max_values=min(len(chunk), 25),
+                options=chunk,
+                custom_id=f"cog_toggle_select_{index}"
+            )
+            
+            select.callback = self.select_callback
+            self.add_item(select)
     
     async def select_callback(self, interaction: discord.Interaction):
         """處理下拉選單選擇"""
