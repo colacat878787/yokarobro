@@ -124,33 +124,24 @@ class ServerSettingsCog(commands.Cog):
         )
         
         # 顯示目前狀態
-        enabled_count = 0
-        disabled_count = 0
-        status_lines = []
-        
-        for cog_name, display_name in TOGGLEABLE_COGS.items():
-            cog = self.bot.get_cog(cog_name)
-            if cog is None:
-                continue
-            
-            if cog_name in disabled_cogs:
-                status_lines.append(f"🔴 {display_name}")
-                disabled_count += 1
-            else:
-                status_lines.append(f"🟢 {display_name}")
-                enabled_count += 1
+        enabled_lines, disabled_lines, unloaded_lines = self._build_cog_status_lines(ctx.guild.id)
         
         # 分組顯示狀態
-        if status_lines:
+        embed.add_field(
+            name=f"✅ 已啟用 ({len(enabled_lines)})",
+            value="\n".join(enabled_lines) or "無",
+            inline=True
+        )
+        embed.add_field(
+            name=f"❌ 已停用 ({len(disabled_lines)})",
+            value="\n".join(disabled_lines) or "無",
+            inline=True
+        )
+        if unloaded_lines:
             embed.add_field(
-                name=f"✅ 已啟用 ({enabled_count})",
-                value="\n".join([s for s in status_lines if s.startswith("🟢")][:15]) or "無",
-                inline=True
-            )
-            embed.add_field(
-                name=f"❌ 已停用 ({disabled_count})",
-                value="\n".join([s for s in status_lines if s.startswith("🔴")][:15]) or "無",
-                inline=True
+                name=f"⚪ 未載入 ({len(unloaded_lines)})",
+                value="\n".join(unloaded_lines),
+                inline=False
             )
         
         embed.set_footer(text="只有伺服器管理員可以操作此面板")
@@ -176,29 +167,25 @@ class ServerSettingsCog(commands.Cog):
             timestamp=datetime.now()
         )
         
-        enabled_list = []
-        disabled_list = []
-        
-        for cog_name, display_name in TOGGLEABLE_COGS.items():
-            cog = self.bot.get_cog(cog_name)
-            if cog is None:
-                continue
-            
-            if cog_name in disabled_cogs:
-                disabled_list.append(f"🔴 {display_name}")
-            else:
-                enabled_list.append(f"🟢 {display_name}")
+        enabled_list, disabled_list, unloaded_list = self._build_cog_status_lines(ctx.guild.id)
         
         embed.add_field(
             name=f"✅ 已啟用 ({len(enabled_list)})",
-            value="\n".join(enabled_list[:10]) if enabled_list else "無",
+            value="\n".join(enabled_list) if enabled_list else "無",
             inline=False
         )
         
         if disabled_list:
             embed.add_field(
                 name=f"❌ 已停用 ({len(disabled_list)})",
-                value="\n".join(disabled_list[:10]) if disabled_list else "無",
+                value="\n".join(disabled_list) if disabled_list else "無",
+                inline=False
+            )
+
+        if unloaded_list:
+            embed.add_field(
+                name=f"⚪ 未載入 ({len(unloaded_list)})",
+                value="\n".join(unloaded_list) if unloaded_list else "無",
                 inline=False
             )
         
@@ -206,6 +193,28 @@ class ServerSettingsCog(commands.Cog):
         
         await ctx.send(embed=embed)
     
+    def _build_cog_status_lines(self, guild_id: int):
+        """建立顯示用的功能狀態清單，包含未載入的模組，讓面板能明確看到所有可切換項目。"""
+        guild_str = str(guild_id)
+        disabled_cogs = self.settings.get(guild_str, {}).get("disabled_cogs", [])
+
+        enabled_lines = []
+        disabled_lines = []
+        unloaded_lines = []
+
+        for cog_name, display_name in TOGGLEABLE_COGS.items():
+            cog = self.bot.get_cog(cog_name)
+            if cog is None:
+                unloaded_lines.append(f"⚪ {display_name}（未載入）")
+                continue
+
+            if cog_name in disabled_cogs:
+                disabled_lines.append(f"🔴 {display_name}")
+            else:
+                enabled_lines.append(f"🟢 {display_name}")
+
+        return enabled_lines, disabled_lines, unloaded_lines
+
     def toggle_cog(self, guild_id: int, cog_name: str) -> bool:
         """切換 cog 的啟用/停用狀態，返回新的狀態 (True=啟用, False=停用)"""
         guild_str = str(guild_id)
@@ -243,18 +252,21 @@ class CogToggleView(discord.ui.View):
         
         for cog_name, display_name in TOGGLEABLE_COGS.items():
             cog = settings_cog.bot.get_cog(cog_name)
-            if cog is None:
-                continue
-            
+            is_loaded = cog is not None
             is_disabled = cog_name in disabled_cogs
-            label = display_name
-            description = "🔴 已停用" if is_disabled else "🟢 已啟用"
+
+            if is_loaded:
+                description = "🔴 已停用" if is_disabled else "🟢 已啟用"
+                emoji = "🔴" if is_disabled else "🟢"
+            else:
+                description = "⚪ 未載入"
+                emoji = "⚪"
             
             options.append(discord.SelectOption(
-                label=label[:100],
+                label=display_name[:100],
                 description=description,
                 value=cog_name,
-                emoji="🔴" if is_disabled else "🟢"
+                emoji=emoji
             ))
         
         # Discord 限制最多 25 個選項
@@ -289,21 +301,7 @@ class CogToggleView(discord.ui.View):
         guild_id_str = str(self.guild_id)
         disabled_cogs = self.settings_cog.settings.get(guild_id_str, {}).get("disabled_cogs", [])
         
-        enabled_count = 0
-        disabled_count = 0
-        status_lines = []
-        
-        for cog_name, display_name in TOGGLEABLE_COGS.items():
-            cog = self.settings_cog.bot.get_cog(cog_name)
-            if cog is None:
-                continue
-            
-            if cog_name in disabled_cogs:
-                status_lines.append(f"🔴 {display_name}")
-                disabled_count += 1
-            else:
-                status_lines.append(f"🟢 {display_name}")
-                enabled_count += 1
+        enabled_lines, disabled_lines, unloaded_lines = self.settings_cog._build_cog_status_lines(self.guild_id)
         
         embed = discord.Embed(
             title="⚙️ 伺服器功能面板",
@@ -313,15 +311,21 @@ class CogToggleView(discord.ui.View):
         )
         
         embed.add_field(
-            name=f"✅ 已啟用 ({enabled_count})",
-            value="\n".join([s for s in status_lines if s.startswith("🟢")][:15]) or "無",
+            name=f"✅ 已啟用 ({len(enabled_lines)})",
+            value="\n".join(enabled_lines) or "無",
             inline=True
         )
         embed.add_field(
-            name=f"❌ 已停用 ({disabled_count})",
-            value="\n".join([s for s in status_lines if s.startswith("🔴")][:15]) or "無",
+            name=f"❌ 已停用 ({len(disabled_lines)})",
+            value="\n".join(disabled_lines) or "無",
             inline=True
         )
+        if unloaded_lines:
+            embed.add_field(
+                name=f"⚪ 未載入 ({len(unloaded_lines)})",
+                value="\n".join(unloaded_lines),
+                inline=False
+            )
         
         embed.set_footer(text="只有伺服器管理員可以操作此面板")
         
