@@ -851,19 +851,34 @@ class MusicCog(commands.Cog):
             formats = subs.get(lang)
             if not formats:
                 continue
-            # pick first vtt/ttml
+            # pick first vtt/ttml or srv3 format
             for f in formats:
                 ext = f.get('ext') or ''
                 url = f.get('url')
                 if not url:
                     continue
-                if ext in ('vtt', 'ttml', 'srv3') or True:
-                    try:
-                        async with aiohttp.ClientSession() as session:
-                            async with session.get(url, timeout=15) as resp:
-                                if resp.status != 200:
-                                    continue
-                                raw = await resp.text()
+                if ext not in ('vtt', 'ttml', 'srv3'):
+                    continue
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(url, timeout=15) as resp:
+                            if resp.status != 200:
+                                continue
+                            raw = await resp.text()
+                            # If the captions are in XML/TTML, parse the XML to extract text.
+                            if raw.lstrip().startswith('<?xml') or '<tt' in raw.lower() or '<p ' in raw.lower():
+                                try:
+                                    import xml.etree.ElementTree as ET
+                                    raw_clean = re.sub(r'xmlns(:\w+)?="[^"]+"', '', raw)
+                                    root = ET.fromstring(raw_clean)
+                                    text = '\n'.join(
+                                        part.strip()
+                                        for part in root.itertext()
+                                        if part and part.strip()
+                                    ).strip()
+                                except Exception:
+                                    text = raw
+                            else:
                                 # strip VTT/TTML timestamps
                                 lines = []
                                 for line in raw.splitlines():
@@ -879,11 +894,11 @@ class MusicCog(commands.Cog):
                                         continue
                                     lines.append(unescape(re.sub(r"<[^>]+>", "", line)))
                                 text = "\n".join(lines).strip()
-                                if text:
-                                    text = self.sanitize_lyrics(text)
-                                    return {"song": info.get('title'), "artist": info.get('uploader'), "lyrics": text, "format": 'captions', 'confidence': 'low', 'videoId': video_id}
-                    except Exception:
-                        continue
+                            if text:
+                                text = self.sanitize_lyrics(text)
+                                return {"song": info.get('title'), "artist": info.get('uploader'), "lyrics": text, "format": 'captions', 'confidence': 'low', 'videoId': video_id}
+                except Exception:
+                    continue
         return None
 
     async def fetch_all_lyrics(self, query=None, video_id=None, preferred_source=None):
