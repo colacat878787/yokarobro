@@ -103,7 +103,7 @@ class ServerSettingsCog(commands.Cog):
     
     @commands.command(name='用戶面板', aliases=['serverpanel', '面板', 'settings'])
     @commands.has_permissions(administrator=True)
-    async def server_panel(self, ctx):
+    async def server_panel_command(self, ctx):
         """顯示伺服器功能開關面板"""
         guild_id = str(ctx.guild.id)
         
@@ -152,7 +152,7 @@ class ServerSettingsCog(commands.Cog):
         await ctx.send(embed=embed, view=view)
     
     @commands.command(name='功能列表', aliases=['coglist'])
-    async def show_cog_status(self, ctx):
+    async def show_server_cog_status(self, ctx):
         """顯示所有功能模組的狀態"""
         if not ctx.guild:
             return await ctx.send("❌ 此指令只能在伺服器中使用")
