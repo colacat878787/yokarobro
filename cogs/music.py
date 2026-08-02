@@ -844,7 +844,6 @@ class MusicCog(commands.Cog):
         if not subs:
             return None
 
-        # prefer 'en' then any language
         def to_timestamp_str(seconds: float) -> str:
             minutes = int(seconds // 60)
             secs = seconds - minutes * 60
@@ -860,11 +859,14 @@ class MusicCog(commands.Cog):
                 if not line or line.startswith('WEBVTT') or line.startswith('NOTE'):
                     continue
                 # match VTT cue timing
-                match = re.match(r"^(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})", line)
+                match = re.match(r"^([0-9]{1,2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}|[0-9]{1,2}:[0-9]{2}\.[0-9]{3})\s+-->\s+([0-9]{1,2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}|[0-9]{1,2}:[0-9]{2}\.[0-9]{3})", line)
                 if match:
                     if start_time is not None and text_lines:
                         cues.append((start_time, ' '.join(text_lines).strip()))
-                    start_time = self._parse_timestamp(match.group(1))
+                    try:
+                        start_time = self._parse_timestamp(match.group(1))
+                    except Exception:
+                        start_time = None
                     text_lines = []
                     continue
                 # skip numeric cue indices
@@ -889,7 +891,6 @@ class MusicCog(commands.Cog):
                     text = ''.join(p.itertext()).strip()
                     if not text:
                         continue
-                    # TTML begin may be 00:00:12.340 or 12.340 or 00:00:12
                     try:
                         start_time = self._parse_timestamp(begin)
                     except Exception:
@@ -912,7 +913,6 @@ class MusicCog(commands.Cog):
             formats = subs.get(lang)
             if not formats:
                 continue
-            # pick first vtt/ttml or srv3 format
             for f in formats:
                 ext = f.get('ext') or ''
                 url = f.get('url')
@@ -934,7 +934,6 @@ class MusicCog(commands.Cog):
                                 cues = parse_vtt(raw)
                                 text = format_cues(cues)
                             if not text:
-                                # fallback: raw text extraction without timestamps
                                 lines = []
                                 for line in raw.splitlines():
                                     line = line.strip()
@@ -942,7 +941,7 @@ class MusicCog(commands.Cog):
                                         continue
                                     if line.startswith('WEBVTT') or line.startswith('NOTE'):
                                         continue
-                                    if re.match(r"^\d{2}:\d{2}:\d{2}\.\d{3}\s+-->\s+\d{2}:\d{2}:\d{2}\.\d{3}", line):
+                                    if re.match(r"^[0-9]{1,2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}\s+-->\s+[0-9]{1,2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}", line):
                                         continue
                                     if re.match(r"^\d+$", line):
                                         continue
