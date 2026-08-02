@@ -74,6 +74,10 @@ class ReactionCog(commands.Cog):
         # 忽略 DM
         if not message.guild:
             return
+
+        settings_cog = self.bot.get_cog("ServerSettingsCog")
+        if settings_cog and not settings_cog.is_cog_enabled(message.guild.id, self.__class__.__name__):
+            return
         
         # 隨機決定是否添加 reaction
         if random.randint(0, 100) > self.ai_reaction_chance:
