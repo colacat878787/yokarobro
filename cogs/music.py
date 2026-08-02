@@ -845,6 +845,67 @@ class MusicCog(commands.Cog):
             return None
 
         # prefer 'en' then any language
+        def to_timestamp_str(seconds: float) -> str:
+            minutes = int(seconds // 60)
+            secs = seconds - minutes * 60
+            return f"[{minutes:02d}:{secs:06.3f}]"
+
+        def parse_vtt(raw_text: str):
+            cues = []
+            lines = raw_text.splitlines()
+            start_time = None
+            text_lines = []
+            for line in lines:
+                line = line.strip()
+                if not line or line.startswith('WEBVTT') or line.startswith('NOTE'):
+                    continue
+                # match VTT cue timing
+                match = re.match(r"^(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})", line)
+                if match:
+                    if start_time is not None and text_lines:
+                        cues.append((start_time, ' '.join(text_lines).strip()))
+                    start_time = self._parse_timestamp(match.group(1))
+                    text_lines = []
+                    continue
+                # skip numeric cue indices
+                if re.match(r"^\d+$", line):
+                    continue
+                if start_time is not None:
+                    text_lines.append(unescape(re.sub(r"<[^>]+>", "", line)))
+            if start_time is not None and text_lines:
+                cues.append((start_time, ' '.join(text_lines).strip()))
+            return cues
+
+        def parse_ttml(raw_text: str):
+            cues = []
+            try:
+                import xml.etree.ElementTree as ET
+                raw_clean = re.sub(r'xmlns(:\w+)?="[^"]+"', '', raw_text)
+                root = ET.fromstring(raw_clean)
+                for p in root.findall('.//p'):
+                    begin = p.get('begin') or p.get('start') or ''
+                    if not begin:
+                        continue
+                    text = ''.join(p.itertext()).strip()
+                    if not text:
+                        continue
+                    # TTML begin may be 00:00:12.340 or 12.340 or 00:00:12
+                    try:
+                        start_time = self._parse_timestamp(begin)
+                    except Exception:
+                        continue
+                    cues.append((start_time, text))
+            except Exception:
+                return []
+            return cues
+
+        def format_cues(cues):
+            output = []
+            for ts, txt in cues:
+                if txt:
+                    output.append(f"{to_timestamp_str(ts)}{txt}")
+            return '\n'.join(output)
+
         for lang in (video_id and ['en'] or []) + list(subs.keys()):
             if lang not in subs:
                 continue
@@ -865,30 +926,23 @@ class MusicCog(commands.Cog):
                             if resp.status != 200:
                                 continue
                             raw = await resp.text()
-                            # If the captions are in XML/TTML, parse the XML to extract text.
+                            text = ''
                             if raw.lstrip().startswith('<?xml') or '<tt' in raw.lower() or '<p ' in raw.lower():
-                                try:
-                                    import xml.etree.ElementTree as ET
-                                    raw_clean = re.sub(r'xmlns(:\w+)?="[^"]+"', '', raw)
-                                    root = ET.fromstring(raw_clean)
-                                    text = '\n'.join(
-                                        part.strip()
-                                        for part in root.itertext()
-                                        if part and part.strip()
-                                    ).strip()
-                                except Exception:
-                                    text = raw
+                                cues = parse_ttml(raw)
+                                text = format_cues(cues)
                             else:
-                                # strip VTT/TTML timestamps
+                                cues = parse_vtt(raw)
+                                text = format_cues(cues)
+                            if not text:
+                                # fallback: raw text extraction without timestamps
                                 lines = []
                                 for line in raw.splitlines():
                                     line = line.strip()
                                     if not line:
                                         continue
-                                    # skip WEBVTT or timing lines
                                     if line.startswith('WEBVTT') or line.startswith('NOTE'):
                                         continue
-                                    if re.match(r"^\d{2}:\d{2}:|^\d{1,2}:\d{2}\.\d{3}|^\d{2}:\d{2}\.\d{3}", line):
+                                    if re.match(r"^\d{2}:\d{2}:\d{2}\.\d{3}\s+-->\s+\d{2}:\d{2}:\d{2}\.\d{3}", line):
                                         continue
                                     if re.match(r"^\d+$", line):
                                         continue
@@ -1140,6 +1194,23 @@ class MusicCog(commands.Cog):
             else:
                 lines.append((None, line))
         return lines
+
+    def _parse_timestamp(self, timestamp_str: str) -> float:
+        if not timestamp_str:
+            raise ValueError("Empty timestamp")
+        timestamp_str = timestamp_str.strip()
+        # common formats: 00:00:12.340, 00:12.340, 12.340, 00:12
+        parts = timestamp_str.split(':')
+        if len(parts) == 3:
+            hours = float(parts[0])
+            minutes = float(parts[1])
+            seconds = float(parts[2])
+            return hours * 3600 + minutes * 60 + seconds
+        if len(parts) == 2:
+            minutes = float(parts[0])
+            seconds = float(parts[1])
+            return minutes * 60 + seconds
+        return float(timestamp_str)
 
     def build_lyrics_display(self, guild_id, elapsed):
         lyrics_info = self.lyrics.get(guild_id)
