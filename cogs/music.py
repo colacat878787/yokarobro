@@ -1347,6 +1347,21 @@ class MusicCog(commands.Cog):
             "lines": parsed_lines,
             "duration": duration or source.duration,
         }
+
+        # 如果是 YouTube 字幕來源且包含時間戳，儲存為 .lrc 供檢查
+        if lyrics_data.get("format") == 'captions' or any(re.match(r"^\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]", line) for line in lyrics.splitlines()):
+            try:
+                folder = os.path.join(os.getcwd(), "lrc")
+                os.makedirs(folder, exist_ok=True)
+                safe_title = re.sub(r"[\\/:*?\"<>|]", "_", (lyrics_data.get("song") or source.title or video_id or "unknown"))
+                filename = f"{safe_title}_{video_id or 'unknown'}.lrc"
+                filepath = os.path.join(folder, filename)
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(lyrics)
+                print(f"[DEBUG Lyrics] Saved LRC file: {filepath}")
+            except Exception as e:
+                print(f"[DEBUG Lyrics] Failed to save LRC file: {e}")
+
         print(f"[DEBUG Lyrics] Lyrics stored successfully for guild {guild_id}")
 
     def create_progress_bar(self, current, total):
