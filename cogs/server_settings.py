@@ -56,7 +56,7 @@ class ServerSettingsCog(commands.Cog):
         self.settings = self._load_settings()
         
         # 註冊全域指令檢查
-        self.bot.add_check(self._cog_check)
+        self.bot.add_check(self._check_cog_enabled)
     
     def _load_settings(self):
         """載入伺服器設定"""
@@ -81,7 +81,7 @@ class ServerSettingsCog(commands.Cog):
         disabled = self.settings[guild_str].get("disabled_cogs", [])
         return cog_name not in disabled
     
-    def _cog_check(self, ctx):
+    def _check_cog_enabled(self, ctx):
         """全域指令檢查 - 攔截所有指令"""
         # 只在伺服器中檢查
         if not ctx.guild:
@@ -142,7 +142,6 @@ class ServerSettingsCog(commands.Cog):
         
         # 分組顯示狀態
         if status_lines:
-            half = (len(status_lines) + 1) // 2
             embed.add_field(
                 name=f"✅ 已啟用 ({enabled_count})",
                 value="\n".join([s for s in status_lines if s.startswith("🟢")][:15]) or "無",
@@ -162,7 +161,7 @@ class ServerSettingsCog(commands.Cog):
         await ctx.send(embed=embed, view=view)
     
     @commands.command(name='功能列表', aliases=['coglist'])
-    async def cog_list(self, ctx):
+    async def show_cog_status(self, ctx):
         """顯示所有功能模組的狀態"""
         if not ctx.guild:
             return await ctx.send("❌ 此指令只能在伺服器中使用")
