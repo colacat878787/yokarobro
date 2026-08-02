@@ -110,6 +110,7 @@ class YokaroBot(commands.Bot):
             'cogs.screenshot',         # 📸 網頁截圖功能
             'cogs.reaction',           # 😀 表情符號反應系統
             'cogs.oauth',              # 🔐 OAuth 加入伺服器系統
+            'cogs.server_settings',    # ⚙️ 伺服器功能開關面板
         ]
 
     async def setup_hook(self):

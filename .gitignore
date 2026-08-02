@@ -58,6 +58,13 @@ music_cache/
 *.sqlite
 *.sqlite3
 
+# 伺服器設定
+server_settings.json
+
+# 備份與截圖
+backups/
+screenshots/
+
 # 節點模組（如果有）
 node_modules/
 package-lock.json
