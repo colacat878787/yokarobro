@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 from discord import app_commands
 from discord.ext import commands
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+from pathlib import Path
 
 class InfoCog(commands.Cog):
     def __init__(self, bot):
@@ -132,16 +133,27 @@ class InfoCog(commands.Cog):
             await ctx.send("嗷嗷嗷～連接股市衛星時發生意外錯誤！可能是網路不穩。")
 
     def _load_font(self, size: int):
+        # Prefer bundled font in repo assets (Noto Sans TC), then fall back to common system fonts.
+        try:
+            repo_root = Path(__file__).resolve().parents[1]
+            bundled = repo_root / "assets" / "fonts" / "NotoSansTC-Bold.otf"
+            if bundled.exists():
+                return ImageFont.truetype(str(bundled), size)
+        except Exception:
+            pass
+
         font_candidates = [
             "C:/Windows/Fonts/msyh.ttc",
             "C:/Windows/Fonts/simhei.ttf",
             "C:/Windows/Fonts/arial.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSansTC-Bold.otf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         ]
         for path in font_candidates:
             try:
-                return ImageFont.truetype(path, size)
+                if Path(path).exists():
+                    return ImageFont.truetype(path, size)
             except Exception:
                 continue
         return ImageFont.load_default()
