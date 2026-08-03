@@ -155,7 +155,7 @@ class MenuCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
     
-    @commands.hybrid_command(name='選單', aliases=['menu', '面板'])
+    @commands.hybrid_command(name='選單', aliases=['menu'])
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def menu(self, ctx):
