@@ -856,18 +856,21 @@ class MusicCog(commands.Cog):
             text_lines = []
             for line in lines:
                 line = line.strip()
-                if not line or line.startswith('WEBVTT') or line.startswith('NOTE'):
+                if not line or line.startswith('WEBVTT') or line.startswith('NOTE') or line.startswith('STYLE') or line.startswith('REGION'):
                     continue
                 # match VTT cue timing
-                match = re.match(r"^([0-9]{1,2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}|[0-9]{1,2}:[0-9]{2}\.[0-9]{3})\s+-->\s+([0-9]{1,2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}|[0-9]{1,2}:[0-9]{2}\.[0-9]{3})", line)
+                match = re.match(r"^(?P<start>[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?\.[0-9]{3})\s*-->\s*(?P<end>[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?\.[0-9]{3})(?:.*)$", line)
                 if match:
                     if start_time is not None and text_lines:
                         cues.append((start_time, ' '.join(text_lines).strip()))
                     try:
-                        start_time = self._parse_timestamp(match.group(1))
+                        start_time = self._parse_timestamp(match.group('start'))
                     except Exception:
                         start_time = None
                     text_lines = []
+                    remaining = line[match.end():].strip()
+                    if remaining:
+                        text_lines.append(unescape(re.sub(r"<[^>]+>", "", remaining)))
                     continue
                 # skip numeric cue indices
                 if re.match(r"^\d+$", line):

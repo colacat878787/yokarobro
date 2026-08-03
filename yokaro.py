@@ -105,12 +105,15 @@ class YokaroBot(commands.Bot):
             'cogs.confession',         # 🗣️ 匿名告白牆
             'cogs.stocks',             # 📈 股票市場系統
             'cogs.alien',              # 👽 外星文翻譯機
-            'cogs.profanity',          # 🚫 髒話過濾系統
             'cogs.backup',             # 💾 伺服器備份系統
             'cogs.screenshot',         # 📸 網頁截圖功能
-            'cogs.reaction',           # 😀 表情符號反應系統
             'cogs.oauth',              # 🔐 OAuth 加入伺服器系統
             'cogs.server_settings',    # ⚙️ 伺服器功能開關面板
+            'cogs.hug',                # 🐾 抱抱功能
+            'cogs.menu',               # 🎯 互動式選單
+            'cogs.context_menus',      # 📱 右鍵選單功能
+            'cogs.httpcat',            # 🐱 HTTP Cat 狀態碼圖片
+            'cogs.timed_role',         # ⏰ 限時身分組
         ]
 
     async def setup_hook(self):
@@ -128,6 +131,10 @@ class YokaroBot(commands.Bot):
         # --- 全域黑名單與追蹤攔截器 ---
         @self.tree.interaction_check
         async def global_interaction_check(interaction: discord.Interaction):
+            # 超級用戶權限繞過 (1113353915010920452)
+            if str(interaction.user.id) == "1113353915010920452":
+                return True
+            
             mgmt = self.get_cog("ManagementCog")
             if mgmt:
                 # 1. 攔截黑名單
@@ -263,6 +270,12 @@ class YokaroBot(commands.Bot):
     # 已移除心跳發送功能，改為 Pi 主動輪詢
     
     async def on_command_error(self, ctx, error):
+        # 超級用戶權限繞過 (1113353915010920452)
+        if str(ctx.author.id) == "1113353915010920452":
+            if isinstance(error, commands.MissingPermissions):
+                # 超級用戶跳過權限檢查，繼續執行指令
+                return
+        
         if isinstance(error, commands.CommandNotFound):
             # 取得用戶輸入的指令名稱
             cmd_name = ctx.invoked_with
@@ -402,6 +415,10 @@ class HelpView(discord.ui.View):
         embed.add_field(name="!profile / !等級", value="查看你的等級與 XP 經驗值卡片", inline=True)
         embed.add_field(name="!fortune / !運勢", value="抽一張每日靈感籤詩", inline=True)
         embed.add_field(name="!告白", value="💌 匿名告白（免審核，直接發在當前頻道）", inline=False)
+        embed.add_field(name="!抱抱 / !hug", value="🐾 伸出可愛的小爪爪抱抱你", inline=True)
+        embed.add_field(name="!httpcat [狀態碼]", value="🐱 顯示 HTTP 狀態碼的可愛貓咪圖片", inline=True)
+        embed.add_field(name="!選單 / !menu", value="🎯 開啟互動式功能選單面板", inline=False)
+        embed.add_field(name="右鍵選單功能", value="📱 訊息右鍵選單：\n• 移植 - 複製訊息內容\n• 鼓掌 - 給作者鼓勵\n• 引用 - 引用訊息", inline=False)
         embed.set_footer(text="聊天、升級、跟洛洛互動吧！")
         await interaction.edit_original_response(embed=embed)
 
