@@ -114,6 +114,7 @@ class YokaroBot(commands.Bot):
             'cogs.context_menus',      # 📱 右鍵選單功能
             'cogs.httpcat',            # 🐱 HTTP Cat 狀態碼圖片
             'cogs.timed_role',         # ⏰ 限時身分組
+            'cogs.ytsubcountdown',     # 📊 YouTube 訂閱數倒數計時
         ]
 
     async def setup_hook(self):
