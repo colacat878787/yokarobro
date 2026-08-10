@@ -102,7 +102,7 @@ class YTSubCountdownCog(commands.Cog):
             await self.session.close()
 
     async def _countdown_loop(self):
-        """Background task: check subscriber count every 30 seconds"""
+        """Background task: check subscriber count every 1 second"""
         await self.bot.wait_until_ready()
         print("🔄 YouTube subscriber count check loop started")
 
@@ -114,7 +114,7 @@ class YTSubCountdownCog(commands.Cog):
             except Exception as e:
                 print(f"Subscriber check error: {e}")
 
-            await asyncio.sleep(30)
+            await asyncio.sleep(1)
 
         print("🛑 YouTube subscriber count check loop stopped")
 
@@ -368,7 +368,7 @@ class YTSubCountdownCog(commands.Cog):
                         f"Target subscribers: **{target_count:,}** 🎯\n"
                         f"Current subscribers: **{current_count:,}** 📊\n"
                         f"Remaining: **{target_count - current_count:,}** 📉\n\n"
-                        f"⏰ Checking every 30 seconds\n"
+                        f"⏰ Checking every 1 second\n"
                         f"📢 Will notify on subscriber count changes\n"
                         f"🎉 Will celebrate when target is reached!",
             color=0xff0000,
