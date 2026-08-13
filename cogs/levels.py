@@ -3,6 +3,7 @@ from discord.ext import commands
 import json
 import os
 from dotenv import load_dotenv
+from utils.i18n import t
 
 load_dotenv()
 
@@ -48,7 +49,10 @@ class LevelsCog(commands.Cog):
             
             # 只有在伺服器頻道才發送升級訊息
             if message.guild:
-                await message.channel.send(f"🎉 **{message.author.display_name}** 升到了 **等級 {new_level}**！嗷嗷嗷～")
+                gid = message.guild.id
+                await message.channel.send(
+                    t(gid, "level.up", user=message.author.display_name, level=new_level)
+                )
             
             # 自動贈送身分組範例 (設定等級 5 為 '高級成員')
             if message.guild and new_level == 5:
@@ -63,19 +67,20 @@ class LevelsCog(commands.Cog):
     async def profile(self, ctx, user: discord.User = None):
         user = user or ctx.author
         user_id = str(user.id)
+        gid = ctx.guild.id if ctx.guild else None
         
         # 獲取名稱
         display_name = getattr(user, "display_name", user.name)
         if user_id in self.levels:
             lv = self.levels[user_id]["level"]
             xp = self.levels[user_id]["xp"]
-            embed = discord.Embed(title=f"🌸 {member.display_name} 的冒險紀錄", color=0xf39c12)
-            embed.set_thumbnail(url=member.display_avatar.url)
-            embed.add_field(name="等級", value=f"LV. {lv}", inline=True)
-            embed.add_field(name="目前 XP", value=f"{xp} / {lv * 200}", inline=True)
+            embed = discord.Embed(title=t(gid, "level.profile.title", user=display_name), color=0xf39c12)
+            embed.set_thumbnail(url=user.display_avatar.url)
+            embed.add_field(name=t(gid, "level.profile.level"), value=f"LV. {lv}", inline=True)
+            embed.add_field(name=t(gid, "level.profile.xp"), value=f"{xp} / {lv * 200}", inline=True)
             await ctx.send(embed=embed)
         else:
-            await ctx.send("洛洛還不認識你，快多聊天賺 XP 吧！")
+            await ctx.send(t(gid, "level.no_data"))
 
 async def setup(bot):
     await bot.add_cog(LevelsCog(bot))

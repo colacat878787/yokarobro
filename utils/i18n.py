@@ -152,6 +152,56 @@ TRANSLATIONS = {
     "fun.giveaway.error": {"zh": "抽獎結算時發生了錯誤！", "en": "An error occurred while settling the giveaway!", "ja": "抽選の確定中にエラーが発生！", "ar": "حدث خطأ أثناء إتمام السحب!"},
     "fun.duihua.notfound": {"zh": "❌ 找不到路徑：`{path}`，請檢查資料夾是否存在！", "en": "❌ Path not found: `{path}`. Check the folder exists!", "ja": "❌ パスが見つかりません：`{path}`。フォルダを確認してください！", "ar": "❌ المسار غير موجود: `{path}`. تحقق من وجود المجلد!"},
     "fun.duihua.novideo": {"zh": "❌ 該資料夾內沒有影片檔案！", "en": "❌ No video files in that folder!", "ja": "❌ そのフォルダに動画がありません！", "ar": "❌ لا توجد ملفات فيديو في هذا المجلد!"},
+
+    # ---- 抱抱 (hug) ----
+    "hug.title": {"zh": "🐾 抱抱時間！", "en": "🐾 Hug Time!", "ja": "🐾 ハグタイム！", "ar": "🐾 وقت العناق!"},
+    "hug.target": {"zh": "💝 傳送對象", "en": "💝 Sent to", "ja": "💝 送る相手", "ar": "💝 أُرسل إلى"},
+    "hug.received": {"zh": "{mention} 收到了滿滿的愛心！", "en": "{mention} received lots of love!", "ja": "{mention} はたくさんの愛を受け取った！", "ar": "تلقى {mention} الكثير من الحب!"},
+    "hug.footer": {"zh": "✨ 洛洛的小爪子永遠為你敞開 ✨", "en": "✨ Yokaro's paws are always open for you ✨", "ja": "✨ ヨカロの手はいつでも君のために ✨", "ar": "✨ أيدي يوكارو مفتوحة دائماً لك ✨"},
+    "hug.anim.1": {"zh": "伸出可愛的小爪爪緊緊抱住你 🤗", "en": "Reaches out cute little paws and hugs you tight 🤗", "ja": "可愛い小さな手でぎゅっと抱きしめる🤗", "ar": "يمد مخالب لطيفة ويعانقك بحرارة 🤗"},
+    "hug.anim.2": {"zh": "用軟綿綿的爪子環抱住你 💕", "en": "Wraps you in soft fluffy paws 💕", "ja": "ふわふわの手で包み込む💕", "ar": "يلفك بمخالب ناعمة رقيقة 💕"},
+    "hug.anim.3": {"zh": "輕輕地用爪子拍拍你的背 🐾", "en": "Gently pats your back with a paw 🐾", "ja": "そっと背中をトントン🐾", "ar": "يربت على ظهرك بلطف 🐾"},
+    "hug.anim.4": {"zh": "用溫暖的小爪子給你一個大大的擁抱 ✨", "en": "Gives you a big warm hug with tiny paws ✨", "ja": "温かい小さな手で大きなハグ✨", "ar": "يعانقك عناقاً كبيراً بمخالب دافئة ✨"},
+    "hug.anim.5": {"zh": "伸出毛茸茸的爪子緊緊摟住你 🥰", "en": "Wraps fluffy paws tightly around you 🥰", "ja": "もふもふの手でぎゅっと抱く🥰", "ar": "يلفك بمخالب ناعمة بحنان 🥰"},
+    "hug.anim.6": {"zh": "用QQ的爪子輕輕抱著你搖啊搖 🎀", "en": "Holds you gently with squishy paws and sways 🎀", "ja": "ぷにぷにの手でゆらゆら🎀", "ar": "يحتضنك بمخالب ناعمة ويتمايل 🎀"},
+    "hug.anim.7": {"zh": "伸出小手手給你一個溫暖的抱抱 🌸", "en": "Reaches out small hands for a warm hug 🌸", "ja": "小さな手で温かいハグ🌸", "ar": "يمد يديه الصغيرتين لعناق دافئ 🌸"},
+    "hug.anim.8": {"zh": "用軟軟的爪子緊緊纏住你 💝", "en": "Wraps soft paws tightly around you 💝", "ja": "柔らかい手でしっかり抱く💝", "ar": "يلفك بمخالب ناعمة بشدة 💝"},
+
+    # ---- Minecraft 伺服器狀態 (mcstatus) ----
+    "mc.online": {"zh": "🟢 {addr}", "en": "🟢 {addr}", "ja": "🟢 {addr}", "ar": "🟢 {addr}"},
+    "mc.offline": {"zh": "🔴 {addr} — 離線", "en": "🔴 {addr} — Offline", "ja": "🔴 {addr} — オフライン", "ar": "🔴 {addr} — غير متصل"},
+    "mc.version": {"zh": "版本", "en": "Version", "ja": "バージョン", "ar": "الإصدار"},
+    "mc.players": {"zh": "玩家", "en": "Players", "ja": "プレイヤー", "ar": "اللاعبون"},
+    "mc.latency": {"zh": "延遲", "en": "Latency", "ja": "遅延", "ar": "زمن الاستجابة"},
+    "mc.footer": {"zh": "結果已快取 60 秒。請確認 IP 與連接埠是否正確。", "en": "Result cached for 60s. Check IP and port.", "ja": "結果は60秒キャッシュ。IPとポートを確認してください。", "ar": "النتيجة مخزنة 60 ثانية. تحقق من IP والمنفذ."},
+    "mc.refused": {"zh": "連線被拒絕（伺服器可能已關閉）", "en": "Connection refused (server may be offline)", "ja": "接続が拒否されました（オフラインかも）", "ar": "تم رفض الاتصال (قد يكون الخادم مغلقاً)"},
+    "mc.timeout": {"zh": "連線逾時（超過 5 秒）", "en": "Connection timed out (over 5s)", "ja": "接続がタイムアウト（5秒超）", "ar": "انتهت مدة الاتصال (أكثر من 5 ثوان)"},
+    "mc.unknown": {"zh": "未知", "en": "Unknown", "ja": "不明", "ar": "غير معروف"},
+
+    # ---- 等級 (levels) ----
+    "level.up": {"zh": "🎉 **{user}** 升到了 **等級 {level}**！", "en": "🎉 **{user}** leveled up to **Level {level}**!", "ja": "🎉 **{user}** が **Lv.{level}** にアップ！", "ar": "🎉 **{user}** ارتفع إلى **المستوى {level}**!"},
+    "level.profile.title": {"zh": "🌸 {user} 的冒險紀錄", "en": "🌸 {user}'s adventure record", "ja": "🌸 {user} の冒険記録", "ar": "🌸 سجل مغامرات {user}"},
+    "level.profile.level": {"zh": "等級", "en": "Level", "ja": "レベル", "ar": "المستوى"},
+    "level.profile.xp": {"zh": "目前 XP", "en": "Current XP", "ja": "現在のXP", "ar": "نقاط الخبرة الحالية"},
+    "level.no_data": {"zh": "洛洛還不認識你，快多聊天賺 XP 吧！", "en": "Yokaro doesn't know you yet. Chat more to earn XP!", "ja": "まだあなたを知りません。話してXPを稼ごう！", "ar": "يوكارو لا يعرفك بعد. تحدث أكثر لكسب النقاط!"},
+
+    # ---- 匿名告白 (confession) ----
+    "confession.modal.title": {"zh": "💌 匿名告白", "en": "💌 Anonymous Confession", "ja": "💌 匿名の告白", "ar": "💌 اعتراف مجهول"},
+    "confession.target_label": {"zh": "告白對象", "en": "Confession target", "ja": "告白の相手", "ar": "الهدف"},
+    "confession.target_ph": {"zh": "寫下你想告白的人的暱稱或名字...", "en": "Write the name of who you confess to...", "ja": "告白したい相手の名前を...", "ar": "اكتب اسم من تعترف له..."},
+    "confession.content_label": {"zh": "你想說的話", "en": "Your message", "ja": "伝えたいこと", "ar": "رسالتك"},
+    "confession.content_ph": {"zh": "寫下你想說的話...（支援文字、網址、圖片連結）", "en": "Write your message... (text, URLs, images)", "ja": "伝えたいことを書いてください...", "ar": "اكتب رسالتك...(نص، روابط، صور)"},
+    "confession.sig_label": {"zh": "署名（可選）", "en": "Signature (optional)", "ja": "署名（任意）", "ar": "التوقيع (اختياري)"},
+    "confession.sig_ph": {"zh": "例如：一個暗戀你的人、匿名者", "en": "e.g. someone who likes you, anonymous", "ja": "例：密かに想う人、匿名", "ar": "مثال: شخص معجب بك، مجهول"},
+    "confession.wall": {"zh": "💌 匿名告白牆", "en": "💌 Anonymous Confession Wall", "ja": "💌 匿名の告白ウォール", "ar": "💌 جدار الاعترافات المجهول"},
+    "confession.give": {"zh": "**💕 給 {target}：**\n\n{content}", "en": "**💕 To {target}:**\n\n{content}", "ja": "**💕 {target} へ：**\n\n{content}", "ar": "**💕 إلى {target}:**\n\n{content}"},
+    "confession.published": {"zh": "💌 你的告白已成功發佈在 {channel} 頻道！\n**給 {target}：** {content}...", "en": "💌 Your confession was published in {channel}!\n**To {target}:** {content}...", "ja": "💌 あなたの告白が {channel} に公開されました！\n**{target} へ：**{content}...", "ar": "💌 تم نشر اعترافك في {channel}!\n**إلى {target}:** {content}..."},
+    "confession.like": {"zh": "💌 我也想知道", "en": "💌 I want to know too", "ja": "💌 私も知りたい", "ar": "💌 أريد أن أعرف أيضاً"},
+    "confession.already": {"zh": "你已經按過囉！", "en": "You already clicked!", "ja": "もう押しました！", "ar": "لقد ضغطت بالفعل!"},
+    "confession.like_done": {"zh": "你對這則告白產生了共鳴！💕", "en": "You resonated with this confession! 💕", "ja": "この告白に共感しました！💕", "ar": "لقد تفاعلت مع هذا الاعتراف! 💕"},
+    "confession.send_prompt": {"zh": "💌 請填寫告白內容：", "en": "💌 Please fill in your confession:", "ja": "💌 告白内容を記入してください：", "ar": "💌 يرجى تعبئة اعترافك:"},
+    "confession.write_btn": {"zh": "✍️ 寫下告白", "en": "✍️ Write confession", "ja": "✍️ 告白を書く", "ar": "✍️ اكتب اعترافك"},
+    "confession.anon": {"zh": "匿名者", "en": "Anonymous", "ja": "匿名", "ar": "مجهول"},
 }
 
 # ===== 語言代碼 -> 該語言的指令別名對照 =====

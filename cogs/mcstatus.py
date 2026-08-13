@@ -3,6 +3,7 @@ from discord.ext import commands
 import asyncio
 import subprocess
 import sys
+from utils.i18n import t
 
 # Auto-install mcstatus if not present
 try:
@@ -52,11 +53,11 @@ class MCStatusCog(commands.Cog):
                 "latency": round(status.latency),
             }
         except ConnectionRefusedError:
-            result = {"online": False, "address": address, "error": "連線被拒絕（伺服器可能已關閉）"}
+            result = {"online": False, "address": address, "error": "refused"}
         except TimeoutError:
-            result = {"online": False, "address": address, "error": "連線逾時（超過 5 秒）"}
+            result = {"online": False, "address": address, "error": "timeout"}
         except OSError as e:
-            result = {"online": False, "address": address, "error": f"網路錯誤: {e.strerror}"}
+            result = {"online": False, "address": address, "error": str(e.strerror or e)}
         except Exception as e:
             result = {"online": False, "address": address, "error": str(e)}
 
@@ -66,31 +67,34 @@ class MCStatusCog(commands.Cog):
     @commands.hybrid_command(name="mcstatus", aliases=["mc"])
     async def mcstatus(self, ctx, *, address: str):
         """查詢 Minecraft 伺服器狀態。格式：!mcstatus <host:port>"""
+        gid = ctx.guild.id if ctx.guild else None
         async with ctx.typing():
             data = await self._query_server(address)
 
         if data.get("online"):
             embed = discord.Embed(
-                title=f"🟢 {data['address']}",
+                title=t(gid, "mc.online", addr=data['address']),
                 color=0x2ECC71,
             )
-            embed.add_field(name="版本", value=data.get("version", "未知"), inline=True)
+            embed.add_field(name=t(gid, "mc.version"), value=data.get("version", t(gid, "mc.unknown")), inline=True)
             embed.add_field(name="Protocol", value=str(data.get("protocol", "?")), inline=True)
             embed.add_field(
-                name="玩家",
+                name=t(gid, "mc.players"),
                 value=f"{data.get('players_online', 0)} / {data.get('players_max', '?')}",
                 inline=True,
             )
-            embed.add_field(name="延遲", value=f"{data.get('latency', '?')} ms", inline=True)
+            embed.add_field(name=t(gid, "mc.latency"), value=f"{data.get('latency', '?')} ms", inline=True)
             if data.get("description"):
                 embed.add_field(name="MOTD", value=data["description"][:200], inline=False)
         else:
+            err = data.get("error", "unknown")
+            err_key = {"refused": t(gid, "mc.refused"), "timeout": t(gid, "mc.timeout")}.get(err, err)
             embed = discord.Embed(
-                title=f"🔴 {data['address']} — 離線",
-                description=f"❌ {data.get('error', '伺服器無法連線')}",
+                title=t(gid, "mc.offline", addr=data['address']),
+                description=err_key,
                 color=0xE74C3C,
             )
-            embed.set_footer(text="結果已快取 60 秒。請確認 IP 與連接埠是否正確。")
+            embed.set_footer(text=t(gid, "mc.footer"))
 
         await ctx.send(embed=embed)
 

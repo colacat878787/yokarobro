@@ -4,40 +4,43 @@ from discord.ui import Button, View, Modal, TextInput
 import asyncio
 import random
 from datetime import datetime
+from utils.i18n import t, get_language
 from utils.data_store import confession_store
 
-class ConfessionModal(Modal, title="💌 匿名告白"):
-    def __init__(self):
-        super().__init__()
+class ConfessionModal(Modal):
+    def __init__(self, guild_id=None):
+        super().__init__(title=t(guild_id, "confession.modal.title"))
+        self._gid = guild_id
         self.target = TextInput(
-            label="告白對象",
-            placeholder="寫下你想告白的人的暱稱或名字...",
+            label=t(guild_id, "confession.target_label"),
+            placeholder=t(guild_id, "confession.target_ph"),
             required=True,
             max_length=100,
         )
         self.add_item(self.target)
         
         self.content = TextInput(
-            label="你想說的話",
+            label=t(guild_id, "confession.content_label"),
             style=discord.TextStyle.long,
-            placeholder="寫下你想說的話...（支援文字、網址、圖片連結）",
+            placeholder=t(guild_id, "confession.content_ph"),
             required=True,
             max_length=1000,
         )
         self.add_item(self.content)
         
         self.signature = TextInput(
-            label="署名（可選）",
-            placeholder="例如：一個暗戀你的人、匿名者",
+            label=t(guild_id, "confession.sig_label"),
+            placeholder=t(guild_id, "confession.sig_ph"),
             required=False,
             max_length=50,
         )
         self.add_item(self.signature)
 
     async def on_submit(self, interaction: discord.Interaction):
+        gid = self._gid
         target = self.target.value.strip()
         content = self.content.value
-        signature = self.signature.value.strip() or "匿名者"
+        signature = self.signature.value.strip() or t(gid, "confession.anon")
         
         confession_id = str(int(datetime.now().timestamp()))
         time_str = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -56,8 +59,8 @@ class ConfessionModal(Modal, title="💌 匿名告白"):
         
         # 直接發佈在當前頻道
         embed = discord.Embed(
-            title="💌 匿名告白牆",
-            description=f"**💕 給 {target}：**\n\n{content}",
+            title=t(gid, "confession.wall"),
+            description=t(gid, "confession.give", target=target, content=content),
             color=discord.Color.pink()
         )
         embed.set_footer(text=f"—— {signature} | {time_str}")
@@ -68,7 +71,10 @@ class ConfessionModal(Modal, title="💌 匿名告白"):
         
         # 私訊通知使用者
         try:
-            await interaction.user.send(f"💌 你的告白已成功發佈在 {interaction.channel.mention} 頻道！\n**給 {target}：** {content[:50]}...")
+            ch = interaction.channel.mention if interaction.channel else "?"
+            await interaction.user.send(
+                t(gid, "confession.published", channel=ch, target=target, content=content[:50])
+            )
         except:
             pass
 
@@ -80,14 +86,18 @@ class ConfessionView(View):
         self.signature = signature
         self.time = time
         self.target = target
+        self.guild_id = None
     
     @discord.ui.button(label="💌 我也想知道", style=discord.ButtonStyle.primary, custom_id="confess_like")
     async def like_button(self, interaction: discord.Interaction, button: Button):
+        gid = interaction.guild.id if interaction.guild else None
+        if self.guild_id is None:
+            self.guild_id = gid
         data = confession_store.get(self.confession_id, {})
         liked_by = data.get("liked_by", [])
         
         if interaction.user.id in liked_by:
-            await interaction.response.send_message("你已經按過囉！", ephemeral=True)
+            await interaction.response.send_message(t(gid, "confession.already"), ephemeral=True)
             return
         
         liked_by.append(interaction.user.id)
@@ -95,9 +105,9 @@ class ConfessionView(View):
         data["liked_by"] = liked_by
         confession_store.set(self.confession_id, data)
         
-        button.label = f"💌 我也想知道 ({data['likes']})"
+        button.label = f"💌 {t(gid, 'confession.like')} ({data['likes']})"
         await interaction.message.edit(view=self)
-        await interaction.response.send_message("你對這則告白產生了共鳴！💕", ephemeral=True)
+        await interaction.response.send_message(t(gid, "confession.like_done"), ephemeral=True)
 
 class ConfessionCog(commands.Cog):
     """🗣️ 匿名告白牆"""
@@ -108,8 +118,9 @@ class ConfessionCog(commands.Cog):
     @commands.command(name='告白')
     async def confess(self, ctx: commands.Context):
         """發送匿名告白（會跳出填寫視窗）"""
-        modal = ConfessionModal()
-        await ctx.send("💌 請填寫告白內容：", view=ConfessionTriggerView(modal), ephemeral=True)
+        gid = ctx.guild.id if ctx.guild else None
+        modal = ConfessionModal(gid)
+        await ctx.send(t(gid, "confession.send_prompt"), view=ConfessionTriggerView(modal), ephemeral=True)
 
 class ConfessionTriggerView(View):
     def __init__(self, modal):
