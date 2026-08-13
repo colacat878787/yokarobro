@@ -6,6 +6,7 @@ import os
 import re
 from datetime import datetime
 import aiohttp
+from utils.i18n import t
 
 YT_COUNTDOWN_FILE = "yt_countdown_data.json"
 
@@ -154,10 +155,10 @@ class YTSubCountdownCog(commands.Cog):
                 color = 0x00ff00
 
             embed = discord.Embed(
-                title=f"{emoji} Subscriber Count Changed!",
+                title=t(guild_id, "yt.change.title", emoji=emoji),
                 description=f"**{yt_channel}**\n"
-                            f"From {last_count:,} → {current_count:,}\n"
-                            f"Change: {diff_str}",
+                            f"{t(guild_id, 'yt.change.from', old=last_count, new=current_count)}\n"
+                            f"{t(guild_id, 'yt.change.diff', diff=diff_str)}",
                 color=color,
                 timestamp=datetime.now(),
             )
@@ -170,16 +171,18 @@ class YTSubCountdownCog(commands.Cog):
 
             if current_count >= target:
                 celebration_embed = discord.Embed(
-                    title="🎉🎊 Goal Achieved! 🎊🎉",
-                    description=f"**Congratulations! {yt_channel}**\n"
-                                f"Reached target subscribers: **{target:,}** 🎯\n"
-                                f"Current subscribers: **{current_count:,}** 🏆\n\n"
-                                f"🌟 Amazing! Keep it up! 🌟",
+                    title=t(guild_id, "yt.celebrate.title"),
+                    description=t(guild_id, "yt.celebrate.desc"),
                     color=0xffd700,
                     timestamp=datetime.now(),
                 )
                 celebration_embed.set_thumbnail(url="https://www.youtube.com/s/desktop/946b7c58/img/favicon_144x144.png")
-                celebration_embed.set_footer(text="🎆 Subscriber countdown complete")
+                celebration_embed.set_footer(text="🎆")
+                # 用正確參數重建慶祝訊息
+                celebration_embed.description = t(
+                    guild_id, "yt.celebrate.desc",
+                    channel=yt_channel, target=target, current=current_count,
+                )
 
                 try:
                     await channel.send(embed=celebration_embed)
@@ -320,62 +323,57 @@ class YTSubCountdownCog(commands.Cog):
         !ytsubcountdown MrBeast 100000000
         """
         if target_count <= 0:
-            return await ctx.send("❌ Target subscriber count must be greater than 0!")
+            return await ctx.send(t(ctx.guild.id, "yt.target.invalid"))
 
         if target_count > 1000000000:
-            return await ctx.send("❌ Target subscriber count cannot exceed 1 billion!")
+            return await ctx.send(t(ctx.guild.id, "yt.target.too_high"))
 
         channel_identifier = self._extract_channel_identifier(channel_link)
         if not channel_identifier:
             return await ctx.send(
-                "❌ Cannot recognize YouTube channel link or username!\n"
-                "Please use one of these formats:\n"
+                t(ctx.guild.id, "yt.channel.invalid") + "\n"
                 "• `!ytsubcountdown @username 1000000`\n"
-                "• `!ytsubcountdown https://www.youtube.com/@username 1000000`\n"
-                "• `!ytsubcountdown username 1000000`"
+                "• `!ytsubcountdown https://www.youtube.com/@username 1000000`"
             )
 
-        await ctx.send("🔍 Testing connection to YouTube channel...")
+        await ctx.send(t(ctx.guild.id, "yt.testing"))
         current_count = await self._fetch_subscriber_count(channel_identifier)
 
         if current_count is None:
-            return await ctx.send(
-                "❌ Cannot fetch subscriber count for this channel. Please check:\n"
-                "1. The channel exists and is public\n"
-                "2. The channel link or name is correct\n"
-                "3. Network connection is working"
-            )
+            return await ctx.send(t(ctx.guild.id, "yt.fetch_fail"))
 
         existing = self.data.get_countdown(ctx.guild.id, ctx.channel.id)
         if existing:
             return await ctx.send(
-                f"⚠️ This channel is already tracking **{existing['yt_channel']}**!\n"
-                f"Target: {existing['target']:,} | Current: {existing['last_count']:,}\n"
-                f"Use `!ytsubstop` to stop and restart."
+                f"{t(ctx.guild.id, 'yt.already_tracking', channel=existing['yt_channel'])}\n"
+                f"{t(ctx.guild.id, 'yt.status.target', target=existing['target'])}\n"
+                f"{t(ctx.guild.id, 'yt.status.current', current=existing['last_count'])}\n"
+                f"`!ytsubstop` / `!停止訂閱倒數`"
             )
 
         if current_count >= target_count:
             return await ctx.send(
-                f"🎉 Great! **{channel_identifier}** has already reached the target of {target_count:,}!\n"
-                f"Current subscribers: {current_count:,}"
+                t(ctx.guild.id, "yt.already_target", channel=channel_identifier, target=target_count)
             )
 
         self.data.add_countdown(ctx.guild.id, ctx.channel.id, channel_identifier, target_count)
 
         embed = discord.Embed(
-            title="📊 YouTube Subscriber Countdown Started!",
-            description=f"**Channel: {channel_identifier}**\n"
-                        f"Target subscribers: **{target_count:,}** 🎯\n"
-                        f"Current subscribers: **{current_count:,}** 📊\n"
-                        f"Remaining: **{target_count - current_count:,}** 📉\n\n"
-                        f"⏰ Checking every 1 second\n"
-                        f"📢 Will notify on subscriber count changes\n"
-                        f"🎉 Will celebrate when target is reached!",
+            title=t(ctx.guild.id, "yt.started.title"),
+            description=(
+                f"{t(ctx.guild.id, 'yt.started.channel', channel=channel_identifier)}\n"
+                f"{t(ctx.guild.id, 'yt.started.target', target=target_count)}\n"
+                f"{t(ctx.guild.id, 'yt.started.current', current=current_count)}\n"
+                f"{t(ctx.guild.id, 'yt.started.remaining', remaining=target_count - current_count)}\n\n"
+                f"{t(ctx.guild.id, 'yt.started.check')}\n"
+                f"{t(ctx.guild.id, 'yt.started.notify')}\n"
+                f"{t(ctx.guild.id, 'yt.started.celebrate')}"
+            ),
             color=0xff0000,
             timestamp=datetime.now(),
         )
         embed.set_thumbnail(url="https://www.youtube.com/s/desktop/946b7c58/img/favicon_144x144.png")
-        embed.set_footer(text="Use !ytsubstop to stop the countdown")
+        embed.set_footer(text=t(ctx.guild.id, "yt.started.footer"))
 
         msg = await ctx.send(embed=embed)
         self.data.countdowns[str(ctx.guild.id)][str(ctx.channel.id)]["message_id"] = msg.id
@@ -387,14 +385,14 @@ class YTSubCountdownCog(commands.Cog):
 
         if result:
             embed = discord.Embed(
-                title="⏹️ Subscriber Countdown Stopped",
-                description="The countdown has been stopped. No more subscriber checks.",
+                title=t(ctx.guild.id, "yt.stop.title"),
+                description=t(ctx.guild.id, "yt.stop.desc"),
                 color=0x95a5a6,
                 timestamp=datetime.now(),
             )
             await ctx.send(embed=embed)
         else:
-            await ctx.send("❌ No active subscriber countdown in this channel!")
+            await ctx.send(t(ctx.guild.id, "yt.no_active"))
 
     @commands.command(name="ytsubstatus", aliases=["訂閱狀態", "ytstatus"])
     async def countdown_status(self, ctx):
@@ -403,8 +401,8 @@ class YTSubCountdownCog(commands.Cog):
 
         if not countdown:
             return await ctx.send(
-                "❌ No active subscriber countdown in this channel!\n"
-                "Use `!ytsubcountdown <channel> <target>` to start one."
+                t(ctx.guild.id, "yt.no_active") + "\n"
+                "`!ytsubcountdown <channel> <target>`"
             )
 
         current_count = await self._fetch_subscriber_count(countdown["yt_channel"])
@@ -419,13 +417,15 @@ class YTSubCountdownCog(commands.Cog):
         progress_bar = self._create_progress_bar(progress)
 
         embed = discord.Embed(
-            title="📊 Subscriber Countdown Status",
-            description=f"**Channel: {countdown['yt_channel']}**\n\n"
-                        f"Target: **{target:,}** 🎯\n"
-                        f"Current: **{current:,}** 📊\n"
-                        f"Remaining: **{remaining:,}** 📉\n"
-                        f"Progress: **{progress:.1f}%**\n\n"
-                        f"{progress_bar}",
+            title=t(ctx.guild.id, "yt.status.title"),
+            description=(
+                f"**{countdown['yt_channel']}**\n\n"
+                f"{t(ctx.guild.id, 'yt.status.target', target=target)}\n"
+                f"{t(ctx.guild.id, 'yt.status.current', current=current)}\n"
+                f"{t(ctx.guild.id, 'yt.status.remaining', remaining=remaining)}\n"
+                f"{t(ctx.guild.id, 'yt.status.progress', progress=progress)}\n\n"
+                f"{progress_bar}"
+            ),
             color=0x00ff00 if current >= target else 0xffaa00,
             timestamp=datetime.now(),
         )

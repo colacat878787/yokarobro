@@ -115,6 +115,7 @@ class YokaroBot(commands.Bot):
             'cogs.httpcat',            # 🐱 HTTP Cat 狀態碼圖片
             'cogs.timed_role',         # ⏰ 限時身分組
             'cogs.ytsubcountdown',     # 📊 YouTube 訂閱數倒數計時
+            'cogs.language',           # 🌐 多語言切換系統
         ]
 
     async def setup_hook(self):
@@ -327,7 +328,9 @@ bot = YokaroBot()
 @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def ping(ctx):
     """檢查機器人延遲"""
-    await ctx.send(f'🏓 砰！延遲是 {round(bot.latency * 1000)}ms')
+    from utils.i18n import t
+    gid = ctx.guild.id if ctx.guild else None
+    await ctx.send(t(gid, "ping.latency", ms=round(bot.latency * 1000)))
 
 @bot.hybrid_command(name='version', aliases=['版本'])
 @app_commands.allowed_installs(guilds=True, users=True)
