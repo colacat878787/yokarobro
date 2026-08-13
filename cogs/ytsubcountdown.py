@@ -197,22 +197,27 @@ class YTSubCountdownCog(commands.Cog):
     async def _fetch_subscriber_count(self, channel_identifier):
         """Fetch subscriber count using non-official methods"""
         try:
-            # Method 1: Use yt-dlp if available
+            # Method 1: Use yt-dlp (阻塞呼叫移到背景執行緒，避免卡住 event loop)
             try:
                 import yt_dlp
 
-                ydl_opts = {
-                    "quiet": True,
-                    "no_warnings": True,
-                    "extract_flat": True,
-                }
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(
-                        f"https://www.youtube.com/{channel_identifier}",
-                        download=False,
-                    )
-                    if info and "channel_follower_count" in info:
-                        return info["channel_follower_count"]
+                def _blocking_fetch():
+                    with yt_dlp.YoutubeDL({
+                        "quiet": True,
+                        "no_warnings": True,
+                        "extract_flat": True,
+                    }) as ydl:
+                        info = ydl.extract_info(
+                            f"https://www.youtube.com/{channel_identifier}",
+                            download=False,
+                        )
+                        if info and "channel_follower_count" in info:
+                            return info["channel_follower_count"]
+                    return None
+
+                count = await asyncio.to_thread(_blocking_fetch)
+                if count:
+                    return count
             except ImportError:
                 pass
 
