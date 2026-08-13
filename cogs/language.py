@@ -115,6 +115,8 @@ class LanguageCog(commands.Cog):
                             new_aliases.append(a)
                     cmd.aliases = new_aliases
                     print(f"🌐 [{lang}] 已為指令 !{cmd.name} 設定語言別名")
+        except Exception as e:
+            print(f"[Language] 註冊指令別名失敗: {e}")
 
     async def register_all_guilds(self):
         """啟動後為已設定語言的伺服器註冊指令別名"""
