@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import aiohttp
 import asyncio
+from utils.i18n import t
 
 class HttpCatCog(commands.Cog):
     def __init__(self, bot):
@@ -37,17 +38,11 @@ class HttpCatCog(commands.Cog):
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def httpcat(self, ctx, status_code: int = 200):
-        """顯示 HTTP 狀態碼的可愛貓咪圖片
-        
-        使用方式：
-        !httpcat 200      - 顯示 200 OK 的貓咪
-        !httpcat 404      - 顯示 404 Not Found 的貓咪
-        !httpcat 500      - 顯示 500 錯誤的貓咪
-        /httpcat 418      - 使用斜線指令
-        """
+        """顯示 HTTP 狀態碼的可愛貓咪圖片"""
+        gid = ctx.guild.id if ctx.guild else None
         # 驗證狀態碼範圍
         if status_code < 100 or status_code > 599:
-            await ctx.send("❌ HTTP 狀態碼必須在 100-599 之間！", ephemeral=True)
+            await ctx.send(t(gid, "httpcat.range"), ephemeral=True)
             return
         
         # 獲取狀態碼描述
@@ -64,7 +59,7 @@ class HttpCatCog(commands.Cog):
         )
         
         embed.set_image(url=image_url)
-        embed.set_footer(text=f"Powered by http.cat | 請求者：{ctx.author.display_name}")
+        embed.set_footer(text=t(gid, "httpcat.footer", user=ctx.author.display_name))
         
         await ctx.send(embed=embed)
 

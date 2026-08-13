@@ -4,6 +4,7 @@ import feedparser
 import aiohttp
 import os
 import asyncio
+from utils.i18n import t
 
 # 公開 Nitter 實例列表 (若掛掉請自行更換)
 NITTER_INSTANCES = [
@@ -19,6 +20,7 @@ class TwitterCog(commands.Cog):
         self.last_posts = {} # screen_name: last_link
         self.monitored_users = ["elonmusk", "index96703"] # 預設追蹤
         self.target_channel_id = None # 設定要發送通知的頻道
+        self.guild_id = None
         self.check_twitter.start()
 
     def cog_unload(self):
@@ -27,12 +29,13 @@ class TwitterCog(commands.Cog):
     @commands.command(name='track_x', aliases=['追蹤推特'])
     async def track_x(self, ctx, username: str):
         """新增追蹤 Twitter(X) 使用者"""
+        self.guild_id = ctx.guild.id if ctx.guild else None
         if username not in self.monitored_users:
             self.monitored_users.append(username)
             self.target_channel_id = ctx.channel.id
-            await ctx.send(f"嗷～開始追蹤 **{username}** 的推特！會在這裡發送通知喔。")
+            await ctx.send(t(self.guild_id, "twitter.tracked", user=username))
         else:
-            await ctx.send(f"嗷～**{username}** 已經在名單裡了。")
+            await ctx.send(t(self.guild_id, "twitter.already", user=username))
 
     @tasks.loop(minutes=10) # 10 分鐘檢查一次，避免被封 IP
     async def check_twitter(self):
@@ -62,12 +65,12 @@ class TwitterCog(commands.Cog):
                                     real_link = link.replace(NITTER_INSTANCES[0], "https://twitter.com")
                                     
                                     embed = discord.Embed(
-                                        title=f"🔔 {username} 發布了新推文！",
+                                        title=t(self.guild_id, "twitter.new", user=username),
                                         description=latest.description[:200] + "...",
                                         url=real_link,
                                         color=0x1da1f2
                                     )
-                                    embed.set_footer(text="洛洛推特情報站 (via Nitter RSS)")
+                                    embed.set_footer(text=t(self.guild_id, "twitter.footer"))
                                     await channel.send(embed=embed)
                         else:
                             print(f"Twitter check failed for {username}: Status {response.status}")

@@ -202,6 +202,36 @@ TRANSLATIONS = {
     "confession.send_prompt": {"zh": "💌 請填寫告白內容：", "en": "💌 Please fill in your confession:", "ja": "💌 告白内容を記入してください：", "ar": "💌 يرجى تعبئة اعترافك:"},
     "confession.write_btn": {"zh": "✍️ 寫下告白", "en": "✍️ Write confession", "ja": "✍️ 告白を書く", "ar": "✍️ اكتب اعترافك"},
     "confession.anon": {"zh": "匿名者", "en": "Anonymous", "ja": "匿名", "ar": "مجهول"},
+
+    # ---- 遊戲 (games) ----
+    "games.pjsk.howto": {"zh": "❓ 如何使用 pjsekai 指令", "en": "❓ How to use the pjsekai command", "ja": "❓ pjsekai コマンドの使い方", "ar": "❓ كيفية استخدام أمر pjsekai"},
+    "games.pjsk.howto_desc": {"zh": "請提供您的 **Project Sekai 遊戲內 ID** (不是 Discord ID 喔！)", "en": "Provide your **Project Sekai in-game ID** (not Discord ID!)", "ja": "**Project Sekai のゲーム内ID** を提供してください（Discord IDではありません）", "ar": "قدم **معرفك داخل لعبة بروجكت سيكاي** (وليس معرف ديسكورد)"},
+    "games.pjsk.usage": {"zh": "📌 用法", "en": "📌 Usage", "ja": "📌 使い方", "ar": "📌 الاستخدام"},
+    "games.pjsk.where": {"zh": "🔍 哪裡找 ID？", "en": "🔍 Where to find your ID?", "ja": "🔍 IDはどこで見つける？", "ar": "🔍 أين تجد المعرّف؟"},
+    "games.pjsk.footer": {"zh": "目前僅支援日服 (JP Server) 查詢", "en": "Currently supports JP Server only", "ja": "現在は日本サーバーのみ対応", "ar": "يدعم خادم اليابان فقط حالياً"},
+    "games.pjsk.ndigits": {"zh": "❌ 遊戲 ID 應該只包含數字喔！", "en": "❌ The game ID should only contain numbers!", "ja": "❌ ゲームIDは数字のみにしてください！", "ar": "❌ يجب أن يحتوي معرف اللعبة على أرقام فقط!"},
+    "games.pjsk.unknown_player": {"zh": "未知玩家", "en": "Unknown player", "ja": "不明なプレイヤー", "ar": "لاعب غير معروف"},
+    "games.pjsk.nocomment": {"zh": "無簡介", "en": "No bio", "ja": "自己紹介なし", "ar": "لا سيرة"},
+    "games.pjsk.field_name": {"zh": "👤 玩家名稱", "en": "👤 Player name", "ja": "👤 プレイヤー名", "ar": "👤 اسم اللاعب"},
+    "games.pjsk.field_rank": {"zh": "⭐ 等級 (Rank)", "en": "⭐ Level (Rank)", "ja": "⭐ ランク", "ar": "⭐ المستوى"},
+    "games.pjsk.field_id": {"zh": "🆔 遊戲 ID", "en": "🆔 Game ID", "ja": "🆔 ゲームID", "ar": "🆔 معرف اللعبة"},
+    "games.pjsk.field_event": {"zh": "🏆 最近活動排名", "en": "🏆 Recent event ranking", "ja": "🏆 最近のイベント順位", "ar": "🏆 ترتيب الحدث الأخير"},
+    "games.pjsk.rank_place": {"zh": "第 {rank} 名", "en": "Rank {rank}", "ja": "{rank} 位", "ar": "المرتبة {rank}"},
+    "games.pjsk.field_bio": {"zh": "📝 簡介", "en": "📝 Bio", "ja": "📝 自己紹介", "ar": "📝 السيرة"},
+    "games.pjsk.mystery": {"zh": "這個玩家很神祕，什麼都沒寫。", "en": "This player is mysterious and wrote nothing.", "ja": "このプレイヤーは神秘的で何も書いていない。", "ar": "هذا اللاعب غامض ولم يكتب شيئاً."},
+    "games.pjsk.notfound": {"zh": "❌ 找不到 ID 為 `{uid}` 的玩家。", "en": "❌ Player with ID `{uid}` not found.", "ja": "❌ そのIDのプレイヤーは見つかりません。", "ar": "❌ لم يتم العثور على لاعب بالمعرف `{uid}`."},
+    "games.pjsk.api_error": {"zh": "❌ API 暫時沒反應 (代碼: {code})，洛洛待會再試！", "en": "❌ API temporarily not responding (code: {code}), try again later!", "ja": "❌ APIが一時的に応答しません（コード:{code}）", "ar": "❌ واجهة البرمجة غير مستجيبة مؤقتاً (الرمز: {code})"},
+    "games.pjsk.fatal": {"zh": "API 壞掉惹，洛洛修不完嗚嗚...", "en": "The API is down and I can't fix it...", "ja": "APIが壊れた...直せない...", "ar": "واجهة البرمجة معطلة ولا أستطيع إصلاحها..."},
+
+    # ---- HTTP Cat (httpcat) ----
+    "httpcat.range": {"zh": "❌ HTTP 狀態碼必須在 100-599 之間！", "en": "❌ HTTP status code must be between 100-599!", "ja": "❌ HTTPステータスコードは100から599の間でなければなりません！", "ar": "❌ يجب أن يكون رمز حالة HTTP بين 100-599!"},
+    "httpcat.footer": {"zh": "Powered by http.cat | 請求者：{user}", "en": "Powered by http.cat | Requested by {user}", "ja": "Powered by http.cat | 依頼者：{user}", "ar": "Powered by http.cat | طلب من قبل {user}"},
+
+    # ---- Twitter/X (twitter) ----
+    "twitter.tracked": {"zh": "嗷～開始追蹤 **{user}** 的推特！會在這裡發送通知喔。", "en": "Now tracking **{user}**'s tweets! Notifications will be sent here.", "ja": "**{user}** のツイートの追跡を開始！ここに通知します。", "ar": "بدأ تتبع تغريدات **{user}**! سيتم إرسال الإشعارات هنا."},
+    "twitter.already": {"zh": "嗷～**{user}** 已經在名單裡了。", "en": "**{user}** is already on the list.", "ja": "**{user}** は既にリストにいます。", "ar": "**{user}** موجود بالفعل في القائمة."},
+    "twitter.new": {"zh": "🔔 {user} 發布了新推文！", "en": "🔔 {user} posted a new tweet!", "ja": "🔔 {user} が新しいツイートを投稿！", "ar": "🔔 نشر {user} تغريدة جديدة!"},
+    "twitter.footer": {"zh": "洛洛推特情報站 (via Nitter RSS)", "en": "Yokaro Twitter feed (via Nitter RSS)", "ja": "ヨカロのX情報 (Nitter RSS)", "ar": "تغذية يوكارو على تويتر (عبر Nitter RSS)"},
 }
 
 # ===== 語言代碼 -> 該語言的指令別名對照 =====
