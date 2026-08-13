@@ -24,39 +24,51 @@ class LanguageSelect(discord.ui.Select):
                 description=info["name"],
                 value=code,
                 emoji=info["flag"],
-                default=(code == current_lang),
             ))
         super().__init__(
             placeholder=t_lang("en", "lang.panel.placeholder"),
             min_values=1,
             max_values=1,
             options=options,
-            custom_id="language_select",
+            custom_id=f"lang_sel_{guild_id}_{id(self)}",
         )
 
     async def callback(self, interaction: discord.Interaction):
-        # 只有管理員可以變更
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(
-                t_lang("en", "lang.admin_only"), ephemeral=True
+        try:
+            # 只有管理員可以變更
+            if not interaction.user.guild_permissions.administrator:
+                return await interaction.response.send_message(
+                    t_lang("en", "lang.admin_only"), ephemeral=True
+                )
+
+            code = self.values[0]
+            set_language(self.guild_id, code)
+            info = SUPPORTED_LANGUAGES[code]
+
+            # 更新指令別名
+            try:
+                self.cog.apply_command_aliases(interaction.guild)
+            except Exception as e:
+                print(f"[Language] 切換時別名更新失敗: {e}")
+
+            embed = discord.Embed(
+                title=t_lang("en", "lang.panel.title"),
+                description=f"{info['flag']} {t_lang('en', 'lang.changed', lang=info['native'])}",
+                color=0x00ff00,
             )
-
-        code = self.values[0]
-        set_language(self.guild_id, code)
-        info = SUPPORTED_LANGUAGES[code]
-
-        # 更新指令別名
-        self.cog.apply_command_aliases(interaction.guild)
-
-        embed = discord.Embed(
-            title=t_lang("en", "lang.panel.title"),
-            description=f"{info['flag']} {t_lang('en', 'lang.changed', lang=info['native'])}",
-            color=0x00ff00,
-        )
-        embed.set_footer(text=t_lang("en", "lang.panel.current") + f": {info['name']}")
-        # 重建選單讓勾選更新
-        new_view = LanguagePanelView(self.cog, self.guild_id)
-        await interaction.response.edit_message(embed=embed, view=new_view)
+            embed.set_footer(text=t_lang("en", "lang.panel.current") + f": {info['name']}")
+            # 重建選單讓勾選更新
+            new_view = LanguagePanelView(self.cog, self.guild_id)
+            await interaction.response.edit_message(embed=embed, view=new_view)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            try:
+                await interaction.response.send_message(
+                    f"❌ 互動錯誤: {e}", ephemeral=True
+                )
+            except Exception:
+                pass
 
 
 class LanguagePanelView(discord.ui.View):
