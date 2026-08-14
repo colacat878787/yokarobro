@@ -232,6 +232,10 @@ TRANSLATIONS = {
     "twitter.already": {"zh": "嗷～**{user}** 已經在名單裡了。", "en": "**{user}** is already on the list.", "ja": "**{user}** は既にリストにいます。", "ar": "**{user}** موجود بالفعل في القائمة."},
     "twitter.new": {"zh": "🔔 {user} 發布了新推文！", "en": "🔔 {user} posted a new tweet!", "ja": "🔔 {user} が新しいツイートを投稿！", "ar": "🔔 نشر {user} تغريدة جديدة!"},
     "twitter.footer": {"zh": "洛洛推特情報站 (via Nitter RSS)", "en": "Yokaro Twitter feed (via Nitter RSS)", "ja": "ヨカロのX情報 (Nitter RSS)", "ar": "تغذية يوكارو على تويتر (عبر Nitter RSS)"},
+    "twitter.invalid": {"zh": "❌ 無法辨識 X/Twitter 個人檔案連結！請貼上類似 `https://x.com/username`、`https://twitter.com/username` 或 `@username` 的格式。", "en": "❌ Could not recognize that X/Twitter profile link! Please use something like `https://x.com/username`, `https://twitter.com/username` or `@username`.", "ja": "❌ X/Twitter のプロフィールリンクを認識できません！`https://x.com/username` や `@username` のような形式で貼ってください。", "ar": "❌ تعذر التعرف على رابط ملف X/Twitter الشخصي! استخدم `https://x.com/username` أو `@username`."},
+    "twitter.updated": {"zh": "👌 已將 **{user}** 的貼文頻道更新為當前頻道！新貼文會發送到這裡。", "en": "👌 Updated **{user}**'s feed to this channel! New posts will be sent here.", "ja": "👌 **{user}** の配信先をこのチャンネルに更新しました！新しい投稿はここに送られます。", "ar": "👌 تم تحديث قناة تغريدات **{user}** إلى هذه القناة! سيتم إرسال المنشورات الجديدة هنا."},
+    "twitter.stopped": {"zh": "⏹️ 已停止追蹤 **{user}**，此頻道不再接收該帳號的貼文。", "en": "⏹️ Stopped tracking **{user}**; this channel will no longer receive their posts.", "ja": "⏹️ **{user}** の追跡を停止しました。このチャンネルには投稿が届きません。", "ar": "⏹️ تم إيقاف تتبع **{user}**؛ لن تستقبل هذه القناة منشوراتهم بعد الآن."},
+    "twitter.notfound": {"zh": "❌ 目前沒有追蹤 **{user}**，不需要停止。", "en": "❌ **{user}** is not being tracked, so there is nothing to stop.", "ja": "❌ **{user}** は追跡されていないため、停止するものはありません。", "ar": "❌ **{user}** غير متتبع، لذلك لا يوجد شيء لإيقافه."},
 }
 
 # ===== 語言代碼 -> 該語言的指令別名對照 =====
