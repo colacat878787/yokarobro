@@ -24,11 +24,13 @@ class AnimeResultsSelect(discord.ui.Select):
         self.results = results
         options = []
         for idx, item in enumerate(results):
-            title = (item.get("title_english") or item.get("title") or "?")[:90]
-            score = item.get("score")
-            desc = f"{t(guild_id, 'anime.score')}: {score}" if score else None
+            t_obj = item.get("title") or {}
+            title = t_obj.get("english") or t_obj.get("romaji") or t_obj.get("native") or "?"
+            title_short = title[:90]
+            use_score = item.get("averageScore")
+            desc = f"{t(guild_id, 'anime.score')}: {use_score / 10:.1f}" if use_score else None
             options.append(discord.SelectOption(
-                label=title[:100],
+                label=title_short[:100],
                 description=(desc or "")[:100],
                 value=str(idx),
             ))
