@@ -4,10 +4,13 @@ import subprocess
 import os
 import asyncio
 import json
+import re
 
 CHANGELOG_FILE = "changelog_channels.json"
 
 class AutoUpdaterCog(commands.Cog):
+    OWNER_ID = 1113353915010920452
+
     def __init__(self, bot):
         self.bot = bot
         self.changelog_channel_ids = self._load_channels()
@@ -35,6 +38,43 @@ class AutoUpdaterCog(commands.Cog):
         with open(CHANGELOG_FILE, "w") as f:
             json.dump({"channel_ids": channel_ids}, f)
 
+    def _load_last_major(self):
+        """Load the last notified major version from file."""
+        LAST_MAJOR_FILE = "last_major_version.json"
+        if os.path.exists(LAST_MAJOR_FILE):
+            try:
+                with open(LAST_MAJOR_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    return data.get("major", 0)
+            except: pass
+        return 0
+
+    def _save_last_major(self, major):
+        """Save the last notified major version to file."""
+        LAST_MAJOR_FILE = "last_major_version.json"
+        with open(LAST_MAJOR_FILE, "w", encoding="utf-8") as f:
+            json.dump({"major": major}, f)
+
+    def _extract_major_version(self, commit_message):
+        """Extract major version number from a commit message."""
+        if not commit_message:
+            return 0
+        match = re.search(r'v?(\d+)\.', commit_message)
+        if match:
+            return int(match.group(1))
+        return 0
+
+    def _get_last_commit_message(self, from_hash, to_hash="HEAD"):
+        """Get the most recent commit message in the range."""
+        try:
+            log = subprocess.check_output(
+                ["git", "log", f"{from_hash}..{to_hash}", "--format=%s"],
+                text=True
+            ).strip()
+            if log:
+                return log.splitlines()[-1]
+        except: pass
+        return ""
     def _get_git_log(self, from_hash, to_hash="HEAD"):
         """取得兩個 commit 之間的更新紀錄"""
         try:
@@ -64,6 +104,22 @@ class AutoUpdaterCog(commands.Cog):
             inline=False
         )
         embed.set_footer(text="洛洛更新完畢後已自動重啟！嗷嗷嗷～")
+
+        # 檢查是否為大版本更新
+        last_major = self._load_last_major()
+        last_commit = self._get_last_commit_message(old_hash, new_hash)
+        new_major = self._extract_major_version(last_commit)
+
+        if new_major > last_major:
+            # 更新大版本標題
+            title = f"🚀 大版本更新 v{new_major}.0.0！"
+            try:
+                user = await self.bot.fetch_user(self.OWNER_ID)
+                await user.send(title)
+                print(f"📤 已向擁有者發送大版本更新標題: {title}")
+            except Exception as e:
+                print(f"⚠️ [更新] 無法發送私訊給擁有者: {e}")
+            self._save_last_major(new_major)
 
         for channel_id in list(self.changelog_channel_ids):
             channel = self.bot.get_channel(channel_id)
