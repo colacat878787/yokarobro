@@ -236,6 +236,26 @@ TRANSLATIONS = {
     "twitter.updated": {"zh": "👌 已將 **{user}** 的貼文頻道更新為當前頻道！新貼文會發送到這裡。", "en": "👌 Updated **{user}**'s feed to this channel! New posts will be sent here.", "ja": "👌 **{user}** の配信先をこのチャンネルに更新しました！新しい投稿はここに送られます。", "ar": "👌 تم تحديث قناة تغريدات **{user}** إلى هذه القناة! سيتم إرسال المنشورات الجديدة هنا."},
     "twitter.stopped": {"zh": "⏹️ 已停止追蹤 **{user}**，此頻道不再接收該帳號的貼文。", "en": "⏹️ Stopped tracking **{user}**; this channel will no longer receive their posts.", "ja": "⏹️ **{user}** の追跡を停止しました。このチャンネルには投稿が届きません。", "ar": "⏹️ تم إيقاف تتبع **{user}**؛ لن تستقبل هذه القناة منشوراتهم بعد الآن."},
     "twitter.notfound": {"zh": "❌ 目前沒有追蹤 **{user}**，不需要停止。", "en": "❌ **{user}** is not being tracked, so there is nothing to stop.", "ja": "❌ **{user}** は追跡されていないため、停止するものはありません。", "ar": "❌ **{user}** غير متتبع، لذلك لا يوجد شيء لإيقافه."},
+
+    # ---- 動漫搜索 (anime) ----
+    "anime.searching": {"zh": "🔍 正在搜尋 **{query}**...", "en": "🔍 Searching for **{query}**...", "ja": "🔍 **{query}** を検索中...", "ar": "🔍 جاري البحث عن **{query}**..."},
+    "anime.no_results": {"zh": "❌ 找不到「{query}」的相關結果。", "en": "❌ No results found for \"{query}\".", "ja": "❌ 「{query}」の結果が見つかりません。", "ar": "❌ لم يتم العثور على نتائج لـ \"{query}\"."},
+    "anime.error": {"zh": "❌ Jikan API 暫時無法使用，請稍後再試。", "en": "❌ Jikan API is temporarily unavailable. Please try again later.", "ja": "❌ Jikan API が一時的に利用できません。後でもう一度お試しください。", "ar": "❌ واجهة Jikan غير متاحة مؤقتاً. حاول مرة أخرى لاحقاً."},
+    "anime.select": {"zh": "🎯 請選擇要查看的結果...", "en": "🎯 Select a result to view...", "ja": "🎯 表示する結果を選択...", "ar": "🎯 اختر نتيجة لعرضها..."},
+    "anime.title": {"zh": "標題", "en": "Title", "ja": "タイトル", "ar": "العنوان"},
+    "anime.type": {"zh": "類型", "en": "Type", "ja": "種類", "ar": "النوع"},
+    "anime.status": {"zh": "狀態", "en": "Status", "ja": "ステータス", "ar": "الحالة"},
+    "anime.episodes": {"zh": "話數", "en": "Episodes", "ja": "話数", "ar": "الحلقات"},
+    "anime.chapters": {"zh": "章節", "en": "Chapters", "ja": "話数", "ar": "الفصول"},
+    "anime.score": {"zh": "評分", "en": "Score", "ja": "評価", "ar": "التقييم"},
+    "anime.year": {"zh": "推出年份", "en": "Year", "ja": "公開年", "ar": "السنة"},
+    "anime.genres": {"zh": "類型標籤", "en": "Genres", "ja": "ジャンル", "ar": "التصنيفات"},
+    "anime.studios": {"zh": "製作公司", "en": "Studios", "ja": "制作会社", "ar": "الاستوديوهات"},
+    "anime.author": {"zh": "作者", "en": "Author(s)", "ja": "作者", "ar": "المؤلفون"},
+    "anime.synopsis": {"zh": "劇情簡介", "en": "Synopsis", "ja": "あらすじ", "ar": "الملخص"},
+    "anime.none": {"zh": "無", "en": "None", "ja": "なし", "ar": "لا شيء"},
+    "anime.no_synopsis": {"zh": "（尚無簡介）", "en": "(No synopsis yet)", "ja": "（あらすじはまだありません）", "ar": "(لا يوجد ملخص بعد)"},
+    "anime.keyword": {"zh": "💡 提示：可在名稱前加「漫畫」來搜尋漫畫，例如 `!動漫搜索 漫畫 火影`", "en": "💡 Tip: add \"manga\" before the name to search manga, e.g. `!animesearch manga Naruto`", "ja": "💡 ヒント：名前の前に「漫画」を付けると漫画を検索します", "ar": "💡 تلميح: أضف \"مانغا\" قبل الاسم للبحث عن مانغا"},
 }
 
 # ===== 語言代碼 -> 該語言的指令別名對照 =====

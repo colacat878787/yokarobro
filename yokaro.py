@@ -116,6 +116,7 @@ class YokaroBot(commands.Bot):
             'cogs.timed_role',         # ⏰ 限時身分組
             'cogs.ytsubcountdown',     # 📊 YouTube 訂閱數倒數計時
             'cogs.language',           # 🌐 多語言切換系統
+            'cogs.anime',              # 🎬 動漫搜索 (Jikan/MyAnimeList)
         ]
 
     async def setup_hook(self):
