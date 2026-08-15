@@ -65,17 +65,49 @@ class AnimeCog(commands.Cog):
         self.bot = bot
 
     async def _search(self, query, kind):
-        """呼叫 Jikan API 搜尋動畫或漫畫"""
-        url = f"{JIKAN_API}/{kind}?q={urllib.parse.quote(query)}&limit=8&order_by=score&sort=desc"
+        """呼叫 AniList GraphQL API 搜尋動畫或漫畫"""
+        # kind: "anime" -> ANIME, "manga" -> MANGA
+        media_type = "ANIME" if kind == "anime" else "MANGA"
+        query_str = """
+query ($search: String, $type: MediaType) {
+  Page(perPage: 8) {
+    media(search: $search, type: $type, sort: SCORE_DESC) {
+      id
+      title { romaji english native }
+      format
+      status
+      episodes
+      chapters
+      averageScore
+      startDate { year }
+      studios { nodes { name } }
+      genres
+      description
+      coverImage { large }
+      siteUrl
+    }
+  }
+}
+"""
+        payload = {
+            "query": query_str,
+            "variables": {"search": query, "type": media_type},
+        }
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=15) as resp:
+                async with session.post(
+                    "https://graphql.anilist.co", json=payload, timeout=15
+                ) as resp:
                     if resp.status != 200:
+                        print(f"[Anime] AniList 回應 {resp.status}")
                         return None
                     data = await resp.json()
-            return data.get("data", [])
+                    if "errors" in data:
+                        print(f"[Anime] AniList errors: {data['errors']}")
+                        return None
+            return (data.get("data", {}).get("Page", {}).get("media") or [])
         except Exception as e:
-            print(f"[Anime] Jikan API 錯誤: {e}")
+            print(f"[Anime] AniList API 錯誤: {e}")
             return None
 
     @commands.hybrid_command(name='動漫搜索', aliases=['animesearch', '動漫搜尋', '搜索動漫'])
@@ -117,29 +149,37 @@ class AnimeCog(commands.Cog):
             view=view,
         )
     def _build_embed(self, gid, kind, item):
-        """建立單一結果的詳細資料 embed"""
-        title = item.get("title") or "?"
-        title_eng = item.get("title_english")
-        embed_title = title if not title_eng or title_eng == title else f"{title} ({title_eng})"
+        """建立單一結果的詳細資料 embed (AniList 資料格式)"""
+        title_obj = item.get("title") or {}
+        romaji = title_obj.get("romaji")
+        english = title_obj.get("english")
+        native = title_obj.get("native")
+        embed_title = romaji or english or native or "?"
 
-        # 用日文/羅馬拼音標題當 fallback
-        alt = item.get("title_japanese") or item.get("title_romaji")
-        if alt and alt not in (title, title_eng):
-            embed_title = f"{embed_title}\n{alt}"
+        extra = []
+        if english and english != embed_title:
+            extra.append(english)
+        if native and native not in (embed_title, english):
+            extra.append(native)
+        if extra:
+            embed_title = embed_title + "\n" + " / ".join(extra)
 
         embed = discord.Embed(
             title=embed_title,
-            url=item.get("url"),
+            url=item.get("siteUrl"),
             color=0x0f94d1,
         )
 
         info_items = []
-        info_items.append(f"**{t(gid, 'anime.type')}：** {item.get('type') or t(gid, 'anime.none')}")
+        fmt = item.get("format") or t(gid, "anime.none")
+        info_items.append(f"**{t(gid, 'anime.type')}：** {fmt}")
         info_items.append(f"**{t(gid, 'anime.status')}：** {item.get('status') or t(gid, 'anime.none')}")
 
-        score = item.get("score")
-        score_str = f"{score}⭐" if score else t(gid, "anime.none")
-        info_items.append(f"**{t(gid, 'anime.score')}：** {score_str}")
+        score = item.get("averageScore")
+        if score:
+            info_items.append(f"**{t(gid, 'anime.score')}：** {score / 10:.1f}⭐")
+        else:
+            info_items.append(f"**{t(gid, 'anime.score')}：** {t(gid, 'anime.none')}")
 
         # 話數/章節
         field_key = "anime.episodes" if kind == "anime" else "anime.chapters"
@@ -148,52 +188,46 @@ class AnimeCog(commands.Cog):
         info_items.append(f"**{t(gid, field_key)}：** {count_str}")
 
         # 年份
-        aired = item.get("aired", {})
-        prop = aired.get("prop") if isinstance(aired, dict) else None
-        year = None
-        if prop and prop.get("from") and prop["from"].get("year"):
-            year = prop["from"]["year"]
-        elif isinstance(aired, dict) and aired.get("from"):
-            from_obj = aired["from"]
-            if isinstance(from_obj, dict):
-                year = from_obj.get("year")
+        start_date = item.get("startDate") or {}
+        year = start_date.get("year")
         year_str = str(year) if year else t(gid, "anime.none")
         info_items.append(f"**{t(gid, 'anime.year')}：** {year_str}")
 
-        # 製作公司 / 作者
+        # 製作公司（動畫）／作者（漫畫 - 用 staff）
         if kind == "anime":
-            studios = item.get("studios") or []
+            studios = (item.get("studios") or {}).get("nodes") or []
             studio_str = ", ".join(s.get("name", "") for s in studios if s.get("name")) or t(gid, "anime.none")
             info_items.append(f"**{t(gid, 'anime.studios')}：** {studio_str}")
-        else:
-            authors = item.get("authors") or []
-            author_str = ", ".join(a.get("name", "") for a in authors if a.get("name")) or t(gid, "anime.none")
-            info_items.append(f"**{t(gid, 'anime.author')}：** {author_str}")
 
         embed.description = "\n".join(info_items)
 
         # 類型標籤
         genres = item.get("genres") or []
         if genres:
-            genre_str = ", ".join(f"`{g.get('name', '')}`" for g in genres if g.get("name"))
+            genre_str = ", ".join(f"`{g}`" for g in genres)
             embed.add_field(name=t(gid, "anime.genres"), value=genre_str[:1024], inline=False)
 
         # 劇情簡介
-        synopsis = item.get("synopsis") or t(gid, "anime.no_synopsis")
+        synopsis = self._strip_html(item.get("description") or t(gid, "anime.no_synopsis"))
         if len(synopsis) > 1024:
             synopsis = synopsis[:1021] + "..."
         embed.add_field(name=t(gid, "anime.synopsis"), value=synopsis[:1024], inline=False)
 
         # 封面
-        images = item.get("images", {})
-        jpg = images.get("jpg", {})
-        if jpg.get("large_image_url"):
-            embed.set_image(url=jpg["large_image_url"])
-        elif jpg.get("image_url"):
-            embed.set_thumbnail(url=jpg["image_url"])
+        cover = item.get("coverImage") or {}
+        if cover.get("large"):
+            embed.set_image(url=cover["large"])
 
-        embed.set_footer(text="Jikan API (MyAnimeList) • https://api.jikan.moe")
+        embed.set_footer(text="AniList API • https://anilist.co")
         return embed
+
+    @staticmethod
+    def _strip_html(text):
+        """去除 AniList 描述中的 HTML 標籤"""
+        import re as _re
+        text = _re.sub(r"<br\s*/?>", "\n", text)
+        text = _re.sub(r"<[^>]+>", "", text)
+        return text.strip()
 
 
 async def setup(bot):

@@ -8,12 +8,18 @@ import re
 from utils.i18n import t
 from utils.data_store import DataStore
 
-# 公開 Nitter 實例列表 (若掛掉請自行更換)
+# 公開 RSSHub 實例（主要來源，免費免登入）
+RSSHUB_INSTANCES = [
+    "https://rsshub.app",
+    "https://rsshub.rssforever.com",
+    "https://rsshub.pseudoyu.com",
+]
+
+# 公開 Nitter 實例（備援，Nitter 已大量失效）
 NITTER_INSTANCES = [
     "https://nitter.net",
     "https://nitter.cz",
-    "https://nitter.it",
-    "https://nitter.privacydev.net"
+    "https://nitter.privacydev.net",
 ]
 
 
@@ -109,16 +115,22 @@ class TwitterCog(commands.Cog):
             print(f"Twitter loop error: {e}")
 
     async def _check_user(self, session, guild_id, cfg):
-        """檢查單一帳號是否有新貼文，並發送到其對應頻道"""
+        """檢查單一帳號是否有新貼文，依序嘗試 RSSHub → Nitter"""
         username = cfg["username"]
         channel = self.bot.get_channel(cfg["channel_id"])
         if not channel:
             return
 
-        for instance in NITTER_INSTANCES:
-            rss_url = f"{instance}/{username}/rss"
+        # 依序嘗試所有來源
+        sources = []
+        for inst in RSSHUB_INSTANCES:
+            sources.append((inst, f"{inst}/twitter/user/{username}", "rsshub"))
+        for inst in NITTER_INSTANCES:
+            sources.append((inst, f"{inst}/{username}/rss", "nitter"))
+
+        for instance, rss_url, src in sources:
             try:
-                async with session.get(rss_url, timeout=10) as response:
+                async with session.get(rss_url, timeout=15) as response:
                     if response.status != 200:
                         continue
                     content = await response.text()
@@ -132,7 +144,7 @@ class TwitterCog(commands.Cog):
                         cfg["last_post"] = link
                         self._persist_cfg(guild_id, username, cfg)
 
-                        real_link = link.replace(instance, "https://twitter.com")
+                        real_link = self._clean_tweet_link(link, instance, src)
                         description = (latest.description or "")[:200]
                         if description:
                             description += "..."
@@ -145,11 +157,27 @@ class TwitterCog(commands.Cog):
                         )
                         embed.set_footer(text=t(guild_id, "twitter.footer"))
                         await channel.send(embed=embed)
-                    return  # 成功取得該帳號最新貼文，結束
+                    return  # 成功取得該帳號最新貼文
             except Exception as e:
-                print(f"Twitter check error for {username} ({instance}): {e}")
+                print(f"Twitter check error for {username} ({instance}, {src}): {e}")
                 await asyncio.sleep(1)
-        print(f"Twitter: all Nitter instances failed for {username}")
+        print(f"Twitter: all sources failed for {username}")
+
+    @staticmethod
+    def _clean_tweet_link(link, instance, src):
+        """將 feed 連結轉換為可直接點擊的 twitter.com 連結"""
+        if src == "rsshub":
+            # RSSHub 的連結通常是真實的 twitter.com URL
+            if link.startswith(instance):
+                link = link.replace(instance, "")
+            if "twitter.com" not in link:
+                # 可能是相對路徑，拼接為完整連結
+                link = f"https://twitter.com{link}" if link.startswith("/") else f"https://twitter.com/{link}"
+            if not link.startswith("http"):
+                link = "https://twitter.com/" + link.lstrip("/")
+            return link
+        # nitter: 取代 nitter 實例為 twitter.com
+        return link.replace(instance, "https://twitter.com")
 
     def _persist_cfg(self, guild_id, username, cfg):
         """更新單一帳號的 last_post 並寫回儲存"""
