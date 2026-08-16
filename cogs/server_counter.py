@@ -6,6 +6,8 @@ Channel 對 @everyone 鎖定（僅可視，不可進入）。
 import discord
 from discord.ext import commands, tasks
 import asyncio
+import time
+import re
 from utils.data_store import DataStore
 
 # 可選的計數類型
@@ -16,7 +18,14 @@ COUNTER_TYPES = {
     "online": "🟢 在線",
     "offline": "🌙 離線",
     "voice": "🔊 語音人數",
+    "ytsub": "🔴 YT 訂閱數",
+    "ytmember": "⭐ YT 頻道會員數",
 }
+
+# 需要外部抓取的 YT 計數類型（更新較慢以免被 YouTube 封鎖）
+YT_TYPES = ("ytsub", "ytmember")
+# 抓取間隔（秒）：YT 計數不適合每秒刷，設為 5 分鐘一次
+YT_FETCH_INTERVAL = 300
 
 
 class AddCounterModal(discord.ui.Modal):
@@ -147,11 +156,108 @@ class EditCounterModal(discord.ui.Modal):
         if guild:
             ch = guild.get_channel(old_cfg.get("channel_id"))
             if ch:
-                count_val = self._cog._compute_count(guild, ctype)
+                count_val = await self._cog._compute_count_for_cfg(guild, old_cfg)
                 try:
                     await ch.edit(name=template.replace("{count}", str(count_val)))
                 except Exception as e:
                     print(f"ServerCounter edit rename error: {e}")
+
+        embed = self._cog._build_panel_embed(self._gid)
+        view = ServerCounterView(self._cog, self._gid)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class YTLinkModal(discord.ui.Modal):
+    """新增 YT 訂閱/會員數計數頻道：貼上頻道連結即可"""
+
+    def __init__(self, cog, guild_id):
+        self._cog = cog
+        self._gid = guild_id
+        super().__init__(title="🔗 新增 YT 計數頻道")
+
+        self._link = discord.ui.TextInput(
+            label="YouTube 頻道連結（貼上即可）",
+            placeholder="例如：https://www.youtube.com/@handle",
+            required=True,
+            max_length=200,
+        )
+        self.add_item(self._link)
+
+        self._type_select = discord.ui.TextInput(
+            label="計數類型",
+            placeholder="ytsub(訂閱數) / ytmember(頻道會員數)",
+            default="ytsub",
+            required=True,
+            max_length=20,
+        )
+        self.add_item(self._type_select)
+
+        self._name = discord.ui.TextInput(
+            label="頻道名稱（用 {count} 代表數字）",
+            placeholder="例如：🔴 訂閱: {count}",
+            default="🔴 訂閱: {count}",
+            required=True,
+            max_length=90,
+        )
+        self.add_item(self._name)
+
+    @staticmethod
+    def _parse_yt_id(link: str):
+        """從連結解析出可供 yt-dlp 使用的頻道識別碼"""
+        link = link.strip()
+        m = re.search(r'@[\w.\-]+', link)
+        if m:
+            return m.group(0)
+        for prefix in ("/channel/", "/c/", "/user/"):
+            m = re.search(re.escape(prefix) + r'[\w.\-]+', link)
+            if m:
+                return m.group(0).lstrip('/')
+        return None
+
+    async def on_submit(self, interaction: discord.Interaction):
+        yt_id = self._parse_yt_id(self._link.value)
+        if not yt_id:
+            return await interaction.response.send_message(
+                "❌ 無法辨識 YouTube 頻道連結！請貼上 `https://www.youtube.com/@handle` 或 `/channel/UCxxx` 格式。",
+                ephemeral=True,
+            )
+
+        ctype = self._type_select.value.strip().lower()
+        if ctype not in YT_TYPES:
+            return await interaction.response.send_message(
+                f"❌ YT 計數類型只能是：{', '.join(YT_TYPES)}", ephemeral=True
+            )
+
+        template = self._name.value.strip()
+        if "{count}" not in template:
+            return await interaction.response.send_message("❌ 名稱必須包含 `{count}`！", ephemeral=True)
+
+        guild = interaction.guild
+        if not guild:
+            return
+
+        # 先抓一次數值當初始名稱
+        count_val = await self._cog._compute_yt_count(guild, {"type": ctype, "yt_id": yt_id})
+        if count_val is None:
+            count_val = 0
+        channel_name = template.replace("{count}", str(count_val))
+
+        try:
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(
+                    view_channel=True, connect=False, speak=False,
+                )
+            }
+            channel = await guild.create_voice_channel(
+                name=channel_name, overwrites=overwrites,
+                reason="YT 計數器自動建立",
+            )
+        except Exception as e:
+            return await interaction.response.send_message(f"❌ 建立頻道失敗：{e}", ephemeral=True)
+
+        configs = self._cog.get_configs(self._gid)
+        configs.append({"channel_id": channel.id, "template": template, "type": ctype, "yt_id": yt_id})
+        self._cog.commit(self._gid, configs)
 
         embed = self._cog._build_panel_embed(self._gid)
         view = ServerCounterView(self._cog, self._gid)
@@ -209,6 +315,13 @@ class ServerCounterView(discord.ui.View):
         modal = AddCounterModal(self._cog, self._gid)
         await interaction.response.send_modal(modal)
 
+    @discord.ui.button(label="🔗 新增 YT 頻道", style=discord.ButtonStyle.primary)
+    async def yt_add_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ 只有管理員可以操作", ephemeral=True)
+        modal = YTLinkModal(self._cog, self._gid)
+        await interaction.response.send_modal(modal)
+
     @discord.ui.button(label="✏️ 編輯計數", style=discord.ButtonStyle.secondary)
     async def edit_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.administrator:
@@ -238,6 +351,7 @@ class ServerCounterCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.store = DataStore("server_counters.json")
+        self.yt_cache = {}  # (gid, yt_id, ctype) -> (count, last_fetch_ts)
         self.update_loop.start()
 
     def cog_unload(self):
@@ -263,6 +377,56 @@ class ServerCounterCog(commands.Cog):
         elif ctype == "voice":
             return sum(len(vc.members) for vc in guild.voice_channels)
         return 0
+
+    async def _fetch_yt_count(self, yt_id: str, ctype: str):
+        """用 yt-dlp 抓取頻道訂閱/會員數（阻塞呼叫移到背景執行緒）。
+        注意：YouTube 只對外公開「訂閱數」，「會員數」不會公開給第三方，
+        因此 ytmember 會回退抓訂閱數作為替代顯示。
+        """
+        try:
+            def _blocking_fetch():
+                import yt_dlp
+                with yt_dlp.YoutubeDL({
+                    "quiet": True,
+                    "no_warnings": True,
+                    "extract_flat": True,
+                }) as ydl:
+                    info = ydl.extract_info(
+                        f"https://www.youtube.com/{yt_id}",
+                        download=False,
+                    )
+                    if not info:
+                        return None
+                    if ctype in YT_TYPES:
+                        return info.get("channel_follower_count")
+                    return None
+
+            return await asyncio.to_thread(_blocking_fetch)
+        except Exception:
+            return None
+
+    async def _compute_yt_count(self, guild, cfg) -> int:
+        """帶快取的 YT 計數抓取；5 分鐘內不重複抓取以免被封鎖"""
+        yt_id = cfg.get("yt_id")
+        ctype = cfg.get("type")
+        if not yt_id:
+            return None
+        cache_key = (guild.id, yt_id, ctype)
+        cached = self.yt_cache.get(cache_key)
+        now = time.time()
+        if cached and now - cached[1] < YT_FETCH_INTERVAL:
+            return cached[0]
+        count = await self._fetch_yt_count(yt_id, ctype)
+        self.yt_cache[cache_key] = (count, now)
+        return count
+
+    async def _compute_count_for_cfg(self, guild, cfg):
+        """依 cfg 類型計算數量（YT 類型走 async 抓取，其餘走內部計算）"""
+        ctype = cfg.get("type")
+        if ctype in YT_TYPES:
+            val = await self._compute_yt_count(guild, cfg)
+            return val if val is not None else 0
+        return self._compute_count(guild, ctype)
 
     def _build_panel_embed(self, guild_id):
         configs = self.get_configs(guild_id)
@@ -301,7 +465,7 @@ class ServerCounterCog(commands.Cog):
                 ch = guild.get_channel(cfg["channel_id"])
                 if not ch:
                     continue
-                count_val = self._compute_count(guild, cfg["type"])
+                count_val = await self._compute_count_for_cfg(guild, cfg)
                 new_name = cfg["template"].replace("{count}", str(count_val))
                 if ch.name != new_name:
                     try:
