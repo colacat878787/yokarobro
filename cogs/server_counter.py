@@ -1,0 +1,226 @@
+"""
+Yokaro 伺服器統計計數器 (!伺服器計數)
+建立語音頻道計數器，即時顯示會員/在線/機器人等數字。
+Channel 對 @everyone 鎖定（僅可視，不可進入）。
+"""
+import discord
+from discord.ext import commands, tasks
+import asyncio
+from utils.data_store import DataStore
+
+# 可選的計數類型
+COUNTER_TYPES = {
+    "members": "👥 會員數",
+    "humans": "🧑 人類",
+    "bots": "🤖 機器人",
+    "online": "🟢 在線",
+    "voice": "🔊 語音人數",
+}
+
+
+class AddCounterModal(discord.ui.Modal):
+    """新增計數器 Modal"""
+
+    def __init__(self, cog, guild_id):
+        self._cog = cog
+        self._gid = guild_id
+        super().__init__(title="📊 新增計數器")
+
+        self._name = discord.ui.TextInput(
+            label="頻道名稱（用 {count} 代表數字）",
+            placeholder="例如：👥 會員數: {count}",
+            default="👥 會員數: {count}",
+            required=True,
+            max_length=90,
+        )
+        self.add_item(self._name)
+
+        self._type_select = discord.ui.TextInput(
+            label="計數類型（輸入代碼）",
+            placeholder="members / humans / bots / online / voice",
+            default="members",
+            required=True,
+            max_length=20,
+        )
+        self.add_item(self._type_select)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        template = self._name.value.strip()
+        ctype = self._type_select.value.strip().lower()
+
+        if "{count}" not in template:
+            return await interaction.response.send_message("❌ 頻道名稱必須包含 `{count}` ！", ephemeral=True)
+
+        if ctype not in COUNTER_TYPES:
+            return await interaction.response.send_message(
+                f"❌ 無效的計數類型。可用：{', '.join(COUNTER_TYPES.keys())}", ephemeral=True
+            )
+
+        guild = interaction.guild
+        if not guild:
+            return
+        count_num = self._cog._compute_count(guild, ctype)
+        channel_name = template.replace("{count}", str(count_num))
+
+        try:
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(
+                    view_channel=True, connect=False, speak=False,
+                )
+            }
+            channel = await guild.create_voice_channel(
+                name=channel_name, overwrites=overwrites,
+                reason="伺服器計數器自動建立",
+            )
+        except Exception as e:
+            return await interaction.response.send_message(f"❌ 建立頻道失敗：{e}", ephemeral=True)
+
+        configs = self._cog.get_configs(self._gid)
+        configs.append({"channel_id": channel.id, "template": template, "type": ctype})
+        self._cog.commit(self._gid, configs)
+
+        embed = self._cog._build_panel_embed(self._gid)
+        view = ServerCounterView(self._cog, self._gid)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class RemoveCounterSelect(discord.ui.Select):
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.values[0] == "-1":
+            return
+        idx = int(self.values[0])
+        configs = self._cog.get_configs(self._gid)
+        if idx >= len(configs):
+            return
+        removed = configs.pop(idx)
+        self._cog.commit(self._gid, configs)
+        guild = interaction.guild
+        if guild:
+            ch = guild.get_channel(removed["channel_id"])
+            if ch:
+                try:
+                    await ch.delete(reason="移除伺服器計數器")
+                except:
+                    pass
+        embed = self._cog._build_panel_embed(self._gid)
+        view = ServerCounterView(self._cog, self._gid)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class ServerCounterView(discord.ui.View):
+    def __init__(self, cog, guild_id):
+        super().__init__(timeout=300)
+        self._cog = cog
+        self._gid = guild_id
+
+    @discord.ui.button(label="➕ 新增計數", style=discord.ButtonStyle.success)
+    async def add_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ 只有管理員可以操作", ephemeral=True)
+        modal = AddCounterModal(self._cog, self._gid)
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(label="🗑️ 移除計數", style=discord.ButtonStyle.danger)
+    async def remove_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ 只有管理員可以操作", ephemeral=True)
+        configs = self._cog.get_configs(self._gid)
+        select = RemoveCounterSelect(self._cog, self._gid, configs)
+        view = discord.ui.View(timeout=30)
+        view.add_item(select)
+        await interaction.response.send_message("請選擇要移除的計數器：", view=view, ephemeral=True)
+
+
+class ServerCounterCog(commands.Cog):
+    """📊 伺服器計數器 - 即時顯示會員/在線/機器人等資料"""
+
+    def __init__(self, bot):
+        self.bot = bot
+        self.store = DataStore("server_counters.json")
+        self.update_loop.start()
+
+    def cog_unload(self):
+        self.update_loop.cancel()
+
+    def get_configs(self, guild_id):
+        return self.store.get(guild_id, [])
+
+    def commit(self, guild_id, configs):
+        self.store.set(guild_id, configs)
+
+    def _compute_count(self, guild, ctype):
+        if ctype == "members":
+            return guild.member_count
+        elif ctype == "humans":
+            return sum(1 for m in guild.members if not m.bot)
+        elif ctype == "bots":
+            return sum(1 for m in guild.members if m.bot)
+        elif ctype == "online":
+            return sum(1 for m in guild.members if m.status != discord.Status.offline)
+        elif ctype == "voice":
+            return sum(len(vc.members) for vc in guild.voice_channels)
+        return 0
+
+    def _build_panel_embed(self, guild_id):
+        configs = self.get_configs(guild_id)
+        embed = discord.Embed(
+            title="📊 伺服器計數設定",
+            description="管理伺服器即時統計頻道。頻道對 `@everyone` 鎖定（僅可視、不可進入）",
+            color=0x2ecc71,
+        )
+        if not configs:
+            embed.add_field(name="目前無計數器", value="點擊「新增計數」按鈕來建立！", inline=False)
+        else:
+            for i, cfg in enumerate(configs, 1):
+                tname = cfg.get("template", "?")
+                ctype = COUNTER_TYPES.get(cfg["type"], cfg["type"])
+                ch_id = cfg.get("channel_id", 0)
+                ch = self.bot.get_channel(ch_id)
+                status = f"<#{ch_id}>" if ch else "❌ (頻道已刪除)"
+                embed.add_field(
+                    name=f"{i}. {tname.replace('{count}', 'N')}",
+                    value=f"類型：{ctype} | 頻道：{status}",
+                    inline=False,
+                )
+        embed.set_footer(text="即時更新間隔：每 2 分鐘")
+        return embed
+
+    @tasks.loop(minutes=2)
+    async def update_loop(self):
+        """背景任務：每 2 分鐘更新一次所有計數器的頻道名稱"""
+        await self.bot.wait_until_ready()
+        for gid_str in list(self.store.data.keys()):
+            guild = self.bot.get_guild(int(gid_str))
+            if not guild:
+                continue
+            configs = self.get_configs(int(gid_str))
+            for cfg in list(configs):
+                ch = guild.get_channel(cfg["channel_id"])
+                if not ch:
+                    continue
+                count_val = self._compute_count(guild, cfg["type"])
+                new_name = cfg["template"].replace("{count}", str(count_val))
+                if ch.name != new_name:
+                    try:
+                        await ch.edit(name=new_name)
+                    except Exception as e:
+                        print(f"ServerCounter rename error: {e}")
+                await asyncio.sleep(0.5)
+
+    @update_loop.before_loop
+    async def before_update_loop(self):
+        await self.bot.wait_until_ready()
+
+    @commands.command(name='伺服器計數', aliases=['計數面板', 'counter', 'servercounter'])
+    @commands.has_permissions(administrator=True)
+    async def counter_panel(self, ctx):
+        """📊 (管理員) 開啟伺服器即時統計計數器控制面板"""
+        guild_id = ctx.guild.id
+        embed = self._build_panel_embed(guild_id)
+        view = ServerCounterView(self, guild_id)
+        await ctx.send(embed=embed, view=view)
+
+
+async def setup(bot):
+    await bot.add_cog(ServerCounterCog(bot))
