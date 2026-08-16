@@ -26,9 +26,10 @@ COUNTER_TYPES = {
 YT_TYPES = ("ytsub", "ytmember")
 # 抓取間隔（秒）：YT 計數不適合每秒刷，設為 5 分鐘一次
 YT_FETCH_INTERVAL = 300
-# 每個頻道「改名」的最小間隔（秒）。Discord 對頻道改名有 rate limit，
-# 每秒改很快就被 429 罰，設為 30 秒可避免狂打 API。
-MIN_RENAME_INTERVAL = 30
+# 每秒「最多改名」幾個頻道。Discord 對頻道改名 PATCH 有全域 rate limit，
+# 每秒能打約 2 次左右。做法：每秒檢查所有頻道，但只挑前幾個需要改名的發送，
+# 其餘排到下一秒。這樣會「每秒更新 1~2 個頻道」，既有即時性又不觸發 429。
+MAX_PATCH_PER_TICK = 2
 
 
 class AddCounterModal(discord.ui.Modal):
@@ -367,7 +368,6 @@ class ServerCounterCog(commands.Cog):
         self.bot = bot
         self.store = DataStore("server_counters.json")
         self.yt_cache = {}  # (gid, yt_id, ctype) -> (count, last_fetch_ts)
-        self.rename_cooldown = {}  # channel_id -> 上次改名時間戳（避免 Discord 429）
         self.update_loop.start()
 
     def cog_unload(self):
@@ -470,30 +470,39 @@ class ServerCounterCog(commands.Cog):
 
     @tasks.loop(seconds=1)
     async def update_loop(self):
-        """背景任務：每秒更新一次所有計數器的頻道名稱"""
+        """背景任務：每秒檢查所有計數器，但每秒最多改名 MAX_PATCH_PER_TICK 個頻道，
+        其餘排到下一秒，兼顧即時更新又避開 Discord 429 rate limit。"""
         await self.bot.wait_until_ready()
+
+        # 收集所有「需要改名」的頻道
+        pending = []
         for gid_str in list(self.store.data.keys()):
             guild = self.bot.get_guild(int(gid_str))
             if not guild:
                 continue
             configs = self.get_configs(int(gid_str))
             for cfg in list(configs):
-                ch = guild.get_channel(cfg["channel_id"])
+                ch = guild.get_channel(cfg.get("channel_id"))
                 if not ch:
                     continue
                 count_val = await self._compute_count_for_cfg(guild, cfg)
+                if count_val is None:
+                    continue
                 new_name = cfg["template"].replace("{count}", str(count_val))
                 if ch.name != new_name:
-                    # 每個頻道至少隔 MIN_RENAME_INTERVAL 秒才改名一次，避免過來 429
-                    now = time.time()
-                    last = self.rename_cooldown.get(ch.id, 0)
-                    if now - last >= MIN_RENAME_INTERVAL:
-                        try:
-                            await ch.edit(name=new_name)
-                            self.rename_cooldown[ch.id] = now
-                        except Exception as e:
-                            print(f"ServerCounter rename error: {e}")
-                await asyncio.sleep(0.1)
+                    pending.append((ch, new_name))
+
+        # 每秒最多改前幾個，其餘留到下一個 tick（round-robin 攤開）
+        for ch, new_name in pending[:MAX_PATCH_PER_TICK]:
+            try:
+                await ch.edit(name=new_name)
+            except discord.Forbidden:
+                continue
+            except Exception as e:
+                # 429 / 暫時性錯誤就停手，下一秒再繼續，避免連打被罰更久
+                print(f"ServerCounter rename error: {e}")
+                break
+        await asyncio.sleep(0)
 
     @update_loop.before_loop
     async def before_update_loop(self):
