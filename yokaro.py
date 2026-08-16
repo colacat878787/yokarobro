@@ -59,10 +59,10 @@ class YokaroBot(commands.Bot):
         self.deleted_roles = {}  # {guild_id: [list of deleted role data]}
         # Status cycling
         self.status_messages = [
-            (discord.Status.idle, "でも　そんなんじゃ　だめ"),
+            (discord.Status.online, "でも　そんなんじゃ　だめ"),
             (discord.Status.online, "もう　そんなんじゃ　ほら"),
-            (discord.Status.idle, "心は進化するよ"),
-            (discord.Status.dnd, "もっと　もっと"),
+            (discord.Status.online, "心は進化するよ"),
+            (discord.Status.online, "もっと　もっと"),
         ]
         self.status_index = 0
         self.music_mode = False
@@ -213,10 +213,10 @@ class YokaroBot(commands.Bot):
         print("🔄 狀態輪播任務開始運行")
         
         status_list = [
-            (discord.Status.idle, "でも　そんなんじゃ　だめ"),
+            (discord.Status.online, "でも　そんなんじゃ　だめ"),
             (discord.Status.online, "もう　そんなんじゃ　ほら"),
-            (discord.Status.idle, "心は進化するよ"),
-            (discord.Status.dnd, "もっと　もっと"),
+            (discord.Status.online, "心は進化するよ"),
+            (discord.Status.online, "もっと　もっと"),
         ]
         
         status_idx = 0  # 從第一個開始輪播
