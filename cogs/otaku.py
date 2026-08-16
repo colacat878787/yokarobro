@@ -55,10 +55,8 @@ class OtakuCog(commands.Cog):
     async def twitter_loop(self):
         # 實例清單，增加備援
         nitter_instances = [
-            "https://nitter.privacydev.net", 
-            "https://nitter.net", 
-            "https://nitter.cz",
-            "https://nitter.it"
+            "https://xcancel.com", 
+            "https://nitter.catsarch.com"
         ]
         
         async with aiohttp.ClientSession() as session:

@@ -17,9 +17,8 @@ RSSHUB_INSTANCES = [
 
 # 公開 Nitter 實例（備援，Nitter 已大量失效）
 NITTER_INSTANCES = [
-    "https://nitter.net",
-    "https://nitter.cz",
-    "https://nitter.privacydev.net",
+    "https://xcancel.com",
+    "https://nitter.catsarch.com",
 ]
 
 
