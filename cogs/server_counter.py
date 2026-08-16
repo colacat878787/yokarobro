@@ -14,6 +14,7 @@ COUNTER_TYPES = {
     "humans": "🧑 人類",
     "bots": "🤖 機器人",
     "online": "🟢 在線",
+    "offline": "🌙 離線",
     "voice": "🔊 語音人數",
 }
 
@@ -257,6 +258,8 @@ class ServerCounterCog(commands.Cog):
             return sum(1 for m in guild.members if m.bot)
         elif ctype == "online":
             return sum(1 for m in guild.members if m.status != discord.Status.offline)
+        elif ctype == "offline":
+            return sum(1 for m in guild.members if m.status == discord.Status.offline)
         elif ctype == "voice":
             return sum(len(vc.members) for vc in guild.voice_channels)
         return 0
@@ -282,12 +285,12 @@ class ServerCounterCog(commands.Cog):
                     value=f"類型：{ctype} | 頻道：{status}",
                     inline=False,
                 )
-        embed.set_footer(text="即時更新間隔：每 2 分鐘")
+        embed.set_footer(text="即時更新間隔：每秒")
         return embed
 
-    @tasks.loop(minutes=2)
+    @tasks.loop(seconds=1)
     async def update_loop(self):
-        """背景任務：每 2 分鐘更新一次所有計數器的頻道名稱"""
+        """背景任務：每秒更新一次所有計數器的頻道名稱"""
         await self.bot.wait_until_ready()
         for gid_str in list(self.store.data.keys()):
             guild = self.bot.get_guild(int(gid_str))
