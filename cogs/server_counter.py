@@ -26,6 +26,9 @@ COUNTER_TYPES = {
 YT_TYPES = ("ytsub", "ytmember")
 # 抓取間隔（秒）：YT 計數不適合每秒刷，設為 5 分鐘一次
 YT_FETCH_INTERVAL = 300
+# 每個頻道「改名」的最小間隔（秒）。Discord 對頻道改名有 rate limit，
+# 每秒改很快就被 429 罰，設為 30 秒可避免狂打 API。
+MIN_RENAME_INTERVAL = 30
 
 
 class AddCounterModal(discord.ui.Modal):
@@ -127,22 +130,25 @@ class EditCounterModal(discord.ui.Modal):
         self.add_item(self._type_select)
 
     async def on_submit(self, interaction: discord.Interaction):
+        # 先立刻回應，避免耗時（如抓取 YT 數值）超過 3 秒造成 404 Unknown interaction
+        await interaction.response.defer(ephemeral=True)
+
         try:
             idx = int(self._index.value.strip()) - 1
         except ValueError:
-            return await interaction.response.send_message("❌ 編號必須是數字！", ephemeral=True)
+            return await interaction.followup.send("❌ 編號必須是數字！", ephemeral=True)
 
         configs = self._cog.get_configs(self._gid)
         if idx < 0 or idx >= len(configs):
-            return await interaction.response.send_message("❌ 找不到這個編號的計數器！", ephemeral=True)
+            return await interaction.followup.send("❌ 找不到這個編號的計數器！", ephemeral=True)
 
         template = self._name.value.strip()
         ctype = self._type_select.value.strip().lower()
 
         if "{count}" not in template:
-            return await interaction.response.send_message("❌ 名稱必須包含 `{count}`！", ephemeral=True)
+            return await interaction.followup.send("❌ 名稱必須包含 `{count}`！", ephemeral=True)
         if ctype not in COUNTER_TYPES:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 f"❌ 無效的計數類型。可用：{', '.join(COUNTER_TYPES.keys())}", ephemeral=True
             )
 
@@ -164,7 +170,10 @@ class EditCounterModal(discord.ui.Modal):
 
         embed = self._cog._build_panel_embed(self._gid)
         view = ServerCounterView(self._cog, self._gid)
-        await interaction.response.edit_message(embed=embed, view=view)
+        try:
+            await interaction.edit_original_message(embed=embed, view=view)
+        except Exception:
+            pass
 
 
 class YTLinkModal(discord.ui.Modal):
@@ -215,28 +224,31 @@ class YTLinkModal(discord.ui.Modal):
         return None
 
     async def on_submit(self, interaction: discord.Interaction):
+        # 先立刻回應，避免超過 3 秒造成 Unknown interaction (404)
+        await interaction.response.defer(ephemeral=True)
+
         yt_id = self._parse_yt_id(self._link.value)
         if not yt_id:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 "❌ 無法辨識 YouTube 頻道連結！請貼上 `https://www.youtube.com/@handle` 或 `/channel/UCxxx` 格式。",
                 ephemeral=True,
             )
 
         ctype = self._type_select.value.strip().lower()
         if ctype not in YT_TYPES:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 f"❌ YT 計數類型只能是：{', '.join(YT_TYPES)}", ephemeral=True
             )
 
         template = self._name.value.strip()
         if "{count}" not in template:
-            return await interaction.response.send_message("❌ 名稱必須包含 `{count}`！", ephemeral=True)
+            return await interaction.followup.send("❌ 名稱必須包含 `{count}`！", ephemeral=True)
 
         guild = interaction.guild
         if not guild:
             return
 
-        # 先抓一次數值當初始名稱
+        # 先抓一次數值當初始名稱（已 defer，就算抓取較慢也不會逾期）
         count_val = await self._cog._compute_yt_count(guild, {"type": ctype, "yt_id": yt_id})
         if count_val is None:
             count_val = 0
@@ -253,7 +265,7 @@ class YTLinkModal(discord.ui.Modal):
                 reason="YT 計數器自動建立",
             )
         except Exception as e:
-            return await interaction.response.send_message(f"❌ 建立頻道失敗：{e}", ephemeral=True)
+            return await interaction.followup.send(f"❌ 建立頻道失敗：{e}", ephemeral=True)
 
         configs = self._cog.get_configs(self._gid)
         configs.append({"channel_id": channel.id, "template": template, "type": ctype, "yt_id": yt_id})
@@ -261,7 +273,10 @@ class YTLinkModal(discord.ui.Modal):
 
         embed = self._cog._build_panel_embed(self._gid)
         view = ServerCounterView(self._cog, self._gid)
-        await interaction.response.edit_message(embed=embed, view=view)
+        try:
+            await interaction.edit_original_message(embed=embed, view=view)
+        except Exception:
+            pass
 
 
 class RemoveCounterSelect(discord.ui.Select):
@@ -352,6 +367,7 @@ class ServerCounterCog(commands.Cog):
         self.bot = bot
         self.store = DataStore("server_counters.json")
         self.yt_cache = {}  # (gid, yt_id, ctype) -> (count, last_fetch_ts)
+        self.rename_cooldown = {}  # channel_id -> 上次改名時間戳（避免 Discord 429）
         self.update_loop.start()
 
     def cog_unload(self):
@@ -468,11 +484,16 @@ class ServerCounterCog(commands.Cog):
                 count_val = await self._compute_count_for_cfg(guild, cfg)
                 new_name = cfg["template"].replace("{count}", str(count_val))
                 if ch.name != new_name:
-                    try:
-                        await ch.edit(name=new_name)
-                    except Exception as e:
-                        print(f"ServerCounter rename error: {e}")
-                await asyncio.sleep(0.5)
+                    # 每個頻道至少隔 MIN_RENAME_INTERVAL 秒才改名一次，避免過來 429
+                    now = time.time()
+                    last = self.rename_cooldown.get(ch.id, 0)
+                    if now - last >= MIN_RENAME_INTERVAL:
+                        try:
+                            await ch.edit(name=new_name)
+                            self.rename_cooldown[ch.id] = now
+                        except Exception as e:
+                            print(f"ServerCounter rename error: {e}")
+                await asyncio.sleep(0.1)
 
     @update_loop.before_loop
     async def before_update_loop(self):
