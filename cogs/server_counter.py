@@ -84,28 +84,115 @@ class AddCounterModal(discord.ui.Modal):
         await interaction.response.edit_message(embed=embed, view=view)
 
 
+class EditCounterModal(discord.ui.Modal):
+    """編輯計數器 Modal：輸入編號後可修改名稱與類型"""
+
+    def __init__(self, cog, guild_id):
+        self._cog = cog
+        self._gid = guild_id
+        super().__init__(title="✏️ 編輯計數器")
+
+        self._index = discord.ui.TextInput(
+            label="要編輯的編號（不填則依現有順序）",
+            placeholder="例如：1",
+            required=True,
+            max_length=5,
+        )
+        self.add_item(self._index)
+
+        self._name = discord.ui.TextInput(
+            label="新的名稱（用 {count} 代表數字）",
+            placeholder="例如：👥 會員數: {count}",
+            required=True,
+            max_length=90,
+        )
+        self.add_item(self._name)
+
+        self._type_select = discord.ui.TextInput(
+            label="計數類型（輸入代碼）",
+            placeholder="members / humans / bots / online / voice",
+            required=True,
+            max_length=20,
+        )
+        self.add_item(self._type_select)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            idx = int(self._index.value.strip()) - 1
+        except ValueError:
+            return await interaction.response.send_message("❌ 編號必須是數字！", ephemeral=True)
+
+        configs = self._cog.get_configs(self._gid)
+        if idx < 0 or idx >= len(configs):
+            return await interaction.response.send_message("❌ 找不到這個編號的計數器！", ephemeral=True)
+
+        template = self._name.value.strip()
+        ctype = self._type_select.value.strip().lower()
+
+        if "{count}" not in template:
+            return await interaction.response.send_message("❌ 名稱必須包含 `{count}`！", ephemeral=True)
+        if ctype not in COUNTER_TYPES:
+            return await interaction.response.send_message(
+                f"❌ 無效的計數類型。可用：{', '.join(COUNTER_TYPES.keys())}", ephemeral=True
+            )
+
+        old_cfg = configs[idx]
+        old_cfg["template"] = template
+        old_cfg["type"] = ctype
+        self._cog.commit(self._gid, configs)
+
+        # 立即更新頻道名稱
+        guild = interaction.guild
+        if guild:
+            ch = guild.get_channel(old_cfg.get("channel_id"))
+            if ch:
+                count_val = self._cog._compute_count(guild, ctype)
+                try:
+                    await ch.edit(name=template.replace("{count}", str(count_val)))
+                except Exception as e:
+                    print(f"ServerCounter edit rename error: {e}")
+
+        embed = self._cog._build_panel_embed(self._gid)
+        view = ServerCounterView(self._cog, self._gid)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
 class RemoveCounterSelect(discord.ui.Select):
+    """移除計數器選單（修正：正確定義 __init__ 並回應 interaction）"""
+
+    def __init__(self, cog, guild_id):
+        self._cog = cog
+        self._gid = guild_id
+        configs = cog.get_configs(guild_id)
+        options = []
+        for i, cfg in enumerate(configs):
+            tname = cfg.get("template", "?").replace("{count}", "N")
+            options.append(discord.SelectOption(label=f"{i + 1}. {tname[:40]}", value=str(i)))
+        options.append(discord.SelectOption(label="取消", value="-1"))
+        super().__init__(placeholder="選擇要移除的計數器...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
         if self.values[0] == "-1":
-            return
+            return await interaction.response.edit_message(content="已取消。", embed=None, view=None)
         idx = int(self.values[0])
         configs = self._cog.get_configs(self._gid)
-        if idx >= len(configs):
-            return
+        if idx < 0 or idx >= len(configs):
+            return await interaction.response.edit_message(content="找不到此編號的計數器。", embed=None, view=None)
+
         removed = configs.pop(idx)
         self._cog.commit(self._gid, configs)
         guild = interaction.guild
         if guild:
-            ch = guild.get_channel(removed["channel_id"])
+            ch = guild.get_channel(removed.get("channel_id"))
             if ch:
                 try:
                     await ch.delete(reason="移除伺服器計數器")
                 except:
                     pass
+
         embed = self._cog._build_panel_embed(self._gid)
         view = ServerCounterView(self._cog, self._gid)
-        await interaction.response.edit_message(embed=embed, view=view)
+        await interaction.response.edit_message(content=None, embed=embed, view=view)
 
 
 class ServerCounterView(discord.ui.View):
@@ -121,12 +208,24 @@ class ServerCounterView(discord.ui.View):
         modal = AddCounterModal(self._cog, self._gid)
         await interaction.response.send_modal(modal)
 
+    @discord.ui.button(label="✏️ 編輯計數", style=discord.ButtonStyle.secondary)
+    async def edit_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ 只有管理員可以操作", ephemeral=True)
+        configs = self._cog.get_configs(self._gid)
+        if not configs:
+            return await interaction.response.send_message("❌ 目前沒有任何計數器可以編輯！", ephemeral=True)
+        modal = EditCounterModal(self._cog, self._gid)
+        await interaction.response.send_modal(modal)
+
     @discord.ui.button(label="🗑️ 移除計數", style=discord.ButtonStyle.danger)
     async def remove_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ 只有管理員可以操作", ephemeral=True)
         configs = self._cog.get_configs(self._gid)
-        select = RemoveCounterSelect(self._cog, self._gid, configs)
+        if not configs:
+            return await interaction.response.send_message("❌ 目前沒有計數器可以移除！", ephemeral=True)
+        select = RemoveCounterSelect(self._cog, self._gid)
         view = discord.ui.View(timeout=30)
         view.add_item(select)
         await interaction.response.send_message("請選擇要移除的計數器：", view=view, ephemeral=True)
