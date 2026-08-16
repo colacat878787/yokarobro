@@ -26,10 +26,11 @@ COUNTER_TYPES = {
 YT_TYPES = ("ytsub", "ytmember")
 # 抓取間隔（秒）：YT 計數不適合每秒刷，設為 5 分鐘一次
 YT_FETCH_INTERVAL = 300
-# 每秒「最多改名」幾個頻道。Discord 對頻道改名 PATCH 有全域 rate limit，
-# 每秒能打約 2 次左右。做法：每秒檢查所有頻道，但只挑前幾個需要改名的發送，
-# 其餘排到下一秒。這樣會「每秒更新 1~2 個頻道」，既有即時性又不觸發 429。
-MAX_PATCH_PER_TICK = 2
+# 每秒「最多改名」幾個頻道。Discord 對頻道改名 PATCH 有 rate limit，
+# 過密會被 429 罰數百秒。做法：每秒掃描，但只挑少數需要改名的發送。
+MAX_PATCH_PER_TICK = 1
+# 每個頻道「兩次改名」之間的最小間隔（秒）：避免同一頻道每秒連打 429
+MIN_NAME_INTERVAL = 5
 
 
 class AddCounterModal(discord.ui.Modal):
@@ -368,6 +369,7 @@ class ServerCounterCog(commands.Cog):
         self.bot = bot
         self.store = DataStore("server_counters.json")
         self.yt_cache = {}  # (gid, yt_id, ctype) -> (count, last_fetch_ts)
+        self.rename_next = {}  # channel_id -> 下一次允許改名的時間戳（兼顧 429 與最小間隔）
         self.update_loop.start()
 
     def cog_unload(self):
@@ -492,16 +494,22 @@ class ServerCounterCog(commands.Cog):
                 if ch.name != new_name:
                     pending.append((ch, new_name))
 
-        # 每秒最多改前幾個，其餘留到下一個 tick（round-robin 攤開）
+        # 每秒最多改前幾個，其餘留到下一個 tick；並尊重每頻道最小間隔與 429 冷卻
+        now = time.time()
         for ch, new_name in pending[:MAX_PATCH_PER_TICK]:
+            if now < self.rename_next.get(ch.id, 0):
+                continue
             try:
                 await ch.edit(name=new_name)
-            except discord.Forbidden:
-                continue
-            except Exception as e:
-                # 429 / 暫時性錯誤就停手，下一秒再繼續，避免連打被罰更久
-                print(f"ServerCounter rename error: {e}")
+                self.rename_next[ch.id] = now + MIN_NAME_INTERVAL
+            except discord.HTTPException as e:
+                # 被限流/錯誤：把該頻道冷卻久一點再講，尊重 Discord Retry-After
+                penalty = 120 if getattr(e, "status", None) == 429 else 30
+                self.rename_next[ch.id] = now + penalty
+                print(f"ServerCounter rename limited({penalty}s): {e}")
                 break
+            except Exception as e:
+                print(f"ServerCounter rename error: {e}")
         await asyncio.sleep(0)
 
     @update_loop.before_loop

@@ -59,10 +59,10 @@ class YokaroBot(commands.Bot):
         self.deleted_roles = {}  # {guild_id: [list of deleted role data]}
         # Status cycling
         self.status_messages = [
-            "でも　そんなんじゃ　だめ",
-            "もう　そんなんじゃ　ほら",
-            "心は進化するよ",
-            "もっと　もっと"
+            (discord.Status.phone, "でも　そんなんじゃ　だめ"),
+            (discord.Status.online, "もう　そんなんじゃ　ほら"),
+            (discord.Status.idle, "心は進化するよ"),
+            (discord.Status.dnd, "もっと　もっと"),
         ]
         self.status_index = 0
         self.music_mode = False
