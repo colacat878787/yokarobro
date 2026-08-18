@@ -125,6 +125,7 @@ class YokaroBot(commands.Bot):
             'cogs.starboard',          # ⭐ 星板系統
             'cogs.auto_role',          # 🤖 自動身分組系統
             'cogs.alarm',              # ⏰ 鬧鐘系統
+            'cogs.logging',             # 📋 機器人 Log 系統
         ]
 
     async def setup_hook(self):
@@ -437,6 +438,10 @@ class HelpView(discord.ui.View):
         embed.add_field(name="⏰ 提醒 / !remindme", value="設定定時提醒，到時間自動通知", inline=True)
         embed.add_field(name="⭐ 星板 / !starboard", value="自動轉發熱門訊息到指定頻道", inline=True)
         embed.add_field(name="🤖 自動身分組 / !autorole", value="新成員加入時自動分配身分組", inline=True)
+        embed.add_field(name="⏰鬧鐘 / !鬧鐘", value="互動式面板設定時間與頻率", inline=True)
+        embed.add_field(name="📋 反應角色 / !rr", value="點擊反應自動獲取身分組", inline=True)
+        embed.add_field(name="💤 AFK / !afk", value="設定離開狀態，@你時自動回覆", inline=True)
+        embed.add_field(name="📋 Log 頻道", value="機器人事件記錄發送至此頻道", inline=True)
         embed.set_footer(text="聊天、升級、跟洛洛互動吧！")
         await interaction.edit_original_response(embed=embed)
 

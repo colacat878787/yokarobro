@@ -262,6 +262,17 @@ class ControlPanelView(discord.ui.View):
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
         await interaction.response.edit_message(content=None, embed=embed, view=view)
 
+
+    @discord.ui.button(label="📋 設定為 Log 頻道", style=discord.ButtonStyle.secondary, row=2, custom_id="admin_v2_set_log")
+    async def set_log(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """把當前頻道設為機器人 Log 頻道"""
+        try:
+            with open("bot_log_channel.json", "w", encoding="utf-8") as f:
+                json.dump({"channel_id": interaction.channel.id}, f)
+            await interaction.response.send_message(f"✅ 已將 {interaction.channel.mention} 設定為機器人 Log 頻道！", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ 設定失敗：{e}", ephemeral=True)
+
 # --- Bot Settings UI ---
 class BotSettingsView(discord.ui.View):
     def __init__(self, bot, parent_view):

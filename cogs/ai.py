@@ -140,6 +140,12 @@ class AICog(commands.Cog):
                 except discord.HTTPException:
                     # 如果原訊息無法 reply (例如被刪除)，就直接 send
                     await message.channel.send(f"<@{message.author.id}> {response}")
+                # 記錄 AI 對話到 Log 頻道
+                logging_cog = self.bot.get_cog("LoggingCog")
+                if logging_cog:
+                    guild_name = message.guild.name if message.guild else None
+                    ch_name = message.channel.name if message.guild else "DM"
+                    await logging_cog.log_ai(message.author, user_input, response, guild_name, ch_name)
 
     async def get_ai_response(self, user_name, user_id, user_input, channel_id):
         if channel_id not in self.conversation_history:

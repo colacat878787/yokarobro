@@ -33,7 +33,6 @@ class RestockView(discord.ui.View):
         super().__init__(timeout=None)
         self.cog = cog
         prizes = [
-            "💎 A賞: Yokaro Premium 永久會員",
             "💰 B賞: 5,000 卡洛幣",
             "💰 C賞: 1,000 卡洛幣",
             "💰 D賞: 500 卡洛幣",
@@ -54,7 +53,6 @@ class RestockView(discord.ui.View):
     async def fill_all_callback(self, interaction: discord.Interaction):
         if interaction.user.id not in ADMIN_IDS: return await interaction.response.send_message("❌ 您無權動用神權。", ephemeral=True)
         prizes = [
-            "💎 A賞: Yokaro Premium 永久會員",
             "💰 B賞: 5,000 卡洛幣",
             "💰 C賞: 1,000 卡洛幣",
             "💰 D賞: 500 卡洛幣",
@@ -125,7 +123,7 @@ class KujiView(discord.ui.View):
 
         # 大總裁神抽：必中 A 賞
         if is_admin:
-            prize = "💎 A賞: Yokaro Premium 永久會員"
+            prize = "👑 大總裁特權賞"
             self.economy_cog.add_money(uid, 114514191981081024)
         else:
             prize = kuji_cog.draw_prize()
@@ -163,7 +161,7 @@ class KujiView(discord.ui.View):
         await asyncio.sleep(1)
 
         if is_admin:
-            prizes = ["💎 A賞: Yokaro Premium 永久會員"] * 10
+            prizes = ["👑 大總裁特權賞"] * 10
             self.economy_cog.add_money(uid, 114514191981081024 * 10)
         else:
             prizes = [kuji_cog.draw_prize() for _ in range(10)]
@@ -248,8 +246,7 @@ class KujiCog(commands.Cog):
         return user_id in self.premium_users
 
     def _default_pool(self):
-        return (["💎 A賞: Yokaro Premium 永久會員"] * 1 +
-                ["💰 B賞: 5,000 卡洛幣"] * 3 +
+        return (["💰 B賞: 5,000 卡洛幣"] * 3 +
                 ["💰 C賞: 1,000 卡洛幣"] * 10 +
                 ["💰 D賞: 500 卡洛幣"] * 26 +
                 ["🧧 E賞: 50 卡洛幣"] * 40)
@@ -269,21 +266,13 @@ class KujiCog(commands.Cog):
     def grant_prize(self, user, prize):
         uid = str(user.id)
         eco = self.bot.get_cog("EconomyCog")
-        if "Premium" in prize or "A賞" in prize:
-            if user.id not in self.premium_users:
-                self.premium_users.append(user.id)
-                self._save()
-        elif "卡洛幣" in prize:
+        if "卡洛幣" in prize:
             import re
             amount = int(re.search(r'\d+', prize.replace(',', '')).group())
             if eco: eco.add_money(uid, amount)
 
     def transfer_prize(self, giver, receiver, prize):
-        if "Premium" in prize or "A賞" in prize:
-            if giver.id in self.premium_users: self.premium_users.remove(giver.id)
-            if receiver.id not in self.premium_users: self.premium_users.append(receiver.id)
-            self._save()
-        elif "卡洛幣" in prize:
+        if "卡洛幣" in prize:
             import re
             amount = int(re.search(r'\d+', prize.replace(',', '')).group())
             eco = self.bot.get_cog("EconomyCog")
@@ -319,7 +308,7 @@ class KujiCog(commands.Cog):
         stats = {}
         for item in self.pool: stats[item] = stats.get(item, 0) + 1
         desc = "**目前剩餘獎項：**\n```\n" + "\n".join([f"{k}: {v}" for k, v in sorted(stats.items())]) + "```"
-        embed = discord.Embed(title="🎟️ Yokaro Premium 一番賞", description=desc, color=0x3498db)
+        embed = discord.Embed(title="🎟️ 優卡洛一番賞", description=desc, color=0x3498db)
         await ctx.send(embed=embed, view=KujiView(self.bot.get_cog("EconomyCog")))
 
 
