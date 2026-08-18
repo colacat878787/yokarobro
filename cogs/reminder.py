@@ -98,7 +98,7 @@ class ReminderCog(commands.Cog):
         if due_ids:
             self._save_reminders()
 
-    @commands.hybrid_command(name="remindme", aliases=["提醒", "reminder"])
+    @commands.hybrid_group(name="remindme", aliases=["提醒", "reminder"], invoke_without_command=True)
     async def remindme(self, ctx, time_str: str = None, *, message: str = None):
         """設定提醒 - 例如: !remindme 1h 去喝水"""
         if time_str is None:

@@ -21,7 +21,7 @@ class AutoRoleCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.group(name="autorole", aliases=["自動身分組", "autorole"], invoke_without_command=True)
+    @commands.group(name="autorole", aliases=["自動身分組", "ar"], invoke_without_command=True)
     @commands.has_permissions(administrator=True)
     async def autorole(self, ctx):
         """自動身分組系統主指令"""

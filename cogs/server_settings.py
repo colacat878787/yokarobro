@@ -101,7 +101,7 @@ class ServerSettingsCog(commands.Cog):
         
         return True
     
-    @commands.command(name='用戶面板', aliases=['serverpanel', '面板', 'settings'])
+    @commands.command(name='用戶面板', aliases=['面板', 'settings', 'serversettings'])
     @commands.has_permissions(administrator=True)
     async def server_panel_command(self, ctx):
         """顯示伺服器功能開關面板"""

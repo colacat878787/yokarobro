@@ -1,4 +1,8 @@
-import discord
+import sys
+sys.path.insert(0, '.')
+
+# Write context_menus.py
+content = r'''import discord
 from discord.ext import commands
 from discord import app_commands
 import random
@@ -82,3 +86,8 @@ async def setup(bot):
     bot.tree.add_command(transplant_context_menu)
     bot.tree.add_command(clap_context_menu)
     bot.tree.add_command(quote_context_menu)
+'''
+
+with open('cogs/context_menus.py', 'w', encoding='utf-8') as f:
+    f.write(content)
+print('✅ context_menus.py rewritten - module-level context menus')

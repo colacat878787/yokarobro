@@ -60,7 +60,7 @@ class ReactionRolesCog(commands.Cog):
 
 
 
-    @commands.hybrid_command(name="reactionrole", aliases=["rr", "反應角色"])
+    @commands.hybrid_group(name="reactionrole", aliases=["rr", "反應角色"], invoke_without_command=True)
     @commands.has_permissions(manage_roles=True)
     async def reaction_role(self, ctx, message: discord.Message = None, emoji: str = None, role: discord.Role = None):
         """設定反應角色 - 讓用戶點擊反應自動獲取身分組"""
