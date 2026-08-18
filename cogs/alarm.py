@@ -1,9 +1,9 @@
 """
 cogs/alarm.py
 鬧鐘系統 (Alarm)
-設定每日定時鬧鐘，時間到時在該頻道連續發送提醒訊息。
+設定鬧鐘並選擇提醒頻率，時間到時在該頻道連續發送提醒訊息。
 指令：
-  !鬧鐘 <時間> <原因>   - 設定每日鬧鐘 (例如: !鬧鐘 16:30 洗澡)
+  !鬧鐘 <時間> <原因>   - 設定鬧鐘並透過選單選擇頻率 (例如: !鬧鐘 16:30 洗澡)
   !鬧鐘 off <時間>       - 取消指定時間的鬧鐘
   !鬧鐘 list             - 列出本頻道的鬧鐘
 """
@@ -14,14 +14,110 @@ import json
 import os
 import re
 import asyncio
-from datetime import datetime
+from datetime import datetime, date
 
 ALARM_FILE = "alarms.json"
 MSGS = 5  # 每次響鈴發送的訊息次數
 
+# 頻率預設
+PRESETS = {
+    "today": {"type": "today", "label": "只有今日", "desc": "只提醒今天一次"},
+    "daily": {"type": "daily", "label": "每天", "desc": "每天這個時間提醒"},
+    "135": {"type": "weekdays", "days": [0, 2, 4], "label": "一三五", "desc": "每週一、三、五"},
+    "246": {"type": "weekdays", "days": [1, 3, 5], "label": "二四六", "desc": "每週二、四、六"},
+    "sun": {"type": "weekdays", "days": [6], "label": "星期日", "desc": "每週日"},
+}
+WEEKDAY_NAMES = ["一", "二", "三", "四", "五", "六", "日"]
+
+
+class AlarmScheduleSelect(discord.ui.Select):
+    """選擇提醒頻率的下拉選單"""
+
+    def __init__(self, view):
+        self.view = view
+        options = [
+            discord.SelectOption(label=p["label"], value=k, description=p["desc"])
+            for k, p in PRESETS.items()
+        ]
+        super().__init__(placeholder="選擇提醒頻率...", options=options, min_values=1, max_values=1)
+
+    async def callback(self, interaction):
+        self.view.selected = self.values[0]
+        await self.view.update_embed(interaction)
+
+
+class AlarmSetupView(discord.ui.View):
+    """鬧鐘設定選單 (選擇頻率 + 設定完成)"""
+
+    def __init__(self, cog, time_str, reason, user_id):
+        super().__init__(timeout=120)
+        self.cog = cog
+        self.time_str = time_str
+        self.reason = reason
+        self.user_id = user_id
+        self.selected = "daily"  # 預設每天
+        self.add_item(AlarmScheduleSelect(self))
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ 只有設定鬧鐘的人可以操作！", ephemeral=True)
+            return False
+        return True
+
+    async def update_embed(self, interaction):
+        preset = PRESETS.get(self.selected, PRESETS["daily"])
+        embed = discord.Embed(title="⏰ 鬧鐘設定", color=0x2ecc71)
+        embed.add_field(name="🕐 時間", value=f"**{self.time_str}**", inline=True)
+        embed.add_field(name="📝 原因", value=self.reason, inline=True)
+        embed.add_field(name="🔁 頻率", value=preset["label"], inline=False)
+        embed.set_footer(text="選擇頻率後點擊「設定完成」")
+        await interaction.response.edit_message(embed=embed)
+
+    @discord.ui.button(label="✅ 設定完成", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction, button):
+        preset = PRESETS.get(self.selected, PRESETS["daily"])
+        schedule = {
+            "type": preset["type"],
+            "days": preset.get("days", []),
+            "label": preset["label"],
+        }
+        target_date = None
+        if schedule["type"] == "today":
+            target_date = date.today().isoformat()
+
+        gid = str(interaction.guild.id)
+        cid = str(interaction.channel.id)
+        if gid not in self.cog.alarms:
+            self.cog.alarms[gid] = {}
+        if cid not in self.cog.alarms[gid]:
+            self.cog.alarms[gid][cid] = []
+
+        for a in self.cog.alarms[gid][cid]:
+            if a.get("time") == self.time_str:
+                await interaction.response.send_message(f"❌ 本頻道已經有 `{self.time_str}` 的鬧鐘了！使用 `!鬧鐘 list` 查看。", ephemeral=True)
+                return
+
+        self.cog.alarms[gid][cid].append({
+            "time": self.time_str,
+            "reason": self.reason,
+            "user_id": self.user_id,
+            "last_fired": None,
+            "schedule": schedule,
+            "target_date": target_date,
+        })
+        self.cog._save_alarms()
+
+        embed = discord.Embed(title="✅ 鬧鐘設定完成", color=0x2ecc71)
+        embed.add_field(name="🕐 時間", value=f"**{self.time_str}**", inline=True)
+        embed.add_field(name="📝 原因", value=self.reason, inline=True)
+        embed.add_field(name="🔁 頻率", value=preset["label"], inline=False)
+        embed.add_field(name="📍 頻道", value=interaction.channel.mention, inline=False)
+        embed.set_footer(text=f"到了 {self.time_str} 我會在這裡提醒你 {MSGS} 次喔！")
+        await interaction.response.edit_message(content=None, embed=embed, view=None)
+
 
 class AlarmCog(commands.Cog):
-    """鬧鐘系統 - 每日定時提醒"""
+    """鬧鐘系統 - 定時提醒"""
 
     def __init__(self, bot):
         self.bot = bot
@@ -44,12 +140,27 @@ class AlarmCog(commands.Cog):
     def cog_unload(self):
         self.check_alarms.cancel()
 
+    def _should_fire(self, alarm, today_str, today_weekday):
+        """判斷鬧鐘今天是否該響"""
+        sched = alarm.get("schedule") or {"type": "daily"}
+        stype = sched.get("type", "daily")
+
+        if stype == "today":
+            return alarm.get("target_date") == today_str
+
+        if stype == "weekdays":
+            return today_weekday in sched.get("days", [])
+
+        # daily 每天
+        return True
+
     @tasks.loop(seconds=1)
     async def check_alarms(self):
         """每秒檢查鬧鐘是否到點 (確保準時)"""
         now = datetime.now()
         cur_time = now.strftime("%H:%M")
-        today = now.strftime("%Y-%m-%d")
+        today_str = now.strftime("%Y-%m-%d")
+        today_weekday = now.weekday()
         fired_any = False
 
         for guild_id, channels in list(self.alarms.items()):
@@ -64,10 +175,14 @@ class AlarmCog(commands.Cog):
                     continue
                 remaining = []
                 for alarm in alarm_list:
-                    if alarm.get("time") == cur_time and alarm.get("last_fired") != today:
-                        alarm["last_fired"] = today
-                        fired_any = True
-                        await self._fire(channel, alarm)
+                    if alarm.get("time") == cur_time and alarm.get("last_fired") != today_str:
+                        if self._should_fire(alarm, today_str, today_weekday):
+                            alarm["last_fired"] = today_str
+                            fired_any = True
+                            await self._fire(channel, alarm)
+                            sched = alarm.get("schedule") or {}
+                            if sched.get("type") == "today":
+                                continue
                     remaining.append(alarm)
                 channels[channel_id] = remaining
 
@@ -100,7 +215,7 @@ class AlarmCog(commands.Cog):
 
     @commands.group(name="鬧鐘", aliases=["alarm"], invoke_without_command=True)
     async def alarm(self, ctx, time_str: str = None, *, reason: str = None):
-        """設定每日鬧鐘 - 例如: !鬧鐘 16:30 洗澡"""
+        """設定鬧鐘 - 例如: !鬧鐘 16:30 洗澡 (會跳出頻率選單)"""
         if time_str is None:
             await ctx.send("❓ 請指定時間！例如：`!鬧鐘 16:30 洗澡`", ephemeral=True)
             return
@@ -111,33 +226,14 @@ class AlarmCog(commands.Cog):
         if not reason:
             reason = "起床"
 
-        gid = str(ctx.guild.id)
-        cid = str(ctx.channel.id)
-        if gid not in self.alarms:
-            self.alarms[gid] = {}
-        if cid not in self.alarms[gid]:
-            self.alarms[gid][cid] = []
-
-        for a in self.alarms[gid][cid]:
-            if a.get("time") == parsed:
-                await ctx.send(f"❌ 本頻道已經有 `{parsed}` 的鬧鐘了！使用 `!鬧鐘 list` 查看。", ephemeral=True)
-                return
-
-        today = datetime.now().strftime("%Y-%m-%d")
-        self.alarms[gid][cid].append({
-            "time": parsed,
-            "reason": reason,
-            "user_id": ctx.author.id,
-            "last_fired": None
-        })
-        self._save_alarms()
-
-        embed = discord.Embed(title="⏰ 鬧鐘已設定", color=0x2ecc71)
-        embed.add_field(name="🕐 時間", value=f"每日 **{parsed}**", inline=True)
+        embed = discord.Embed(title="⏰ 鬧鐘設定", color=0x2ecc71)
+        embed.add_field(name="🕐 時間", value=f"**{parsed}**", inline=True)
         embed.add_field(name="📝 原因", value=reason, inline=True)
-        embed.add_field(name="📍 頻道", value=ctx.channel.mention, inline=False)
-        embed.set_footer(text=f"到了 {parsed} 我會在這裡提醒你 5 次喔！")
-        await ctx.send(f"{ctx.author.mention} 的鬧鐘設定完成！⏰", embed=embed)
+        embed.add_field(name="🔁 頻率", value="每天（請選擇你要的頻率）", inline=False)
+        embed.set_footer(text="從下方選單選擇提醒頻率，完成後點擊「設定完成」")
+
+        view = AlarmSetupView(self, parsed, reason, ctx.author.id)
+        await ctx.send(embed=embed, view=view)
 
     @alarm.command(name="off", aliases=["取消", "刪除"])
     async def alarm_off(self, ctx, time_str: str):
@@ -173,8 +269,10 @@ class AlarmCog(commands.Cog):
         for a in lst:
             user = self.bot.get_user(a.get("user_id", 0))
             uname = user.display_name if user else f"ID:{a.get('user_id')}"
+            sched = a.get("schedule") or {}
+            freq = sched.get("label", "每天")
             embed.add_field(
-                name=f"🕐 {a['time']}",
+                name=f"🕐 {a['time']} · {freq}",
                 value=f"📝 {a.get('reason')}\n👤 {uname}",
                 inline=True
             )
