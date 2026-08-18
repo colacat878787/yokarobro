@@ -44,6 +44,31 @@ def save_token(token):
     with open(TOKEN_FILE, 'w', encoding='utf-8') as f:
         json.dump({"token": token}, f)
 
+
+# ===== 伺服器後台 Token (每個伺服器獨立金鑰) =====
+SERVER_TOKEN_FILE = "server_panel_tokens.json"
+
+def load_server_tokens():
+    if os.path.exists(SERVER_TOKEN_FILE):
+        try:
+            with open(SERVER_TOKEN_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def save_server_tokens(data):
+    with open(SERVER_TOKEN_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
+
+def get_server_token(guild_id):
+    data = load_server_tokens()
+    gid = str(guild_id)
+    if gid not in data or not data.get(gid):
+        data[gid] = secrets.token_urlsafe(16)
+        save_server_tokens(data)
+    return data[gid]
+
 load_token()
 
 HTML_TEMPLATE = """
@@ -306,6 +331,121 @@ HTML_TEMPLATE = """
 </html>
 """
 
+
+SERVER_HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>優卡洛 伺服器後台</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{font-family:'Inter','Segoe UI',Tahoma,sans-serif;color:#e2e8f0;background:#0b1220;}
+  *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top,rgba(56,189,248,.16),transparent 22%),linear-gradient(180deg,#0b1220,#101a2e);}
+  main{max-width:960px;margin:0 auto;padding:28px 20px 40px}
+  .card{background:rgba(17,26,44,.92);border:1px solid rgba(148,163,184,.14);border-radius:20px;padding:22px;margin-bottom:20px}
+  h1{margin:0 0 4px;font-size:1.8rem}
+  .sub{color:#94a3b8;margin:0 0 18px}
+  .guild-head{display:flex;gap:16px;align-items:center}
+  .guild-head img{width:64px;height:64px;border-radius:16px}
+  .stat{font-size:.95rem;color:#cbd5e1;margin:2px 0}
+  .toggle{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid rgba(148,163,184,.14);border-radius:14px;margin-bottom:10px;background:rgba(148,163,184,.06)}
+  .toggle .nm{font-weight:600}
+  .toggle .dc{color:#94a3b8;font-size:.85rem;margin-top:2px}
+  .switch{position:relative;width:52px;height:28px;flex-shrink:0}
+  .switch input{opacity:0;width:0;height:0}
+  .slider{position:absolute;inset:0;background:#334155;border-radius:28px;transition:.25s;cursor:pointer}
+  .slider:before{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.25s}
+  .switch input:checked + .slider{background:#2ecc71}
+  .switch input:checked + .slider:before{transform:translateX(24px)}
+  label{display:block;margin:14px 0 6px;color:#cbd5e1;font-size:.92rem}
+  input[type=text],input[type=number]{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(148,163,184,.2);background:#0f1a30;color:#f8fafc;font-size:.95rem}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .btn{border:none;border-radius:12px;padding:11px 18px;font-weight:600;cursor:pointer;background:#334155;color:#fff}
+  .btn.primary{background:linear-gradient(135deg,#3b82f6,#6366f1)}
+  .btn.green{background:linear-gradient(135deg,#10b981,#059669)}
+  .toast{position:fixed;bottom:22px;right:22px;background:#111827;border:1px solid #2ecc71;color:#d1fae5;padding:12px 18px;border-radius:12px;display:none;z-index:9}
+</style>
+</head>
+<body>
+<main>
+  <h1>⚙️ 優卡洛 伺服器後台</h1>
+  <p class="sub">管理優卡洛在本伺服器內的功能</p>
+  <div class="card">
+    <div class="guild-head">
+      <img id="gicon" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
+      <div>
+        <div style="font-size:1.3rem;font-weight:700" id="gname">載入中...</div>
+        <div class="stat" id="gmeta"></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>功能開關</h2>
+    <div id="modules">載入中...</div>
+  </div>
+  <div class="card">
+    <h2>伺服器設定</h2>
+    <label>經驗值倍率 (XP Rate)</label>
+    <div class="row">
+      <input type="number" id="xp_rate" step="0.1" min="0.1" placeholder="1.0">
+      <button class="btn primary" onclick="saveSetting('xp_rate')">儲存</button>
+    </div>
+    <label>歡迎頻道 ID (留空 = 關閉)</label>
+    <div class="row">
+      <input type="text" id="welcome_channel" placeholder="頻道 ID">
+      <button class="btn primary" onclick="saveSetting('welcome_channel')">儲存</button>
+    </div>
+    <label>日誌頻道 ID</label>
+    <div class="row">
+      <input type="text" id="log_channel" placeholder="頻道 ID">
+      <button class="btn primary" onclick="saveSetting('log_channel')">儲存</button>
+    </div>
+  </div>
+  <button class="btn green" onclick="refresh()">🔄 重新整理</button>
+</main>
+
+<div class="toast" id="toast"></div>
+<script>
+  const GID = {{guild_id}};
+  const KEY = "{{key}}";
+  function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2500);}
+  async function api(url, opts){
+    opts=opts||{};opts.method=opts.method||'GET';opts.headers=opts.headers||{};
+    if(opts.body&&typeof opts.body!=='string'){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(opts.body);}
+    const r=await fetch(url,opts);return r.json();
+  }
+  async function refresh(){
+    const d=await api(`/api/server/info?guild=${GID}&key=${KEY}`);
+    if(d.error){document.getElementById('gname').textContent='權限不足';return;}
+    document.getElementById('gname').textContent=d.guild.name;
+    document.getElementById('gmeta').textContent=`👥 ${d.guild.members} 位成員 | ID: ${d.guild.id}`;
+    if(d.guild.icon)document.getElementById('gicon').src=d.guild.icon;
+    const s=d.settings;
+    document.getElementById('xp_rate').value=s.xp_rate||1;
+    document.getElementById('welcome_channel').value=s.welcome_channel||'';
+    document.getElementById('log_channel').value=s.log_channel||'';
+    const box=document.getElementById('modules');box.innerHTML='';
+    for(const m of d.modules){
+      const div=document.createElement('div');div.className='toggle';
+      div.innerHTML=`<div><div class="nm">${m.name}</div><div class="dc">${m.desc}</div></div>
+        <label class="switch"><input type="checkbox" ${m.state?'checked':''} onchange="toggleMod('${m.key}',this.checked)"><span class="slider"></span></label>`;
+      box.appendChild(div);
+    }
+  }
+  async function toggleMod(key,enabled){
+    const r=await api('/api/server/toggle',{method:'POST',body:{guild:GID,key:KEY,module:key,enabled}});
+    toast(r.ok?('已更新 '+(enabled?'開啟':'關閉')):'失敗');
+  }
+  async function saveSetting(field){
+    const el=document.getElementById(field);const v=el.value;
+    const r=await api('/api/server/settings',{method:'POST',body:{guild:GID,key:KEY,field,value:v}});
+    toast(r.ok?('已儲存 '+field):'失敗');
+  }
+  refresh();
+</script>
+</body>
+</html>"""
+
 @app.route('/')
 def index():
     # 檢查是否有 OAuth callback 參數
@@ -465,6 +605,96 @@ def api_discord_broadcast():
     except Exception as e:
         return jsonify({"message": f"發送超時或失敗: {e}", "success": False}), 500
     return jsonify(result)
+
+
+# ============================================================
+#  伺服器後台面板 (Server Admin Panel)
+# ============================================================
+@app.route('/server')
+def server_panel():
+    guild_id = request.args.get("guild")
+    key = request.args.get("key")
+    if not guild_id or not key:
+        return "缺少參數", 400
+    tokens = load_server_tokens()
+    if tokens.get(str(guild_id)) != key:
+        return "Unauthorized", 403
+    return render_template_string(SERVER_HTML_TEMPLATE, guild_id=guild_id, key=key)
+
+@app.route('/api/server/info')
+def api_server_info():
+    guild_id = request.args.get("guild")
+    key = request.args.get("key")
+    tokens = load_server_tokens()
+    if tokens.get(str(guild_id)) != key:
+        return jsonify({"error": "Unauthorized"}), 403
+    if not bot_instance:
+        return jsonify({"error": "Bot not ready"}), 500
+    guild = bot_instance.get_guild(int(guild_id))
+    if not guild:
+        return jsonify({"error": "Guild not found"}), 404
+    settings = bot_instance.get_cog("ManagementCog")  # not used, use config
+    from utils.config import config_manager
+    s = config_manager.get_guild_settings(guild.id)
+    # 可管理模組與狀態
+    modules = [
+        {"key": "ai_enabled", "name": "🤖 AI 對話", "desc": "AI 聊天功能", "state": s.get("ai_enabled", True)},
+        {"key": "music_enabled", "name": "🎵 音樂系統", "desc": "音樂播放", "state": s.get("music_enabled", True)},
+        {"key": "economy_enabled", "name": "💰 經濟系統", "desc": "金幣/銀行/股市", "state": s.get("economy_enabled", True)},
+        {"key": "security_enabled", "name": "🛡️ 安全防護", "desc": "掃毒/防廣告", "state": s.get("security_enabled", True)},
+        {"key": "levels_enabled", "name": "📊 等級系統", "desc": "經驗值與排行", "state": s.get("levels_enabled", True)},
+        {"key": "tickets_enabled", "name": "🎫 票單系統", "desc": "客服支援", "state": s.get("tickets_enabled", True)},
+        {"key": "welcome_enabled", "name": "🌌 歡迎系統", "desc": "新成員歡迎", "state": s.get("welcome_enabled", True)},
+        {"key": "games_enabled", "name": "🎮 小遊戲", "desc": "狼人殺/拉霸/賭博", "state": s.get("games_enabled", True)},
+        {"key": "kuji_enabled", "name": "🏮 一番賞", "desc": "星空抽獎", "state": s.get("kuji_enabled", True)},
+        {"key": "music_recc_enabled", "name": "🎧 音樂推薦", "desc": "智能推薦歌曲", "state": s.get("recommend_enabled", True)},
+    ]
+    return jsonify({
+        "guild": {"name": guild.name, "id": str(guild.id), "members": guild.member_count,
+                  "icon": guild.icon.url if guild.icon else None},
+        "settings": s,
+        "modules": modules
+    })
+
+@app.route('/api/server/toggle', methods=['POST'])
+def api_server_toggle():
+    data = request.get_json(silent=True) or request.form
+    guild_id = data.get("guild")
+    key = data.get("key")
+    tokens = load_server_tokens()
+    if tokens.get(str(guild_id)) != key:
+        return jsonify({"error": "Unauthorized"}), 403
+    module_key = data.get("module")
+    new_state = data.get("enabled")
+    if not module_key or new_state is None:
+        return jsonify({"error": "Missing module/enabled"}), 400
+    from utils.config import config_manager
+    config_manager.set_guild_setting(int(guild_id), module_key, bool(new_state))
+    return jsonify({"ok": True, "module": module_key, "enabled": bool(new_state)})
+
+@app.route('/api/server/settings', methods=['POST'])
+def api_server_settings():
+    data = request.get_json(silent=True) or request.form
+    guild_id = data.get("guild")
+    key = data.get("key")
+    tokens = load_server_tokens()
+    if tokens.get(str(guild_id)) != key:
+        return jsonify({"error": "Unauthorized"}), 403
+    field = data.get("field")
+    value = data.get("value")
+    if not field or value is None:
+        return jsonify({"error": "Missing field/value"}), 400
+    from utils.config import config_manager
+    # 簡單型別轉換
+    try:
+        if value.lower() in ("true", "false"):
+            value = value.lower() == "true"
+        elif value.replace(".", "", 1).isdigit():
+            value = float(value) if "." in value else int(value)
+    except Exception:
+        pass
+    config_manager.set_guild_setting(int(guild_id), field, value)
+    return jsonify({"ok": True, "field": field, "value": value})
 
 @app.route('/api/widget/exchange', methods=['POST', 'OPTIONS'])
 def api_widget_exchange():
@@ -637,5 +867,36 @@ class WebPanelCog(commands.Cog):
         except:
             await ctx.send(f"❌ 無法私訊您，請開啟私訊功能。")
 
+
+    @commands.command(name='伺服器後台', aliases=['serverpanel', 'server_panel'])
+    async def server_panel_cmd(self, ctx):
+        """開啟本伺服器的管理後台 (僅限管理員)"""
+        if not ctx.guild:
+            return await ctx.send("❌ 請在伺服器內使用此指令。")
+        if not ctx.author.guild_permissions.administrator and str(ctx.author.id) != "1113353915010920452":
+            return await ctx.send("❌ 此功能僅限伺服器管理員使用。")
+
+        domain = os.getenv("CUSTOM_DOMAIN")
+        base_url = f"https://{domain}" if domain else self.tunnel_url
+        if not base_url:
+            base_url = f"http://localhost:{self.port}"
+
+        token = get_server_token(ctx.guild.id)
+        url = f"{base_url}/server?guild={ctx.guild.id}&key={token}"
+        embed = discord.Embed(title="⚙️ 優卡洛 伺服器後台", color=0x2ecc71)
+        embed.description = (
+            f"您好，{ctx.author.mention}！\n\n"
+            f"這是 **{ctx.guild.name}** 的管理後台連結：\n\n"
+            f"🔗 **[點此開啟伺服器後台]({url})**\n\n"
+            f"可在裡面管理優卡洛在貴伺服器內的功能開關與設定。"
+        )
+        embed.set_footer(text="僅限伺服器管理員使用")
+        try:
+            await ctx.author.send(embed=embed)
+            await ctx.send("✅ 伺服器後台連結已發送到您的私訊！")
+        except:
+            await ctx.send(f"❌ 無法私訊您，請開啟私訊功能後再試。")
+
 async def setup(bot):
     await bot.add_cog(WebPanelCog(bot))
+
