@@ -15,6 +15,33 @@ class AutoUpdaterCog(commands.Cog):
         self.bot = bot
         self.changelog_channel_ids = self._load_channels()
         self.check_update.start()
+        self.bot.loop.create_task(self._startup_version_check())
+
+    async def _startup_version_check(self):
+        """Startup check: notify owner on major version update"""
+        try:
+            from datetime import datetime
+            await self.bot.wait_until_ready()
+            last_major = self._load_last_major()
+            current_commit = self._get_last_commit_message(None, "HEAD")
+            new_major = self._extract_major_version(current_commit)
+            if new_major > last_major and new_major > 0:
+                title = f"🚀 大版本更新 v{new_major}.0.0！"
+                try:
+                    user = await self.bot.fetch_user(self.OWNER_ID)
+                    embed = discord.Embed(
+                        title="🚀 大版本更新通知",
+                        description=f"洛洛偵測到大版本更新 v{new_major}.0.0！\n\n感謝使用幽芙優(小幽)！嗷嗷嗷～",
+                        color=0xf1c40f
+                    )
+                    embed.set_footer(text=f"通知時間：<t:{int(datetime.now().timestamp())}:F>")
+                    await user.send(embed=embed)
+                    print(f"[啟動檢查] 向擁有者發送大版本更新通知: {title}")
+                except Exception as e:
+                    print(f"[啟動檢查] 無法發送 DM 給擁有者: {e}")
+                self._save_last_major(new_major)
+        except Exception as e:
+            print(f"[啟動版本檢查] 發生錯誤: {e}")
 
     def cog_unload(self):
         self.check_update.cancel()

@@ -4,6 +4,7 @@ from discord.ext import commands
 import aiohttp
 import os
 import json
+import re
 from collections import deque
 from dotenv import load_dotenv
 

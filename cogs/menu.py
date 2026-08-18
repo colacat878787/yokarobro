@@ -140,12 +140,12 @@ class MenuView(discord.ui.View):
         )
         embed.add_field(
             name="📝 實用指令",
-            value="`!天氣 [城市]` - 查詢天氣\n`!維基 [關鍵字]` - 搜尋維基\n`!截圖 [網址]` - 網頁截圖\n`!翻譯` - 外星文翻譯",
+            value="`!天氣 [城市]` - 查詢天氣\n`!維基 [關鍵字]` - 搜尋維基\n`!截圖 [網址]` - 網頁截圖\n`!翻譯` - 外星文翻譯\n`!rr` - 反應角色設定\n`!afk` - 設定離開狀態\n`!remindme` - 設定提醒\n`!starboard` - 星板功能\n`!autorole` - 自動身分組",
             inline=False
         )
         embed.add_field(
             name="✨ 特色",
-            value="• 天氣預報\n• 維基百科搜尋\n• 網頁截圖\n• 多語言翻譯",
+            value="• 天氣預報\n• 維基百科搜尋\n• 網頁截圖\n• 多語言翻譯\n• 反應角色\n• AFK 自動回覆\n• 定時提醒\n• 星板熱門訊息",
             inline=False
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)

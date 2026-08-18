@@ -117,7 +117,14 @@ class YokaroBot(commands.Bot):
             'cogs.ytsubcountdown',     # 📊 YouTube 訂閱數倒數計時
             'cogs.language',           # 🌐 多語言切換系統
             'cogs.anime',              # 🎬 動漫搜索 (Jikan/MyAnimeList)
-            'cogs.server_counter',     # 📊 伺服器計數器
+                        'cogs.server_counter',     # 📊 伺服器計數器
+            # ===== 热门机器人功能完补 =====
+            'cogs.reaction_roles',     # 🎭 反應角色系統
+            'cogs.afk',                # 💤 AFK 離開系統
+            'cogs.reminder',           # ⏰ 提醒/鬧鐘系統
+            'cogs.starboard',          # ⭐ 星板系統
+            'cogs.auto_role',          # 🤖 自動身分組系統
+            'cogs.alarm',              # ⏰ 鬧鐘系統
         ]
 
     async def setup_hook(self):
@@ -425,7 +432,25 @@ class HelpView(discord.ui.View):
         embed.add_field(name="!httpcat [狀態碼]", value="🐱 顯示 HTTP 狀態碼的可愛貓咪圖片", inline=True)
         embed.add_field(name="!選單 / !menu", value="🎯 開啟互動式功能選單面板", inline=False)
         embed.add_field(name="右鍵選單功能", value="📱 訊息右鍵選單：\n• 移植 - 複製訊息內容\n• 鼓掌 - 給作者鼓勵\n• 引用 - 引用訊息", inline=False)
+        embed.add_field(name="🎭 反應角色 / !rr", value="用戶點擊反應自動獲取身分組", inline=True)
+        embed.add_field(name="💤 AFK / !afk", value="設定離開狀態，@你時自動回覆", inline=True)
+        embed.add_field(name="⏰ 提醒 / !remindme", value="設定定時提醒，到時間自動通知", inline=True)
+        embed.add_field(name="⭐ 星板 / !starboard", value="自動轉發熱門訊息到指定頻道", inline=True)
+        embed.add_field(name="🤖 自動身分組 / !autorole", value="新成員加入時自動分配身分組", inline=True)
         embed.set_footer(text="聊天、升級、跟洛洛互動吧！")
+        await interaction.edit_original_response(embed=embed)
+
+    @discord.ui.button(label="🎮 小遊戲/娛樂", style=discord.ButtonStyle.success, custom_id="help_games")
+    async def games(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        embed = discord.Embed(title="🎮 小遊戲與娛樂", color=0x9b59b6)
+        embed.add_field(name="!狼人殺 / !werewolf", value="多人語音狼人殺遊戲", inline=True)
+        embed.add_field(name="!運勢 / !fortune", value="每日隨機籤詩", inline=True)
+        embed.add_field(name="!拉霸 / !slot", value="試手氣拉霸機", inline=True)
+        embed.add_field(name="!抽獎 / !giveaway", value="主辦抽獎活動", inline=True)
+        embed.add_field(name="!一番賞 / !kuji", value="星空主題抽獎", inline=True)
+        embed.add_field(name="!賭博 / !gamble", value="心臟要夠強的翻倍賭博", inline=False)
+        embed.set_footer(text="玩遊戲、贏取獎品、讓洛洛陪你玩！")
         await interaction.edit_original_response(embed=embed)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item):
