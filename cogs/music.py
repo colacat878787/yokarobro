@@ -41,6 +41,11 @@ YTDL_OPTIONS = {
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['android'],
+        },
+    },
     # extract_flat 移除：對單首歌需要完整解析才能拿到真正的串流 URL
     'youtube_include_dash_manifest': False,
     'http_headers': {
