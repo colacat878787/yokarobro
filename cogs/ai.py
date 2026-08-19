@@ -112,8 +112,8 @@ class AICog(commands.Cog):
         if not ctx.guild:
             await ctx.send("❌ 這個功能只能在伺服器頻道使用。")
             return
-        if target.bot:
-            await ctx.send("❌ 不能邀請機器人進行這個對話。")
+        if target.id == self.bot.user.id:
+            await ctx.send("❌ 不能邀請洛洛自己進行這個對話。")
             return
 
         seconds = self._parse_play_duration(duration)
@@ -141,7 +141,6 @@ class AICog(commands.Cog):
                         message.guild == ctx.guild
                         and message.channel.id == ctx.channel.id
                         and message.author.id == target.id
-                        and not message.author.bot
                     )
 
                 try:
