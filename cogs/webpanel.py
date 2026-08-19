@@ -446,6 +446,103 @@ SERVER_HTML_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>"""
 
+
+PUBLIC_POLICY_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title }} | Yokaro</title>
+    <style>
+        :root { color-scheme: dark; font-family: "Segoe UI", system-ui, sans-serif; color: #e5eefb; background: #07111f; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 15% 0%, rgba(56, 189, 248, .18), transparent 30%), linear-gradient(145deg, #07111f, #101b31); }
+        main { width: min(900px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0 72px; }
+        header { margin-bottom: 28px; }
+        .brand { color: #7dd3fc; font-size: .9rem; letter-spacing: .12em; text-transform: uppercase; }
+        h1 { margin: 10px 0 8px; font-size: clamp(2rem, 5vw, 3.2rem); color: #f8fafc; }
+        .updated { margin: 0; color: #9fb1c8; }
+        article { padding: 30px; border: 1px solid rgba(148, 163, 184, .16); border-radius: 18px; background: rgba(15, 27, 48, .9); box-shadow: 0 24px 70px rgba(0, 0, 0, .24); }
+        h2 { margin: 28px 0 10px; color: #bae6fd; font-size: 1.2rem; }
+        h2:first-child { margin-top: 0; }
+        p, li { color: #c7d4e5; line-height: 1.85; }
+        ul { padding-left: 1.3rem; }
+        a { color: #7dd3fc; }
+        footer { margin-top: 22px; color: #8192aa; font-size: .9rem; }
+        @media (max-width: 600px) { main { padding-top: 32px; } article { padding: 22px; } }
+    </style>
+</head>
+<body>
+    <main>
+        <header>
+            <div class="brand">Yokaro / 優卡洛</div>
+            <h1>{{ title }}</h1>
+            <p class="updated">最後更新：2026-08-19</p>
+        </header>
+        <article>{{ content|safe }}</article>
+        <footer>本頁面適用於 Yokaro Discord 機器人及其相關服務。</footer>
+    </main>
+</body>
+</html>
+"""
+
+
+TERMS_CONTENT = """
+<h2>1. 服務說明</h2>
+<p>Yokaro 是提供 Discord 伺服器管理、娛樂、資訊與互動功能的機器人服務。使用本服務即表示你同意遵守 Discord 的使用條款、社群規範，以及所在伺服器的管理規則。</p>
+<h2>2. 使用規範</h2>
+<ul>
+    <li>不得利用 Yokaro 進行騷擾、詐騙、惡意散播、未經授權的資料蒐集或其他違法行為。</li>
+    <li>不得嘗試破壞服務、繞過權限、濫用 API 或干擾其他使用者。</li>
+    <li>伺服器管理員可以依伺服器規則停用功能或限制成員使用。</li>
+</ul>
+<h2>3. 服務變更與可用性</h2>
+<p>功能可能因維護、Discord API 變更、第三方服務故障或安全因素而調整、暫停或移除。我們會盡力維持服務穩定，但不保證服務永遠不中斷或完全沒有錯誤。</p>
+<h2>4. 第三方服務</h2>
+<p>部分功能可能連接 Discord、Google Gemini、YouTube、Spotify 或其他第三方服務。這些服務有各自的條款與隱私政策，使用相關功能時也必須遵守其規範。</p>
+<h2>5. 條款更新</h2>
+<p>條款更新後會公布在本頁面。更新後繼續使用 Yokaro，即表示接受更新後的內容。</p>
+"""
+
+
+PRIVACY_CONTENT = """
+<h2>1. 我們可能處理的資料</h2>
+<ul>
+    <li>Discord 使用者 ID、伺服器 ID、頻道 ID，以及執行功能所需的基本暱稱或顯示名稱。</li>
+    <li>你主動輸入的設定、指令內容、問候訊息、提醒或遊戲資料。</li>
+    <li>為了維持服務安全與除錯而產生的錯誤、操作與系統日誌。</li>
+</ul>
+<h2>2. 使用目的</h2>
+<p>資料只用於提供機器人功能、保存個人或伺服器設定、處理管理操作、改善穩定性，以及偵測濫用或安全事件。</p>
+<h2>3. 資料保存與刪除</h2>
+<p>資料會依功能需要保存於機器人運行環境。當資料不再需要、功能被移除，或收到合理的刪除要求時，會視技術與備份狀況刪除或匿名化。</p>
+<h2>4. 資料分享與安全</h2>
+<p>除非為了提供你主動使用的第三方功能、遵守法律要求或處理安全事件，我們不會出售你的個人資料。網路傳輸與第三方服務仍可能存在風險，請勿透過機器人提交密碼、Token、信用卡號或其他敏感資訊。</p>
+<h2>5. 你的權利</h2>
+<p>如需查詢、修改或刪除與 Yokaro 相關的資料，請透過機器人的管理聯絡方式提出申請，並提供足以辨識資料的 Discord 使用者 ID 或伺服器 ID。</p>
+<h2>6. 政策更新</h2>
+<p>本隱私政策可能因功能或法律要求更新。最新版本會持續公布於本頁面。</p>
+"""
+
+@app.route('/term')
+def terms_page():
+    return render_template_string(
+        PUBLIC_POLICY_TEMPLATE,
+        title="服務條款",
+        content=TERMS_CONTENT,
+    )
+
+
+@app.route('/privacy')
+def privacy_page():
+    return render_template_string(
+        PUBLIC_POLICY_TEMPLATE,
+        title="隱私與安全政策",
+        content=PRIVACY_CONTENT,
+    )
+
+
 @app.route('/')
 def index():
     # 檢查是否有 OAuth callback 參數
