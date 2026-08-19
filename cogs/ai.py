@@ -2,6 +2,7 @@
 import discord
 from discord.ext import commands
 import aiohttp
+import asyncio
 import os
 import json
 import re
@@ -69,6 +70,7 @@ class AICog(commands.Cog):
         self.bot = bot
         self.conversation_history = {}
         self.ai_channels = set()
+        self.active_play_sessions = set()
         self.load_ai_channels() # 讀取紀錄的 AI 頻道
         
         # 讀取金鑰與模型
@@ -91,6 +93,74 @@ class AICog(commands.Cog):
             self.model = os.getenv("AI_MODEL", "llama3")
             self.active_key = "ollama"
             print("⚠️ [AI] 未偵測到有效雲端金鑰，切換至 Ollama 本地模式 (localhost:11434)")
+
+    def _parse_play_duration(self, value):
+        """解析 !玩 的時長，例如 30s、1m、2h。"""
+        match = re.fullmatch(r"(\d+(?:\.\d+)?)([smhd])", value.lower().strip())
+        if not match:
+            return None
+        amount = float(match.group(1))
+        unit_seconds = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+        seconds = amount * unit_seconds[match.group(2)]
+        if seconds < 10 or seconds > 86400:
+            return None
+        return seconds
+
+    @commands.hybrid_command(name="玩", aliases=["playwith"])
+    async def play_with(self, ctx, duration: str, target: discord.Member):
+        """在指定時間內等待成員回覆，並由 AI 持續協助對話。"""
+        if not ctx.guild:
+            await ctx.send("❌ 這個功能只能在伺服器頻道使用。")
+            return
+        if target.bot:
+            await ctx.send("❌ 不能邀請機器人進行這個對話。")
+            return
+
+        seconds = self._parse_play_duration(duration)
+        if seconds is None:
+            await ctx.send("❌ 時間格式錯誤，請使用 10s、1m、1h 或 1d（最短 10 秒）。")
+            return
+        if ctx.channel.id in self.active_play_sessions:
+            await ctx.send("❌ 這個頻道已經有一場進行中的遊戲了。")
+            return
+
+        self.active_play_sessions.add(ctx.channel.id)
+        deadline = asyncio.get_running_loop().time() + seconds
+        try:
+            await ctx.send(
+                f"{target.mention} 洛洛想和你玩一下！請直接在這個頻道回覆，"
+                f"對話會持續約 `{duration}`。"
+            )
+            while True:
+                remaining = deadline - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    break
+
+                def check(message):
+                    return (
+                        message.guild == ctx.guild
+                        and message.channel.id == ctx.channel.id
+                        and message.author.id == target.id
+                        and not message.author.bot
+                    )
+
+                try:
+                    reply = await self.bot.wait_for("message", timeout=remaining, check=check)
+                except asyncio.TimeoutError:
+                    break
+
+                async with ctx.channel.typing():
+                    response = await self.get_ai_response(
+                        target.display_name,
+                        str(target.id),
+                        reply.content,
+                        str(ctx.channel.id),
+                    )
+                await reply.reply(response, mention_author=False)
+
+            await ctx.send(f"⌛ 和 {target.mention} 的遊戲時間到了，這次對話結束。")
+        finally:
+            self.active_play_sessions.discard(ctx.channel.id)
 
     @commands.Cog.listener()
     async def on_message(self, message):
