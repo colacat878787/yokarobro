@@ -22,5 +22,5 @@ flask
 lyricsgenius>=3.0.0
 matplotlib
 mcstatus==11.1.0
-pyncm
+# pyncm is unavailable on PyPI; cogs.music treats it as an optional dependency.
 deep-translator

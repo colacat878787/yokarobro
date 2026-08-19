@@ -86,7 +86,7 @@ class LanguageCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="lang", aliases=["語言", "language", "languagemenu", "言語", "لغة"])
+    @commands.command(name="lang", aliases=["語言", "language", "languagemenu", "لغة"])
     @commands.has_permissions(administrator=True)
     async def lang(self, ctx):
         """🌐 (管理員) 切換伺服器的顯示語言 (中文/英文/日文/阿拉伯文)"""
