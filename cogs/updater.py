@@ -208,9 +208,9 @@ class AutoUpdaterCog(commands.Cog):
             # 在重啟前發送更新通知到頻道
             await self._notify_changelog(local_hash, remote_hash)
 
-            # 優雅重啟：重新載入所有 extensions 而非強制退出
-            # 這樣不會中斷正在播放的音樂或 AI 對話
-            await self._graceful_reload()
+            # 必須完整重啟程序，才能載入新增或刪除的 Cog。
+            # start.sh 會在程序結束後重新啟動機器人並安裝依賴。
+            os._exit(0)
 
         except subprocess.TimeoutExpired:
             print("⚠️ [自動更新] 連接 GitHub 超時，跳過本次檢查。")
