@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands, tasks
 import subprocess
 import os
-import sys
 import asyncio
 import json
 import re
@@ -209,8 +208,8 @@ class AutoUpdaterCog(commands.Cog):
             # 在重啟前發送更新通知到頻道
             await self._notify_changelog(local_hash, remote_hash)
 
-            # 原地替換程序，讓新 Cog 在同一個服務中立即由 setup_hook 載入。
-            await self._hot_restart()
+            # 由外部 start.sh 負責程序重啟與重新載入所有 Cog。
+            os._exit(0)
 
         except subprocess.TimeoutExpired:
             print("⚠️ [自動更新] 連接 GitHub 超時，跳過本次檢查。")
@@ -268,11 +267,6 @@ class AutoUpdaterCog(commands.Cog):
         print(f"[GracefulReload] 重載完成: {len(reloaded)}/{len(extensions)} 成功")
         if failed:
             print(f"[GracefulReload] 失敗: {failed}")
-
-    async def _hot_restart(self):
-        """以目前 Python 程序直接替換自己，不依賴外部 start.sh。"""
-        print("🔁 [自動更新] 正在進行熱重啟，重新載入全部 Cog...")
-        os.execv(sys.executable, [sys.executable, *sys.argv])
 
     @check_update.before_loop
     async def before_check(self):
@@ -354,7 +348,8 @@ class AutoUpdaterCog(commands.Cog):
             )
             await msg.edit(content="✅ 同步完成！洛洛馬上重啟...")
             await self._notify_changelog(local, remote)
-            await self._hot_restart()
+            # 由外部 start.sh 負責程序重啟與重新載入所有 Cog。
+            os._exit(0)
 
         except subprocess.TimeoutExpired:
             await msg.edit(content="❌ 連接 GitHub 超時！")
