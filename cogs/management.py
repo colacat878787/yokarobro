@@ -87,8 +87,9 @@ class QuarantinePanelView(discord.ui.View):
         if self.target is None or self.duration is None:
             await interaction.response.send_message("❌ 請先選擇成員和關閉時間。", ephemeral=True)
             return
+        await interaction.response.defer(ephemeral=True)
         result = await self.cog._quarantine_member(interaction.guild, interaction.user, self.target, self.duration)
-        await interaction.response.send_message(result, ephemeral=True)
+        await interaction.edit_original_response(content=result)
 
     @discord.ui.button(label="✅ 解除小黑屋", style=discord.ButtonStyle.success, row=2)
     async def release_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -124,10 +125,11 @@ class QuarantineReleaseView(discord.ui.View):
         if not record:
             await interaction.response.send_message("📭 這位成員已不在小黑屋。", ephemeral=True)
             return
+        await interaction.response.defer(ephemeral=True)
         member = self.guild.get_member(int(user_id))
         await self.cog._release_quarantine(str(self.guild.id), user_id)
         name = member.mention if member else f"<@{user_id}>"
-        await interaction.response.send_message(f"✅ 已解除 {name} 的小黑屋。", ephemeral=True)
+        await interaction.edit_original_response(content=f"✅ 已解除 {name} 的小黑屋。")
 
 
 class ManagementCog(commands.Cog):
