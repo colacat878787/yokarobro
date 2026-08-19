@@ -69,6 +69,7 @@ class YokaroBot(commands.Bot):
         self.status_task = None
         # ... (其餘部分不變)
         self.initial_extensions = [
+            'cogs.user_settings',
             'cogs.ai',
             'cogs.security',
             'cogs.music',
@@ -130,6 +131,7 @@ class YokaroBot(commands.Bot):
 
     async def setup_hook(self):
         """載入所有 Cog 分離功能"""
+        print("[Loader] starting extensions")
         for ext in self.initial_extensions:
             try:
                 print(f"📦 [加載中] 正在喚醒功能: {ext}...")
@@ -139,6 +141,13 @@ class YokaroBot(commands.Bot):
                 print(f"❌ [失敗] {ext} 喚醒過程發生錯誤: {e}")
                 import traceback
                 traceback.print_exc()
+
+            user_settings_command = self.get_command("使用者設定")
+            print(
+                "[Loader] cogs.user_settings: "
+                f"Cog={'OK' if self.get_cog('UserSettingsCog') else 'NONE'}, "
+                f"command={'OK' if user_settings_command else 'NONE'}"
+            )
         
         # --- 全域黑名單與追蹤攔截器 ---
         @self.tree.interaction_check
