@@ -122,7 +122,10 @@ class UserSettingsCog(commands.Cog):
             return "lunch"
         return "evening"
 
-    @commands.command(name="使用者設定", aliases=["個人設定", "usersettings"])
+    @commands.command(
+        name="使用者設定",
+        aliases=["使用者面板", "個人設定", "個人面板", "usersettings", "userpanel"],
+    )
     async def user_settings(self, ctx):
         """開啟自己的每日問候設定面板。"""
         if not ctx.guild:
