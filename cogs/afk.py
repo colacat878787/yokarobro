@@ -68,6 +68,35 @@ class AFKCog(commands.Cog):
             return f"{m}分{s}秒" if s else f"{m}分"
         return f"{seconds}秒"
 
+    @commands.hybrid_command(name="afk", aliases=["離開"])
+    async def afk(self, ctx, duration: str = None, *, reason: str = "暫時離開"):
+        """設定自己的 AFK 狀態，例如 !afk 1h 睡覺了。"""
+        guild_id = str(ctx.guild.id) if ctx.guild else "DM"
+        user_id = str(ctx.author.id)
+        duration_seconds = None
+        if duration is not None:
+            duration_seconds = self._parse_duration(duration)
+            if duration_seconds is None or duration_seconds <= 0:
+                await ctx.send("❌ 時間格式錯誤！請使用 `30s`、`5m`、`1h`、`1d` 或 `永久`。", ephemeral=True)
+                return
+
+        now = datetime.now()
+        self.afk_data.setdefault(guild_id, {})[user_id] = {
+            "reason": reason,
+            "duration": self._format_duration(duration_seconds),
+            "duration_seconds": duration_seconds,
+            "set_at_timestamp": now.timestamp(),
+            "expires_at": now.timestamp() + duration_seconds if duration_seconds else None,
+        }
+        self._save_data()
+
+        try:
+            if ctx.guild and not ctx.author.display_name.startswith("[AFK]"):
+                await ctx.author.edit(nick=f"[AFK] {ctx.author.display_name}", reason="設定 AFK 狀態")
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+        await ctx.send(f"💤 {ctx.author.mention} 已設定 AFK 狀態！\n理由：{reason}\n持續：{self._format_duration(duration_seconds)}")
 
 
     @commands.hybrid_command(name="afk_cancel", aliases=["取消afk", "afkoff", "取消離開"])

@@ -82,7 +82,7 @@ class StarboardCog(commands.Cog):
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         if payload.guild_id is None or payload.user_id == self.bot.user.id:
             return
-        emoji_name = payload.emoji.name if payload.emoji.is_custom() else str(payload.emoji)
+        emoji_name = payload.emoji.name if payload.emoji.id else str(payload.emoji)
         is_star = emoji_name in ("⭐", "🌟", "✨")
         if not is_star:
             return

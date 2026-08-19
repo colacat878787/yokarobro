@@ -165,7 +165,7 @@ class ReactionRolesCog(commands.Cog):
         emoji_str = str(payload.emoji)
         role_id = roles.get(emoji_str)
         if role_id is None and payload.emoji.name:
-            full_str = f"<:{payload.emoji.name}:{payload.emoji.id}>" if payload.emoji.is_custom() else str(payload.emoji)
+            full_str = f"<:{payload.emoji.name}:{payload.emoji.id}>" if payload.emoji.id else str(payload.emoji)
             role_id = roles.get(full_str)
         if role_id is None:
             return
@@ -197,7 +197,7 @@ class ReactionRolesCog(commands.Cog):
         emoji_str = str(payload.emoji)
         role_id = roles.get(emoji_str)
         if role_id is None and payload.emoji.name:
-            full_str = f"<:{payload.emoji.name}:{payload.emoji.id}>" if payload.emoji.is_custom() else str(payload.emoji)
+            full_str = f"<:{payload.emoji.name}:{payload.emoji.id}>" if payload.emoji.id else str(payload.emoji)
             role_id = roles.get(full_str)
         if role_id is None:
             return
