@@ -92,7 +92,12 @@ class YTDLSource(discord.PCMVolumeTransformer):
         )
 
         ffmpeg_options = {
-            'before_options': before_opts,
+            'before_options': (
+                f'{before_opts} '
+                f'-headers "{header_str.replace(chr(34), chr(92) + chr(34))}" '
+                f'-user_agent "{headers.get("User-Agent", YTDL_OPTIONS["http_headers"]["User-Agent"])}" '
+                '-rw_timeout 15000000'
+            ),
             'options': f'-vn {af_string}'.strip()
         }
 
@@ -518,7 +523,7 @@ class MusicCog(commands.Cog):
             return None
         try:
             import lyricsgenius
-            client = lyricsgenius.Genius(token, timeout=15, skip_non_songs=True, excluded_terms=["(Remix)", "(Live)"])
+            client = lyricsgenius.Genius(token, timeout=5, skip_non_songs=True, excluded_terms=["(Remix)", "(Live)"])
             print("[DEBUG Genius] Client created successfully")
             return client
         except Exception as e:
