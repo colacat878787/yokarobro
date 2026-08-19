@@ -124,13 +124,20 @@ class AICog(commands.Cog):
             await ctx.send("❌ 這個頻道已經有一場進行中的遊戲了。")
             return
 
+        target_is_bot = target.bot
         self.active_play_sessions.add(ctx.channel.id)
         deadline = asyncio.get_running_loop().time() + seconds
         try:
             await ctx.send(
                 f"{target.mention} 洛洛想和你玩一下！請直接在這個頻道回覆，"
-                f"對話會持續約 `{duration}`。"
+                f"對話會持續約 `{duration}`。",
+                allowed_mentions=discord.AllowedMentions(users=True),
             )
+            if target_is_bot:
+                print(
+                    f"[PlaySession] waiting for bot reply: target={target.id} "
+                    f"channel={ctx.channel.id} duration={duration}"
+                )
             while True:
                 remaining = deadline - asyncio.get_running_loop().time()
                 if remaining <= 0:
@@ -148,6 +155,9 @@ class AICog(commands.Cog):
                 except asyncio.TimeoutError:
                     break
 
+                if target_is_bot:
+                    print(f"[PlaySession] received bot reply: target={target.id} message={reply.id}")
+
                 async with ctx.channel.typing():
                     response = await self.get_ai_response(
                         target.display_name,
@@ -157,7 +167,13 @@ class AICog(commands.Cog):
                     )
                 await reply.reply(response, mention_author=False)
 
-            await ctx.send(f"⌛ 和 {target.mention} 的遊戲時間到了，這次對話結束。")
+            if target_is_bot:
+                await ctx.send(
+                    f"⌛ 和 {target.mention} 的遊戲時間到了。若它整段期間都沒有回覆，"
+                    "通常是因為對方 AI 不接受其他機器人的訊息；請由真人再 @ 它發問。"
+                )
+            else:
+                await ctx.send(f"⌛ 和 {target.mention} 的遊戲時間到了，這次對話結束。")
         finally:
             self.active_play_sessions.discard(ctx.channel.id)
 
