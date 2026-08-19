@@ -36,6 +36,100 @@ class ServerListView(discord.ui.View):
         
         await interaction.response.send_modal(LeaveModal(self.cog))
 
+
+class QuarantinePanelView(discord.ui.View):
+    def __init__(self, cog):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.target = None
+        self.duration = None
+
+        self.member_select = discord.ui.UserSelect(
+            placeholder="選擇要關入小黑屋的成員",
+            min_values=1,
+            max_values=1,
+        )
+        self.member_select.callback = self.member_selected
+        self.add_item(self.member_select)
+
+        self.duration_select = discord.ui.Select(
+            placeholder="選擇關閉時間",
+            min_values=1,
+            max_values=1,
+            options=[
+                discord.SelectOption(label="30 分鐘", value="30m"),
+                discord.SelectOption(label="1 小時", value="1h"),
+                discord.SelectOption(label="6 小時", value="6h"),
+                discord.SelectOption(label="1 天", value="1d"),
+                discord.SelectOption(label="7 天", value="7d"),
+            ],
+        )
+        self.duration_select.callback = self.duration_selected
+        self.add_item(self.duration_select)
+
+    async def member_selected(self, interaction: discord.Interaction):
+        selected = self.member_select.values[0]
+        self.target = interaction.guild.get_member(selected.id)
+        if self.target is None:
+            await interaction.response.send_message("❌ 找不到這位伺服器成員。", ephemeral=True)
+            return
+        await interaction.response.send_message(f"✅ 已選擇：{self.target.mention}", ephemeral=True)
+
+    async def duration_selected(self, interaction: discord.Interaction):
+        self.duration = self.duration_select.values[0]
+        await interaction.response.send_message(f"✅ 已選擇關閉時間：{self.duration}", ephemeral=True)
+
+    @discord.ui.button(label="🚫 關入小黑屋", style=discord.ButtonStyle.danger, row=2)
+    async def quarantine_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_roles:
+            await interaction.response.send_message("❌ 你需要管理身分組權限。", ephemeral=True)
+            return
+        if self.target is None or self.duration is None:
+            await interaction.response.send_message("❌ 請先選擇成員和關閉時間。", ephemeral=True)
+            return
+        result = await self.cog._quarantine_member(interaction.guild, interaction.user, self.target, self.duration)
+        await interaction.response.send_message(result, ephemeral=True)
+
+    @discord.ui.button(label="✅ 解除小黑屋", style=discord.ButtonStyle.success, row=2)
+    async def release_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_roles:
+            await interaction.response.send_message("❌ 你需要管理身分組權限。", ephemeral=True)
+            return
+        view = QuarantineReleaseView(self.cog, interaction.guild)
+        if not view.options:
+            await interaction.response.send_message("📭 目前沒有任何成員在小黑屋。", ephemeral=True)
+            return
+        await interaction.response.send_message("請選擇要解除小黑屋的成員：", view=view, ephemeral=True)
+
+
+class QuarantineReleaseView(discord.ui.View):
+    def __init__(self, cog, guild):
+        super().__init__(timeout=120)
+        self.cog = cog
+        self.guild = guild
+        self.options = []
+        for user_id in cog.quarantines.get(str(guild.id), {}):
+            member = guild.get_member(int(user_id))
+            if member:
+                self.options.append(discord.SelectOption(label=member.display_name[:100], value=user_id))
+        self.options = self.options[:25]
+        if self.options:
+            select = discord.ui.Select(placeholder="選擇要解除的成員", options=self.options)
+            select.callback = self.release_selected
+            self.add_item(select)
+
+    async def release_selected(self, interaction: discord.Interaction):
+        user_id = interaction.data["values"][0]
+        record = self.cog.quarantines.get(str(self.guild.id), {}).get(user_id)
+        if not record:
+            await interaction.response.send_message("📭 這位成員已不在小黑屋。", ephemeral=True)
+            return
+        member = self.guild.get_member(int(user_id))
+        await self.cog._release_quarantine(str(self.guild.id), user_id)
+        name = member.mention if member else f"<@{user_id}>"
+        await interaction.response.send_message(f"✅ 已解除 {name} 的小黑屋。", ephemeral=True)
+
+
 class ManagementCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -149,42 +243,44 @@ class ManagementCog(commands.Cog):
 
     @commands.hybrid_command(name="小黑屋", aliases=["quarantine", "禁閉"])
     @commands.has_permissions(manage_roles=True)
-    async def quarantine(self, ctx, target: discord.Member, duration: str):
-        """將成員暫時限制在小黑屋，例如 !小黑屋 @使用者 1h。"""
-        bot_member = ctx.guild.me
+    async def quarantine(self, ctx, target: discord.Member = None, duration: str = None):
+        """開啟小黑屋面板，也支援 !小黑屋 @使用者 1h。"""
+        if target is None or duration is None:
+            await ctx.send("🚫 小黑屋管理面板：請選擇成員、時間，或解除現有小黑屋。", view=QuarantinePanelView(self))
+            return
+        result = await self._quarantine_member(ctx.guild, ctx.author, target, duration)
+        await ctx.send(result)
+
+    async def _quarantine_member(self, guild, actor, target, duration):
+        """執行小黑屋限制並回傳使用者可見結果。"""
+        bot_member = guild.me
         if not bot_member.guild_permissions.manage_roles or not bot_member.guild_permissions.manage_channels:
-            await ctx.send("❌ 我需要「管理身分組」和「管理頻道」權限才能使用小黑屋。", ephemeral=True)
-            return
+            return "❌ 我需要「管理身分組」和「管理頻道」權限才能使用小黑屋。"
         if target.guild_permissions.administrator:
-            await ctx.send("❌ 管理員權限可以繞過頻道隱藏，無法套用小黑屋。", ephemeral=True)
-            return
-        if target == ctx.guild.owner or target.top_role >= ctx.author.top_role:
-            await ctx.send("❌ 你不能把同等或更高身分組的成員關進小黑屋。", ephemeral=True)
-            return
+            return "❌ 管理員權限可以繞過頻道隱藏，無法套用小黑屋。"
+        if target == guild.owner or target.top_role >= actor.top_role:
+            return "❌ 你不能把同等或更高身分組的成員關進小黑屋。"
         seconds = self._parse_quarantine_duration(duration)
         if seconds is None or seconds <= 0:
-            await ctx.send("❌ 時間格式錯誤！請使用 `30m`、`1h` 或 `1d`。", ephemeral=True)
-            return
-        if ctx.guild.me.top_role <= target.top_role:
-            await ctx.send("❌ 我的身分組等級不夠，無法限制這位成員。", ephemeral=True)
-            return
+            return "❌ 時間格式錯誤！請使用 `30m`、`1h`、`6h`、`1d` 或 `7d`。"
+        if bot_member.top_role <= target.top_role:
+            return "❌ 我的身分組等級不夠，無法限制這位成員。"
 
-        role = await self._get_quarantine_role(ctx.guild)
-        await self._apply_quarantine_permissions(ctx.guild, role)
+        role = await self._get_quarantine_role(guild)
+        await self._apply_quarantine_permissions(guild, role)
         try:
-            await target.add_roles(role, reason=f"小黑屋 {duration}，執行者：{ctx.author}")
+            await target.add_roles(role, reason=f"小黑屋 {duration}，執行者：{actor}")
         except (discord.Forbidden, discord.HTTPException):
-            await ctx.send("❌ 加入小黑屋失敗，請確認我有管理身分組權限。", ephemeral=True)
-            return
+            return "❌ 加入小黑屋失敗，請確認我有管理身分組權限。"
 
-        guild_data = self.quarantines.setdefault(str(ctx.guild.id), {})
+        guild_data = self.quarantines.setdefault(str(guild.id), {})
         guild_data[str(target.id)] = {
             "role_id": role.id,
             "expires_at": datetime.datetime.now(datetime.timezone.utc).timestamp() + seconds,
-            "channel_id": ctx.channel.id,
+            "channel_id": None,
         }
         self._save_data(QUARANTINE_FILE, self.quarantines)
-        await ctx.send(f"🚫 {target.mention} 已進入小黑屋，將於 <t:{int(guild_data[str(target.id)]['expires_at'])}:R> 恢復。")
+        return f"🚫 {target.mention} 已進入小黑屋，將於 <t:{int(guild_data[str(target.id)]['expires_at'])}:R> 恢復。"
 
     def _parse_quarantine_duration(self, value):
         import re
