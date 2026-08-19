@@ -69,11 +69,15 @@ class AlarmPanelView(discord.ui.View):
 
     @discord.ui.button(label="🗑️ 取消鬧鐘", style=discord.ButtonStyle.danger, row=0)
     async def cancel_btn(self, interaction, button):
-        gid = str(self.cog._current_guild_id)
+        gid = str(interaction.guild.id)
         lst = self.cog.alarms.get(gid, {}).get(str(interaction.channel.id), [])
         if not lst:
             return await interaction.response.send_message("📭 目前沒有鬧鐘可以取消！", ephemeral=True)
-        await interaction.response.send_message("選擇要取消的鬧鐘：", view=AlarmDeleteView(self.cog, interaction.channel.id), ephemeral=True)
+        await interaction.response.send_message(
+            "選擇要取消的鬧鐘：",
+            view=AlarmDeleteView(self.cog, interaction.guild.id, interaction.channel.id),
+            ephemeral=True,
+        )
 
     @discord.ui.button(label="🔄 重新整理", style=discord.ButtonStyle.secondary, row=1)
     async def refresh_btn(self, interaction, button):
@@ -201,17 +205,21 @@ class AlarmDeleteSelect(discord.ui.Select):
 
     async def callback(self, interaction):
         self.view.index = int(self.values[0])
-        await interaction.response.defer()
+        alarm = self.view.lst[self.view.index]
+        await interaction.response.edit_message(
+            content=f"已選擇 `{alarm['time']}`，請按「🗑️ 確認取消」。"
+        )
 
 
 class AlarmDeleteView(discord.ui.View):
     """取消鬧鐘"""
 
-    def __init__(self, cog, channel):
+    def __init__(self, cog, guild_id, channel):
         super().__init__(timeout=120)
         self.cog = cog
+        self.guild_id = guild_id
         self.channel = channel
-        gid = str(cog._current_guild_id)
+        gid = str(guild_id)
         self.lst = cog.alarms.get(gid, {}).get(str(channel.id), [])
         self.index = None
         self.add_item(AlarmDeleteSelect(self))
@@ -220,14 +228,18 @@ class AlarmDeleteView(discord.ui.View):
     async def confirm(self, interaction, button):
         if self.index is None:
             return await interaction.response.send_message("請先從選單選擇要取消的鬧鐘！", ephemeral=True)
-        gid = str(self.cog._current_guild_id)
+        gid = str(self.guild_id)
         cid = str(self.channel.id)
-        alarm = self.lst[self.index]
+        current_list = self.cog.alarms.get(gid, {}).get(cid, [])
+        if self.index >= len(current_list):
+            return await interaction.response.send_message("❌ 這個鬧鐘已不存在，請重新開啟鬧鐘面板。", ephemeral=True)
+        alarm = current_list[self.index]
         if alarm.get("user_id") != interaction.user.id and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ 只有設定的人或管理員可以取消！", ephemeral=True)
-        del self.lst[self.index]
+        await interaction.response.defer(ephemeral=True)
+        del current_list[self.index]
         self.cog._save_alarms()
-        await interaction.response.edit_message(content=f"✅ 已取消 `{alarm['time']}` 的鬧鐘！", embed=None, view=None)
+        await interaction.edit_original_response(content=f"✅ 已取消 `{alarm['time']}` 的鬧鐘！", embed=None, view=None)
 
 
 class AlarmCog(commands.Cog):
