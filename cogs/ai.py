@@ -165,6 +165,19 @@ class AICog(commands.Cog):
         lines.reverse()
         return "\n".join(lines[-limit:])
 
+    def _summarize_memory_type(self, user_input: str, reply: str) -> str:
+        combined = f"{user_input} {reply}".strip()
+        if len(combined) > 160:
+            combined = combined[:160] + "…"
+
+        short_keywords = ["剛剛", "現在", "今天", "暫時", "短期", "提醒", "待辦", "馬上", "立刻"]
+        long_keywords = ["喜歡", "討厭", "設定", "主人", "身份", "關係", "規則", "習慣", "長期", "永遠", "記住"]
+        if any(k in combined for k in long_keywords):
+            return "長期記憶"
+        if any(k in combined for k in short_keywords):
+            return "短期記憶"
+        return "短期記憶"
+
     def _parse_play_duration(self, value):
         """解析 !玩 的時長，例如 30s、1m、2h。"""
         match = re.fullmatch(r"(\d+(?:\.\d+)?)([smhd])", value.lower().strip())
@@ -377,7 +390,8 @@ class AICog(commands.Cog):
                         
                         history.append({"role": "user", "content": prompt_content})
                         history.append({"role": "assistant" if not is_gemini else "model", "content": reply})
-                        await self._append_memory("短期記憶", f"{user_name}({user_id}) 在 #{channel_id} 問：{user_input} | 回覆：{reply}")
+                        memory_type = self._summarize_memory_type(user_input, reply)
+                        await self._append_memory(memory_type, f"{user_name}({user_id}) 在 #{channel_id} 問：{user_input} | 回覆：{reply}")
                         return reply
                     else:
                         error_data = await response.text()
@@ -532,7 +546,6 @@ class AICog(commands.Cog):
             self.memory_channel_id = ctx.channel.id
             self.save_memory_channel()
             await ctx.send(f"🧠 已把這個頻道設定成機器人的頭腦：{ctx.channel.mention}")
-            await self._append_memory("長期記憶", f"已設定記憶頻道為 #{ctx.channel.id}，由 {ctx.author} 操作")
             return
 
         if mode in {"清除", "clear", "reset", "取消"}:
@@ -541,21 +554,7 @@ class AICog(commands.Cog):
             await ctx.send("🧠 已清除記憶頻道設定。")
             return
 
-        if mode in {"短期", "short"}:
-            if not content:
-                return await ctx.send("❌ 請提供短期記憶內容。")
-            await self._append_memory("短期記憶", content)
-            await ctx.send("✅ 已寫入短期記憶。")
-            return
-
-        if mode in {"長期", "long"}:
-            if not content:
-                return await ctx.send("❌ 請提供長期記憶內容。")
-            await self._append_memory("長期記憶", content)
-            await ctx.send("✅ 已寫入長期記憶。")
-            return
-
-        await ctx.send("❓ 用法：`!記憶 設定`、`!記憶 短期 內容`、`!記憶 長期 內容`、`!記憶 清除`")
+        await ctx.send("❓ 用法：`!記憶 設定`、`!記憶`、`!記憶 清除`")
 
     @commands.hybrid_command(name="ai", aliases=["agent", "代理"])
     @commands.has_permissions(administrator=True)
