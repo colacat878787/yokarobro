@@ -95,6 +95,14 @@ class AICog(commands.Cog):
             print("⚠️ [AI] 未偵測到有效雲端金鑰，切換至 Ollama 本地模式 (localhost:11434)")
         self.agent_allowed_prefixes = ("cogs.",)
         self.agent_allowed_commands = {"reloadcog", "loadcog", "unloadcog"}
+        self.agent_aliases = {
+            "rr": "cogs.reaction_roles",
+            "reactionrole": "cogs.reaction_roles",
+            "reaction_roles": "cogs.reaction_roles",
+            "反應角色": "cogs.reaction_roles",
+            "rg": "cogs.reaction",
+            "reaction": "cogs.reaction",
+        }
 
     def _parse_play_duration(self, value):
         """解析 !玩 的時長，例如 30s、1m、2h。"""
@@ -372,6 +380,44 @@ class AICog(commands.Cog):
             print(f"Execute AI Command Error: {e}")
             return None
 
+    def _normalize_cog_name(self, raw: str):
+        if not raw:
+            return None
+        value = raw.strip().lower()
+        value = value.replace(" ", "").replace("-", "_")
+        if value in self.agent_aliases:
+            return self.agent_aliases[value]
+        if value.startswith("cogs."):
+            return value
+        if not value.startswith("cogs."):
+            return f"cogs.{value}"
+        return value
+
+    async def _agent_manage_cog(self, ctx, action: str, target: str):
+        ext = self._normalize_cog_name(target)
+        if not ext:
+            return "❌ 請提供要操作的模組名稱。"
+        if not ext.startswith(self.agent_allowed_prefixes):
+            return "❌ 只能操作 `cogs.` 開頭的模組。"
+
+        action = action.lower().strip()
+        if action in {"卸載", "unload", "remove", "關閉"}:
+            if ext not in self.bot.extensions:
+                return f"ℹ️ `{ext}` 目前沒有載入。"
+            await self.bot.unload_extension(ext)
+            return f"✅ 已卸載模組：`{ext}`"
+        if action in {"載入", "load", "開啟"}:
+            if ext in self.bot.extensions:
+                return f"ℹ️ `{ext}` 已經載入中。"
+            await self.bot.load_extension(ext)
+            return f"✅ 已載入模組：`{ext}`"
+        if action in {"重載", "reload", "刷新"}:
+            if ext in self.bot.extensions:
+                await self.bot.unload_extension(ext)
+            await self.bot.load_extension(ext)
+            return f"✅ 已重載模組：`{ext}`"
+        return "❌ 只能使用 `卸載`、`載入`、`重載`。"
+
     def load_ai_channels(self):
         if os.path.exists('ai_channels.json'):
             try:
@@ -404,13 +450,31 @@ class AICog(commands.Cog):
     @commands.hybrid_command(name="ai", aliases=["agent", "代理"])
     @commands.has_permissions(administrator=True)
     async def ai_agent(self, ctx, *, instruction: str):
-        """正式代理入口：要求 AI 產生受限的管理指令。"""
+        """正式代理入口：直接執行受限的模組管理動作。"""
+        text = instruction.strip()
+        match = re.search(r"(卸載|載入|重載|reload|unload|load)\s+(.+)", text, re.I)
+        if match:
+            action = match.group(1)
+            target = match.group(2).strip(" `,，。")
+            result = await self._agent_manage_cog(ctx, action, target)
+            await ctx.send(result)
+            return
+
         prompt = (
-            "你是受限代理。只允許輸出一行命令，格式必須是 [EXECUTE_CMD]!命令 參數。"
-            "只可使用 loadcog, unloadcog, reloadcog。"
+            "你是正式管理代理。請只回覆一行，格式必須是 [EXECUTE_CMD]!命令 參數。"
+            "若使用者要操作模組，命令只能是 loadcog, unloadcog, reloadcog。"
             f"使用者需求：{instruction}"
         )
         reply = await self.get_ai_response(ctx.author.name, str(ctx.author.id), prompt, str(ctx.channel.id))
+        if "[EXECUTE_CMD]" in reply:
+            message = getattr(ctx, "message", None)
+            if message is not None:
+                result = await self._execute_ai_command(reply, await self.bot.get_context(message))
+            else:
+                result = None
+            if result:
+                await ctx.send(result)
+                return
         await ctx.send(reply)
 
 async def setup(bot):

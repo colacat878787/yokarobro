@@ -386,61 +386,57 @@ class FeatureMenuView(discord.ui.View):
     def __init__(self, bot):
         super().__init__(timeout=None)
         self.bot = bot
+        self.page = "home"
 
-    def _loaded_modules(self):
-        items = []
-        for ext in self.bot.initial_extensions:
-            cog_name = ext.split(".")[-1].lower()
-            cog = self.bot.get_cog(f"{cog_name.capitalize()}Cog")
-            if cog:
-                items.append((cog.__class__.__name__, ext))
-        return items
-
-    def _build_embed(self, title, description, entries):
-        embed = discord.Embed(title=title, description=description, color=0x111827)
-        for name, value in entries:
-            embed.add_field(name=name, value=value, inline=False)
+    def _base_embed(self):
+        embed = discord.Embed(
+            title="Yokaro 功能表",
+            description="按鈕會直接更新上方嵌入內容，指令則保留給熟手與自動化。",
+            color=0x111827,
+        )
+        if self.bot.user:
+            embed.set_thumbnail(url=self.bot.user.display_avatar.url)
         return embed
+
+    def _build_page(self, page: str):
+        embed = self._base_embed()
+        if page == "loaded":
+            embed.title = "🧩 已載入模組"
+            loaded = [f"• {name}" for name in self.bot.cogs.keys()]
+            embed.add_field(name="目前載入", value="\n".join(loaded) or "目前沒有已載入模組", inline=False)
+            embed.add_field(name="說明", value="只列出開機後實際成功載入的 cog。", inline=False)
+        elif page == "groups":
+            embed.title = "🧭 功能分類"
+            embed.add_field(name="管理 / 系統", value="`!sys`、`!manage`、`!後台`、`!webpanel`", inline=False)
+            embed.add_field(name="內容 / 互動", value="`!menu`、`!選單`、`!hug`、`!afk`、`!remindme`", inline=False)
+            embed.add_field(name="金流 / 經營", value="`!balance`、`!work`、`!stock`、`!casino`、`!finance`", inline=False)
+            embed.add_field(name="AI / 助手", value="`!玩`、`!set_ai`、`!ai`", inline=False)
+        elif page == "admin":
+            embed.title = "⚙️ 管理入口"
+            embed.add_field(name="系統維運", value="`!sys check` `!sys repair` `!reloadcog`", inline=False)
+            embed.add_field(name="伺服器控制", value="`!用戶面板` `!功能列表` `!後台` `!webpanel`", inline=False)
+            embed.add_field(name="AI 代理", value="`!ai` 可執行受限的 cog 管理動作", inline=False)
+        else:
+            embed.title = "Yokaro 功能表"
+            embed.add_field(name="快速入口", value="`!help` `!功能表` `!menu` `!選單`", inline=False)
+            embed.add_field(name="定位", value="正式化、模組化、可持續擴充的 Discord 機器人。", inline=False)
+        return embed
+
+    async def _switch_page(self, interaction: discord.Interaction, page: str):
+        self.page = page
+        await interaction.response.edit_message(embed=self._build_page(page), view=self)
 
     @discord.ui.button(label="🧩 已載入模組", style=discord.ButtonStyle.primary, custom_id="feature_menu_loaded")
     async def loaded(self, interaction: discord.Interaction, button: discord.ui.Button):
-        entries = []
-        for cog_name, loaded_cog in self.bot.cogs.items():
-            commands_list = []
-            for cmd in loaded_cog.get_commands():
-                if cmd.hidden:
-                    continue
-                display = f"/{cmd.qualified_name}"
-                commands_list.append(display)
-            if commands_list:
-                entries.append((cog_name, "\n".join(commands_list[:12])))
-        embed = self._build_embed("🧩 已載入模組", "只列出目前開機已載入的功能，help 會隨實際模組更新。", entries or [("目前沒有已載入模組", "請確認 cog 是否成功載入")])
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await self._switch_page(interaction, "loaded")
 
     @discord.ui.button(label="🧭 功能分類", style=discord.ButtonStyle.success, custom_id="feature_menu_groups")
     async def groups(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(
-            title="🧭 功能分類",
-            description="按鈕是入口，指令仍保留給熟手和自動化腳本。",
-            color=0x0f766e,
-        )
-        embed.add_field(name="管理 / 系統", value="`!sys`、`!manage`、`!後台`、`!webpanel`", inline=False)
-        embed.add_field(name="內容 / 互動", value="`!menu`、`!選單`、`!hug`、`!afk`、`!remindme`", inline=False)
-        embed.add_field(name="金流 / 經營", value="`!balance`、`!work`、`!stock`、`!casino`、`!finance`", inline=False)
-        embed.add_field(name="AI / 助手", value="`!玩`、`!set_ai`、`!ai`", inline=False)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await self._switch_page(interaction, "groups")
 
     @discord.ui.button(label="⚙️ 管理入口", style=discord.ButtonStyle.danger, custom_id="feature_menu_admin")
     async def admin(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(
-            title="⚙️ 管理入口",
-            description="這裡只放正式管理功能，不再塞一堆分散的舊說明。",
-            color=0x991b1b,
-        )
-        embed.add_field(name="系統維運", value="`!sys check` `!sys repair` `!reloadcog`", inline=False)
-        embed.add_field(name="伺服器控制", value="`!用戶面板` `!功能列表` `!後台` `!webpanel`", inline=False)
-        embed.add_field(name="AI 代理", value="`!ai agent` 可在授權範圍內執行管理動作", inline=False)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await self._switch_page(interaction, "admin")
 
 
 @bot.hybrid_command(name='help', aliases=['幫助', '求救'])
@@ -448,31 +444,16 @@ class FeatureMenuView(discord.ui.View):
 @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def help(ctx):
     """顯示動態功能總覽"""
-    embed = discord.Embed(
-        title="Yokaro 功能總覽",
-        description="只會顯示目前已載入的模組與入口，避免 help 變成雜訊清單。",
-        color=0x111827
-    )
-    embed.set_thumbnail(url=bot.user.display_avatar.url)
-    loaded = [f"• {name}" for name in bot.cogs.keys()]
-    embed.add_field(name="已載入模組", value="\n".join(loaded) or "目前尚未載入模組", inline=False)
-    embed.add_field(name="入口指令", value="`!功能表` `!help` `!menu` `!選單`", inline=False)
-    embed.set_footer(text="help 會在每次開機後依實際載入模組更新")
-
-    await ctx.send(embed=embed, view=bot.help_view or FeatureMenuView(bot))
+    view = bot.help_view or FeatureMenuView(bot)
+    await ctx.send(embed=view._build_page("home"), view=view)
 
 @bot.hybrid_command(name='功能表', aliases=['fmenu'])
 @app_commands.allowed_installs(guilds=True, users=True)
 @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def feature_menu(ctx):
     """正式功能表入口"""
-    embed = discord.Embed(
-        title="功能表",
-        description="使用按鈕選功能，指令保留給習慣文字輸入的使用者。",
-        color=0x111827,
-    )
-    embed.set_thumbnail(url=bot.user.display_avatar.url)
-    await ctx.send(embed=embed, view=bot.help_view or FeatureMenuView(bot))
+    view = bot.help_view or FeatureMenuView(bot)
+    await ctx.send(embed=view._build_page("home"), view=view)
 
 def ensure_packages(packages):
     import importlib.util
