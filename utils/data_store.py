@@ -81,6 +81,9 @@ auction_store = DataStore("auctions.json")
 # 頭銜系統
 title_store = DataStore("titles.json")
 
+# 記憶系統
+memory_store = DataStore("memory.json")
+
 # ===== 工具函數 =====
 
 def parse_time_string(time_str: str) -> int:

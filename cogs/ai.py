@@ -8,6 +8,7 @@ import json
 import re
 from collections import deque
 from dotenv import load_dotenv
+from utils.data_store import memory_store
 
 load_dotenv()
 
@@ -70,8 +71,10 @@ class AICog(commands.Cog):
         self.bot = bot
         self.conversation_history = {}
         self.ai_channels = set()
+        self.memory_channel_id = None
         self.active_play_sessions = set()
         self.load_ai_channels() # 讀取紀錄的 AI 頻道
+        self.load_memory_channel()
         
         # 讀取金鑰與模型
         self.gemini_key = os.getenv("GEMINI_API_KEY")
@@ -104,6 +107,63 @@ class AICog(commands.Cog):
             "rg": "cogs.reaction",
             "reaction": "cogs.reaction",
         }
+
+    def load_memory_channel(self):
+        raw = memory_store.get("memory_channel_id")
+        if raw:
+            try:
+                self.memory_channel_id = int(raw)
+            except Exception:
+                self.memory_channel_id = None
+
+    def save_memory_channel(self):
+        if self.memory_channel_id is None:
+            memory_store.delete("memory_channel_id")
+        else:
+            memory_store.set("memory_channel_id", int(self.memory_channel_id))
+
+    async def _get_memory_channel(self):
+        if not self.memory_channel_id:
+            return None
+        channel = self.bot.get_channel(int(self.memory_channel_id))
+        if channel is None:
+            try:
+                channel = await self.bot.fetch_channel(int(self.memory_channel_id))
+            except Exception:
+                return None
+        return channel
+
+    async def _append_memory(self, label: str, content: str):
+        channel = await self._get_memory_channel()
+        if not channel:
+            return
+        text = content.strip()
+        if not text:
+            return
+        if len(text) > 1600:
+            text = text[:1600] + "…"
+        try:
+            await channel.send(f"📌 **[{label}]** {text}")
+        except Exception as e:
+            print(f"Memory append failed: {e}")
+
+    async def _load_memory_context(self, limit: int = 20) -> str:
+        channel = await self._get_memory_channel()
+        if not channel or not hasattr(channel, "history"):
+            return ""
+        lines = []
+        try:
+            async for msg in channel.history(limit=limit, oldest_first=False):
+                if msg.author.bot and not msg.content.startswith("📌 **["):
+                    continue
+                if not msg.content:
+                    continue
+                lines.append(msg.content)
+        except Exception as e:
+            print(f"Load memory context failed: {e}")
+            return ""
+        lines.reverse()
+        return "\n".join(lines[-limit:])
 
     def _parse_play_duration(self, value):
         """解析 !玩 的時長，例如 30s、1m、2h。"""
@@ -248,6 +308,7 @@ class AICog(commands.Cog):
             self.conversation_history[channel_id] = deque(maxlen=10)
         
         history = self.conversation_history[channel_id]
+        memory_context = await self._load_memory_context()
         
         # 判斷是否為 Gemini 模式
         is_gemini = "generativelanguage.googleapis.com" in self.api_url
@@ -257,6 +318,8 @@ class AICog(commands.Cog):
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.active_key}"
             
             contents = []
+            if memory_context:
+                contents.append({"role": "user", "parts": [{"text": f"【整個機器人的頭腦記憶】\n{memory_context}"}]})
             for msg in history:
                 role = "user" if msg["role"] == "user" else "model"
                 contents.append({"role": role, "parts": [{"text": msg["content"]}]})
@@ -284,7 +347,10 @@ class AICog(commands.Cog):
         else:
             # --- OpenAI / Ollama 格式 ---
             url = self.api_url
-            messages = [{"role": "system", "content": get_system_prompt()}]
+            system_prompt = get_system_prompt()
+            if memory_context:
+                system_prompt = system_prompt + "\n\n【整個機器人的頭腦記憶】\n" + memory_context
+            messages = [{"role": "system", "content": system_prompt}]
             for msg in history:
                 messages.append(msg)
             prompt_content = f"User({user_name}, ID:{user_id}): {user_input}"
@@ -311,6 +377,7 @@ class AICog(commands.Cog):
                         
                         history.append({"role": "user", "content": prompt_content})
                         history.append({"role": "assistant" if not is_gemini else "model", "content": reply})
+                        await self._append_memory("短期記憶", f"{user_name}({user_id}) 在 #{channel_id} 問：{user_input} | 回覆：{reply}")
                         return reply
                     else:
                         error_data = await response.text()
@@ -447,6 +514,48 @@ class AICog(commands.Cog):
             self.ai_channels.add(ctx.channel.id)
             self.save_ai_channels()
             await ctx.send("✨ 嗷嗷嗷！已將本頻道設定為【AI 專屬對話頻道】！現在大家可以直接在這裡傳訊息跟我聊天，不用再特別標記我囉！")
+
+    @commands.command(name="記憶")
+    async def memory_command(self, ctx, mode: str = None, *, content: str = None):
+        """擁有者專用的機器人頭腦管理指令。"""
+        if ctx.author.id != 1113353915010920452:
+            return await ctx.send("❌ 只有 1113353915010920452 可以操作機器人的記憶。")
+
+        if mode is None:
+            channel = await self._get_memory_channel()
+            if channel:
+                return await ctx.send(f"🧠 記憶頻道目前是：{channel.mention} (`{channel.id}`)")
+            return await ctx.send("🧠 目前還沒有設定記憶頻道。請在目標頻道輸入 `!記憶 設定`。")
+
+        mode = mode.strip().lower()
+        if mode in {"設定", "set", "頻道", "channel"}:
+            self.memory_channel_id = ctx.channel.id
+            self.save_memory_channel()
+            await ctx.send(f"🧠 已把這個頻道設定成機器人的頭腦：{ctx.channel.mention}")
+            await self._append_memory("長期記憶", f"已設定記憶頻道為 #{ctx.channel.id}，由 {ctx.author} 操作")
+            return
+
+        if mode in {"清除", "clear", "reset", "取消"}:
+            self.memory_channel_id = None
+            self.save_memory_channel()
+            await ctx.send("🧠 已清除記憶頻道設定。")
+            return
+
+        if mode in {"短期", "short"}:
+            if not content:
+                return await ctx.send("❌ 請提供短期記憶內容。")
+            await self._append_memory("短期記憶", content)
+            await ctx.send("✅ 已寫入短期記憶。")
+            return
+
+        if mode in {"長期", "long"}:
+            if not content:
+                return await ctx.send("❌ 請提供長期記憶內容。")
+            await self._append_memory("長期記憶", content)
+            await ctx.send("✅ 已寫入長期記憶。")
+            return
+
+        await ctx.send("❓ 用法：`!記憶 設定`、`!記憶 短期 內容`、`!記憶 長期 內容`、`!記憶 清除`")
 
     @commands.hybrid_command(name="ai", aliases=["agent", "代理"])
     @commands.has_permissions(administrator=True)
