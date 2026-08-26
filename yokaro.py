@@ -390,9 +390,9 @@ class FeatureMenuView(discord.ui.View):
 
     def _base_embed(self):
         embed = discord.Embed(
-            title="Yokaro 功能表",
-            description="按鈕會直接更新上方嵌入內容，指令則保留給熟手與自動化。",
-            color=0x111827,
+            title="✨ 祈星·優卡洛 互動指令面板",
+            description="洛洛現在支援全新的按鈕選單囉！\n請點擊下方的按鈕來切換不同的指令分類：",
+            color=0xf7b9c4,
         )
         if self.bot.user:
             embed.set_thumbnail(url=self.bot.user.display_avatar.url)
@@ -417,9 +417,8 @@ class FeatureMenuView(discord.ui.View):
             embed.add_field(name="伺服器控制", value="`!用戶面板` `!功能列表` `!後台` `!webpanel`", inline=False)
             embed.add_field(name="AI 代理", value="`!ai` 可執行受限的 cog 管理動作", inline=False)
         else:
-            embed.title = "Yokaro 功能表"
-            embed.add_field(name="快速入口", value="`!help` `!功能表` `!menu` `!選單`", inline=False)
-            embed.add_field(name="定位", value="正式化、模組化、可持續擴充的 Discord 機器人。", inline=False)
+            embed.add_field(name="洛洛現在支援全新的按鈕選單囉！", value="請點擊下方的按鈕來切換不同的指令分類。", inline=False)
+            embed.add_field(name="提示", value="所有指令皆支援中英雙語通用喔！", inline=False)
         return embed
 
     async def _switch_page(self, interaction: discord.Interaction, page: str):
@@ -430,13 +429,48 @@ class FeatureMenuView(discord.ui.View):
     async def loaded(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._switch_page(interaction, "loaded")
 
-    @discord.ui.button(label="🧭 功能分類", style=discord.ButtonStyle.success, custom_id="feature_menu_groups")
+    @discord.ui.button(label="🛡️ 管理/系統", style=discord.ButtonStyle.primary, custom_id="feature_menu_groups")
     async def groups(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._switch_page(interaction, "groups")
 
-    @discord.ui.button(label="⚙️ 管理入口", style=discord.ButtonStyle.danger, custom_id="feature_menu_admin")
+    @discord.ui.button(label="🎵 語音/音樂", style=discord.ButtonStyle.primary, custom_id="feature_menu_admin")
     async def admin(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._switch_page(interaction, "admin")
+
+    @discord.ui.button(label="🎥 影像/錄影", style=discord.ButtonStyle.danger, custom_id="feature_menu_record")
+    async def record(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = self._base_embed()
+        embed.title = "🎥 影像/錄影"
+        embed.add_field(name="!record start / !錄音 開始", value="進入頻道捕捉語音訊號", inline=False)
+        embed.add_field(name="!record stop / !錄音 停止", value="結束錄製並輸出影片", inline=False)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="💰 經濟/股票", style=discord.ButtonStyle.success, custom_id="feature_menu_economy")
+    async def economy(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = self._base_embed()
+        embed.title = "💰 經濟/股票"
+        embed.add_field(name="!balance / !錢包", value="查看資產", inline=False)
+        embed.add_field(name="!work / !打工", value="賺取洛洛幣", inline=False)
+        embed.add_field(name="!stock / !股價", value="查詢報價", inline=False)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="🔍 雜項/告白", style=discord.ButtonStyle.secondary, custom_id="feature_menu_misc")
+    async def misc(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = self._base_embed()
+        embed.title = "🔍 雜項/告白"
+        embed.add_field(name="!weather / !天氣", value="即時天氣", inline=False)
+        embed.add_field(name="!wiki / !查", value="維基百科搜尋", inline=False)
+        embed.add_field(name="!告白", value="匿名告白", inline=False)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="🎮 小遊戲/娛樂", style=discord.ButtonStyle.success, custom_id="feature_menu_games")
+    async def games(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = self._base_embed()
+        embed.title = "🎮 小遊戲/娛樂"
+        embed.add_field(name="!狼人殺 / !werewolf", value="多人語音狼人殺遊戲", inline=False)
+        embed.add_field(name="!運勢 / !fortune", value="每日隨機籤詩", inline=False)
+        embed.add_field(name="!拉霸 / !slot", value="試手氣拉霸機", inline=False)
+        await interaction.response.edit_message(embed=embed, view=self)
 
 
 @bot.hybrid_command(name='help', aliases=['幫助', '求救'])
