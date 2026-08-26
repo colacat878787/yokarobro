@@ -143,72 +143,9 @@ class AICog(commands.Cog):
         try:
             prefix = f"📌 **[{label}]** "
             max_len = 1800 - len(prefix)
-            if len(text) <= max_len:
-                await channel.send(prefix + text)
-                return
-
-            chunks = [text[i:i + max_len] for i in range(0, len(text), max_len)]
-            for idx, chunk in enumerate(chunks, start=1):
-                header = prefix if idx == 1 else f"📎 **[{label}] (續 {idx})** "
-                await channel.send(header + chunk)
+            await channel.send(prefix + text[:max_len])
         except Exception as e:
             print(f"Memory append failed: {e}")
-
-    async def _summarize_for_memory(self, user_name: str, user_id: str, user_input: str, reply: str) -> tuple[str, str]:
-        """讓 AI 自己把對話整理成可寫入頭腦的摘要。"""
-        is_gemini = "generativelanguage.googleapis.com" in self.api_url
-        prompt = (
-            "請把下面這段對話整理成適合寫入機器人記憶的摘要。"
-            "只輸出 JSON，格式必須是 {\"type\":\"短期記憶|長期記憶\",\"summary\":\"...\"}。"
-            "summary 用繁體中文，20 到 80 字，保留重點，不要抄原文，不要加解釋。"
-            f"使用者：{user_name} ({user_id})\n"
-            f"使用者說：{user_input}\n"
-            f"AI 回覆：{reply}"
-        )
-
-        if is_gemini:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.active_key}"
-            payload = {
-                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                "generationConfig": {"maxOutputTokens": 256, "temperature": 0.2},
-            }
-            headers = {"Content-Type": "application/json"}
-        else:
-            url = self.api_url
-            payload = {
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": "你是摘要器，只輸出 JSON，不要額外文字。"},
-                    {"role": "user", "content": prompt},
-                ],
-                "max_tokens": 256,
-                "temperature": 0.2,
-            }
-            headers = {"Authorization": f"Bearer {self.active_key}", "Content-Type": "application/json"}
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, json=payload) as response:
-                    if response.status != 200:
-                        return ("短期記憶", "摘要失敗")
-                    data = await response.json()
-                    raw = (
-                        data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                        if is_gemini
-                        else data["choices"][0]["message"]["content"].strip()
-                    )
-                    try:
-                        parsed = json.loads(raw)
-                        mem_type = parsed.get("type", "短期記憶")
-                        summary = parsed.get("summary", "")
-                        if mem_type not in {"短期記憶", "長期記憶"}:
-                            mem_type = "短期記憶"
-                        return mem_type, summary or "摘要失敗"
-                    except Exception:
-                        return ("短期記憶", raw[:120])
-        except Exception as e:
-            print(f"Memory summary failed: {e}")
-            return ("短期記憶", "摘要失敗")
 
     async def _load_memory_context(self, limit: int = 20) -> str:
         channel = await self._get_memory_channel()
@@ -440,10 +377,9 @@ class AICog(commands.Cog):
                         
                         history.append({"role": "user", "content": prompt_content})
                         history.append({"role": "assistant" if not is_gemini else "model", "content": reply})
-                        memory_type, memory_summary = await self._summarize_for_memory(
-                            user_name, user_id, user_input, reply
-                        )
-                        await self._append_memory(memory_type, memory_summary)
+                        memory_type = "長期記憶" if any(k in f"{user_input} {reply}" for k in ["喜歡", "討厭", "設定", "主人", "身份", "關係", "規則", "習慣", "永遠", "記住"]) else "短期記憶"
+                        summary = f"使用者 {user_name}({user_id}) 問了重點內容，AI 已回應並完成互動摘要。"
+                        await self._append_memory(memory_type, summary)
                         return reply
                     else:
                         error_data = await response.text()
