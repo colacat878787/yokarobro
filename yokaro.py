@@ -9,6 +9,8 @@ import importlib
 import subprocess
 import aiohttp
 import json
+import threading
+from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from dotenv import load_dotenv
 
@@ -67,6 +69,7 @@ class YokaroBot(commands.Bot):
         self.status_index = 0
         self.music_mode = False
         self.status_task = None
+        self.help_view = None
         # ... (其餘部分不變)
         self.initial_extensions = [
             'cogs.user_settings',
@@ -128,6 +131,11 @@ class YokaroBot(commands.Bot):
             'cogs.alarm',              # ⏰ 鬧鐘系統
             'cogs.logging',             # 📋 機器人 Log 系統
         ]
+        self.core_cogs = {
+            "SecurityCog", "WebPanelCog", "ManagementCog", "SystemCog",
+            "MusicWebPanelCog", "UpdaterCog", "ReloaderCog", "DeleteLogCog",
+            "TestSystemCog", "AdminCog", "ServerSettingsCog"
+        }
 
     async def setup_hook(self):
         """載入所有 Cog 分離功能"""
@@ -180,6 +188,7 @@ class YokaroBot(commands.Bot):
         # 同步 Slash 指令
         await self.tree.sync()
         print("📁 Slash Commands 同步完成")
+        self._refresh_help_view()
 
     async def on_ready(self):
         ai_mode = "本地模式 (Ollama)"
@@ -278,6 +287,9 @@ class YokaroBot(commands.Bot):
         if enabled:
             # 音樂模式啟動時立即更新狀態
             self.loop.create_task(self._update_status())
+
+    def _refresh_help_view(self):
+        self.help_view = FeatureMenuView(self)
     
     def _run_status_server(self):
         """啟動狀態查詢伺服器（背景執行緒）"""
@@ -370,124 +382,97 @@ async def reboot(ctx):
     await ctx.send("⚙️ 洛洛正在重啟中，請稍候一下喔！嗷～")
     exit(0) # 搭配 start.sh 循環實現自動重啟
 
-class HelpView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None) # 持久化 View 不設 timeout
+class FeatureMenuView(discord.ui.View):
+    def __init__(self, bot):
+        super().__init__(timeout=None)
+        self.bot = bot
 
-    @discord.ui.button(label="🛡️ 管理/系統", style=discord.ButtonStyle.primary, custom_id="help_security")
-    async def security(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        embed = discord.Embed(title="🛡️ 管理與系統指令", description="只有管理員權限才能使用的核心功能", color=0x34495e)
-        embed.add_field(name="!setup_verify / !設定驗證", value="設定入群驗證按鈕 (防機器人)", inline=False)
-        embed.add_field(name="!welcome_test / !測試歡迎", value="模擬新成員加入的歡迎訊息", inline=False)
-        embed.add_field(name="!panel / !後台", value="💡 開啟管理員專用圖形控制面板 (V2)", inline=False)
-        embed.add_field(name="!webpanel", value="🔐 **黑科技：生成 TryCloudflare 遠端管理後台**", inline=False)
-        embed.add_field(name="!ticket / !開單", value="💡 發送票單啟動儀表板", inline=False)
-        embed.add_field(name="!更新紀錄 [set] / !更新速遞 [set]", value="查看 GitHub 同步紀錄或設定通知頻道", inline=False)
-        embed.add_field(name="!reboot / !重啟", value="💡 強制重啟並拉取最新的 GitHub 代碼", inline=False)
-        await interaction.edit_original_response(embed=embed)
+    def _loaded_modules(self):
+        items = []
+        for ext in self.bot.initial_extensions:
+            cog_name = ext.split(".")[-1].lower()
+            cog = self.bot.get_cog(f"{cog_name.capitalize()}Cog")
+            if cog:
+                items.append((cog.__class__.__name__, ext))
+        return items
 
-    @discord.ui.button(label="🎵 語音/音樂", style=discord.ButtonStyle.primary, custom_id="help_music")
-    async def music(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        embed = discord.Embed(title="🎵 語音頻道與音樂功能", color=0x2ecc71)
-        embed.add_field(name="!play / !播放 [歌名]", value="搜尋並播放 Youtube/Spotify 音樂", inline=True)
-        embed.add_field(name="!recap / !回顧", value="📊 查看您的音樂 DNA 排行榜", inline=True)
-        embed.add_field(name="!antirickroll [on/off]", value="🛡️ **反 Rickroll 護盾：拒絕惡作劇**", inline=False)
-        embed.add_field(name="!ducking / !247", value="🐥 自動降音量 / 🌌 永不打烊模式", inline=False)
-        embed.add_field(name="!skip / !跳過", value="跳到下一首", inline=True)
-        embed.add_field(name="!stop / !停止", value="清空隊列並離開頻道", inline=True)
-        embed.add_field(name="!say / !廣播 [文字]", value="💡 讓洛洛在語音頻道說話 (TTS)", inline=False)
-        embed.add_field(name="!m推 / !推歌", value="💡 隨機推薦一首好聽的歌 (含自動整點推送)", inline=False)
-        embed.set_footer(text="提示：洛洛也支援多音軌混音播放喔！")
-        await interaction.edit_original_response(embed=embed)
+    def _build_embed(self, title, description, entries):
+        embed = discord.Embed(title=title, description=description, color=0x111827)
+        for name, value in entries:
+            embed.add_field(name=name, value=value, inline=False)
+        return embed
 
-    @discord.ui.button(label="🎥 影像/錄影", style=discord.ButtonStyle.danger, custom_id="help_record")
-    async def record(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        embed = discord.Embed(title="🎥 洛洛錄影機 (影視級系統)", description="業界最強！錄製語音並自動生成「帶字幕與頭像動畫」的影片。", color=0xe74c3c)
-        embed.add_field(name="!record start / !錄音 開始", value="進入頻道捕捉語音訊號 (需所有成員同意)", inline=False)
-        embed.add_field(name="!record stop / !錄音 停止", value="結束錄製並啟動「AI 自動剪輯與字幕燒製」", inline=False)
-        embed.add_field(name="📩 Modmail 客服", value="直接私訊給洛洛即可開啟與管理員的連線", inline=False)
-        embed.set_footer(text="錄影完成後，影片會自動傳送到當前文字頻道。嗷嗷嗷～")
-        await interaction.edit_original_response(embed=embed)
+    @discord.ui.button(label="🧩 已載入模組", style=discord.ButtonStyle.primary, custom_id="feature_menu_loaded")
+    async def loaded(self, interaction: discord.Interaction, button: discord.ui.Button):
+        entries = []
+        for cog_name, loaded_cog in self.bot.cogs.items():
+            commands_list = []
+            for cmd in loaded_cog.get_commands():
+                if cmd.hidden:
+                    continue
+                display = f"/{cmd.qualified_name}"
+                commands_list.append(display)
+            if commands_list:
+                entries.append((cog_name, "\n".join(commands_list[:12])))
+        embed = self._build_embed("🧩 已載入模組", "只列出目前開機已載入的功能，help 會隨實際模組更新。", entries or [("目前沒有已載入模組", "請確認 cog 是否成功載入")])
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @discord.ui.button(label="💰 經濟/股票", style=discord.ButtonStyle.success, custom_id="help_economy")
-    async def economy(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        embed = discord.Embed(title="💰 經濟、股票與博弈系統", color=0xf1c40f)
-        embed.add_field(name="!balance / !錢包", value="查看自己的現金與銀行存摺", inline=True)
-        embed.add_field(name="!ATM / !銀行", value="💡 圖形化 ATM 系統 (存提款)", inline=True)
-        embed.add_field(name="!work / !打工", value="賺取洛洛幣，有冷卻時間喔！", inline=True)
-        embed.add_field(name="!簽到", value="📅 每日簽到獲得金幣 + 連續簽到獎勵，還能抽隨機卡片！", inline=False)
-        embed.add_field(name="!抽卡 [數量]", value="🎴 花10金幣抽一張卡，稀有度從普通到神話都有！", inline=False)
-        embed.add_field(name="!我的卡片 / !卡片背包", value="📦 查看你擁有的所有卡片收藏", inline=False)
-        embed.add_field(name="!kuji / !一番賞", value="🎟️ 抽星空主題一番賞 (內含稀有頭銜)", inline=False)
-        embed.add_field(name="!gamble / !賭博 [金額]", value="翻倍大挑戰，心臟要夠強！", inline=False)
-        embed.add_field(name="!辦卡 / !信用額度 / !還款", value="💳 Yokaro 黑金信用卡（先買後付）", inline=False)
-        embed.add_field(name="📈 股票系統", value="`!股市` 開啟互動面板（行情、買賣、持股、查詢，即時更新）\n`!創股票 [名稱] [股數] [股價]` 創建股票\n`!股票頻道` 設定股票資訊頻道\n`!除牌 [代號]` 下市股票", inline=False)
-        await interaction.edit_original_response(embed=embed)
+    @discord.ui.button(label="🧭 功能分類", style=discord.ButtonStyle.success, custom_id="feature_menu_groups")
+    async def groups(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🧭 功能分類",
+            description="按鈕是入口，指令仍保留給熟手和自動化腳本。",
+            color=0x0f766e,
+        )
+        embed.add_field(name="管理 / 系統", value="`!sys`、`!manage`、`!後台`、`!webpanel`", inline=False)
+        embed.add_field(name="內容 / 互動", value="`!menu`、`!選單`、`!hug`、`!afk`、`!remindme`", inline=False)
+        embed.add_field(name="金流 / 經營", value="`!balance`、`!work`、`!stock`、`!casino`、`!finance`", inline=False)
+        embed.add_field(name="AI / 助手", value="`!玩`、`!set_ai`、`!ai`", inline=False)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @discord.ui.button(label="🔍 雜項/告白", style=discord.ButtonStyle.secondary, custom_id="help_info")
-    async def info(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        embed = discord.Embed(title="🔍 實用工具、等級與告白", color=0x95a5a6)
-        embed.add_field(name="!weather / !天氣 [城市]", value="即時天氣訊號監測", inline=True)
-        embed.add_field(name="!stock / !股價 [代號]", value="查詢美股/台股即時報價", inline=True)
-        embed.add_field(name="!wiki / !查 [關鍵字]", value="維基百科深度搜尋", inline=True)
-        embed.add_field(name="!profile / !等級", value="查看你的等級與 XP 經驗值卡片", inline=True)
-        embed.add_field(name="!fortune / !運勢", value="抽一張每日靈感籤詩", inline=True)
-        embed.add_field(name="!告白", value="💌 匿名告白（免審核，直接發在當前頻道）", inline=False)
-        embed.add_field(name="!抱抱 / !hug", value="🐾 伸出可愛的小爪爪抱抱你", inline=True)
-        embed.add_field(name="!httpcat [狀態碼]", value="🐱 顯示 HTTP 狀態碼的可愛貓咪圖片", inline=True)
-        embed.add_field(name="!選單 / !menu", value="🎯 開啟互動式功能選單面板", inline=False)
-        embed.add_field(name="右鍵選單功能", value="📱 訊息右鍵選單：\n• 移植 - 複製訊息內容\n• 鼓掌 - 給作者鼓勵\n• 引用 - 引用訊息", inline=False)
-        embed.add_field(name="🎭 反應角色 / !rr", value="用戶點擊反應自動獲取身分組", inline=True)
-        embed.add_field(name="💤 AFK / !afk", value="設定離開狀態，@你時自動回覆", inline=True)
-        embed.add_field(name="⏰ 提醒 / !remindme", value="設定定時提醒，到時間自動通知", inline=True)
-        embed.add_field(name="⭐ 星板 / !starboard", value="自動轉發熱門訊息到指定頻道", inline=True)
-        embed.add_field(name="🤖 自動身分組 / !autorole", value="新成員加入時自動分配身分組", inline=True)
-        embed.add_field(name="⏰鬧鐘 / !鬧鐘", value="互動式面板設定時間與頻率", inline=True)
-        embed.add_field(name="📋 反應角色 / !rr", value="點擊反應自動獲取身分組", inline=True)
-        embed.add_field(name="💤 AFK / !afk", value="設定離開狀態，@你時自動回覆", inline=True)
-        embed.add_field(name="📋 Log 頻道", value="機器人事件記錄發送至此頻道", inline=True)
-        embed.set_footer(text="聊天、升級、跟洛洛互動吧！")
-        await interaction.edit_original_response(embed=embed)
+    @discord.ui.button(label="⚙️ 管理入口", style=discord.ButtonStyle.danger, custom_id="feature_menu_admin")
+    async def admin(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="⚙️ 管理入口",
+            description="這裡只放正式管理功能，不再塞一堆分散的舊說明。",
+            color=0x991b1b,
+        )
+        embed.add_field(name="系統維運", value="`!sys check` `!sys repair` `!reloadcog`", inline=False)
+        embed.add_field(name="伺服器控制", value="`!用戶面板` `!功能列表` `!後台` `!webpanel`", inline=False)
+        embed.add_field(name="AI 代理", value="`!ai agent` 可在授權範圍內執行管理動作", inline=False)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @discord.ui.button(label="🎮 小遊戲/娛樂", style=discord.ButtonStyle.success, custom_id="help_games")
-    async def games(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        embed = discord.Embed(title="🎮 小遊戲與娛樂", color=0x9b59b6)
-        embed.add_field(name="!狼人殺 / !werewolf", value="多人語音狼人殺遊戲", inline=True)
-        embed.add_field(name="!運勢 / !fortune", value="每日隨機籤詩", inline=True)
-        embed.add_field(name="!拉霸 / !slot", value="試手氣拉霸機", inline=True)
-        embed.add_field(name="!抽獎 / !giveaway", value="主辦抽獎活動", inline=True)
-        embed.add_field(name="!一番賞 / !kuji", value="星空主題抽獎", inline=True)
-        embed.add_field(name="!賭博 / !gamble", value="心臟要夠強的翻倍賭博", inline=False)
-        embed.set_footer(text="玩遊戲、贏取獎品、讓洛洛陪你玩！")
-        await interaction.edit_original_response(embed=embed)
-
-    async def on_error(self, interaction: discord.Interaction, error: Exception, item):
-        logger.error(f"HelpView Error: {error}")
-        if not interaction.response.is_done():
-            await interaction.response.send_message(f"❌ Help 面板發生錯誤: {error}", ephemeral=True)
-        else:
-            await interaction.followup.send(f"❌ Help 面板發生錯誤: {error}", ephemeral=True)
 
 @bot.hybrid_command(name='help', aliases=['幫助', '求救'])
 @app_commands.allowed_installs(guilds=True, users=True)
 @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def help(ctx):
-    """顯示按鈕導航的功能說明"""
+    """顯示動態功能總覽"""
     embed = discord.Embed(
-        title="🌟 祈星‧優卡洛 互動指令面板",
-        description="洛洛現在支援全新的按鈕選單囉！\n請點擊下方的按鈕來切換不同的指令分類：",
-        color=0xffc0cb
+        title="Yokaro 功能總覽",
+        description="只會顯示目前已載入的模組與入口，避免 help 變成雜訊清單。",
+        color=0x111827
     )
     embed.set_thumbnail(url=bot.user.display_avatar.url)
-    embed.set_footer(text="提示：所有指令皆支援中英雙語通用喔！")
-    
-    await ctx.send(embed=embed, view=HelpView())
+    loaded = [f"• {name}" for name in bot.cogs.keys()]
+    embed.add_field(name="已載入模組", value="\n".join(loaded) or "目前尚未載入模組", inline=False)
+    embed.add_field(name="入口指令", value="`!功能表` `!help` `!menu` `!選單`", inline=False)
+    embed.set_footer(text="help 會在每次開機後依實際載入模組更新")
+
+    await ctx.send(embed=embed, view=bot.help_view or FeatureMenuView(bot))
+
+@bot.hybrid_command(name='功能表', aliases=['fmenu'])
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+async def feature_menu(ctx):
+    """正式功能表入口"""
+    embed = discord.Embed(
+        title="功能表",
+        description="使用按鈕選功能，指令保留給習慣文字輸入的使用者。",
+        color=0x111827,
+    )
+    embed.set_thumbnail(url=bot.user.display_avatar.url)
+    await ctx.send(embed=embed, view=bot.help_view or FeatureMenuView(bot))
 
 def ensure_packages(packages):
     import importlib.util

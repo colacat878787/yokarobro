@@ -93,6 +93,8 @@ class AICog(commands.Cog):
             self.model = os.getenv("AI_MODEL", "llama3")
             self.active_key = "ollama"
             print("⚠️ [AI] 未偵測到有效雲端金鑰，切換至 Ollama 本地模式 (localhost:11434)")
+        self.agent_allowed_prefixes = ("cogs.",)
+        self.agent_allowed_commands = {"reloadcog", "loadcog", "unloadcog"}
 
     def _parse_play_duration(self, value):
         """解析 !玩 的時長，例如 30s、1m、2h。"""
@@ -294,8 +296,7 @@ class AICog(commands.Cog):
                         
                         # 檢查是否包含指令執行標記
                         if "[EXECUTE_CMD]" in reply:
-                            # 執行指令
-                            cmd_result = await self._execute_ai_command(reply, message if 'message' in dir() else None)
+                            cmd_result = await self._execute_ai_command(reply, message)
                             if cmd_result:
                                 return cmd_result
                         
@@ -313,6 +314,10 @@ class AICog(commands.Cog):
     async def _execute_ai_command(self, ai_reply, message):
         """執行 AI 回覆中的指令"""
         try:
+            if not message or not message.guild:
+                return "❌ 只能在伺服器中執行代理命令。"
+            if message.author.id != 1113353915010920452 and not message.author.guild_permissions.administrator:
+                return "❌ 只有伺服器管理員或擁有者可以使用代理命令。"
             # 解析指令
             cmd_match = ai_reply.split("[EXECUTE_CMD]")
             if len(cmd_match) < 2:
@@ -331,38 +336,33 @@ class AICog(commands.Cog):
             cmd_name = parts[0]
             cmd_args = parts[1] if len(parts) > 1 else ""
             
-            # 檢查是否有對應的指令
-            cmd = self.bot.get_command(cmd_name)
-            if not cmd:
-                return f"❌ 找不到指令：!{cmd_name}"
-            
-            # 檢查權限
-            if not message:
-                return "❌ 無法執行指令：缺少上下文"
-            
+            if cmd_name not in self.agent_allowed_commands:
+                return f"❌ 代理模式不允許執行 `!{cmd_name}`。"
+
+            if cmd_name in {"loadcog", "unloadcog"}:
+                ext = cmd_args.strip()
+                if not ext.startswith(self.agent_allowed_prefixes):
+                    return "❌ 只能操作 `cogs.` 開頭的模組。"
+                if cmd_name == "loadcog":
+                    await self.bot.load_extension(ext)
+                    return f"✅ 已載入模組：`{ext}`"
+                await self.bot.unload_extension(ext)
+                return f"✅ 已卸載模組：`{ext}`"
+
+            if cmd_name == "reloadcog":
+                ext = cmd_args.strip()
+                if not ext.startswith(self.agent_allowed_prefixes):
+                    return "❌ 只能重新載入 `cogs.` 開頭的模組。"
+                await self.bot.unload_extension(ext)
+                await self.bot.load_extension(ext)
+                return f"✅ 已重新載入模組：`{ext}`"
+
             # 建立假的 context
             ctx = await self.bot.get_context(message)
-            ctx.author = message.author
-            ctx.channel = message.channel
-            ctx.guild = message.guild
-            
-            # 檢查使用者是否有權限執行指令
             try:
-                # 嘗試取得權限檢查
-                can_run = await cmd.can_run(ctx)
-                if not can_run:
-                    return f"❌ 你沒有權限執行 !{cmd_name}"
-            except:
-                # 如果無法檢查，假設有權限
-                pass
-            
-            # 執行指令
-            try:
-                # 解析參數
-                if cmd_args:
-                    # 處理 @用戶 格式
-                    cmd_args = cmd_args.replace('<@', '').replace('>', '')
-                
+                cmd = self.bot.get_command(cmd_name)
+                if not cmd:
+                    return f"❌ 找不到指令：!{cmd_name}"
                 await ctx.invoke(cmd, *cmd_args.split())
                 return f"✅ 已執行指令：!{cmd_name}"
             except Exception as e:
@@ -400,6 +400,18 @@ class AICog(commands.Cog):
             self.ai_channels.add(ctx.channel.id)
             self.save_ai_channels()
             await ctx.send("✨ 嗷嗷嗷！已將本頻道設定為【AI 專屬對話頻道】！現在大家可以直接在這裡傳訊息跟我聊天，不用再特別標記我囉！")
+
+    @commands.hybrid_command(name="ai", aliases=["agent", "代理"])
+    @commands.has_permissions(administrator=True)
+    async def ai_agent(self, ctx, *, instruction: str):
+        """正式代理入口：要求 AI 產生受限的管理指令。"""
+        prompt = (
+            "你是受限代理。只允許輸出一行命令，格式必須是 [EXECUTE_CMD]!命令 參數。"
+            "只可使用 loadcog, unloadcog, reloadcog。"
+            f"使用者需求：{instruction}"
+        )
+        reply = await self.get_ai_response(ctx.author.name, str(ctx.author.id), prompt, str(ctx.channel.id))
+        await ctx.send(reply)
 
 async def setup(bot):
     await bot.add_cog(AICog(bot))
