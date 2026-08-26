@@ -97,6 +97,7 @@ class AICog(commands.Cog):
         self.agent_allowed_commands = {"reloadcog", "loadcog", "unloadcog"}
         self.agent_aliases = {
             "rr": "cogs.reaction_roles",
+            "rrrr": "cogs.reaction_roles",
             "reactionrole": "cogs.reaction_roles",
             "reaction_roles": "cogs.reaction_roles",
             "反應角色": "cogs.reaction_roles",
@@ -348,7 +349,7 @@ class AICog(commands.Cog):
                 return f"❌ 代理模式不允許執行 `!{cmd_name}`。"
 
             if cmd_name in {"loadcog", "unloadcog"}:
-                ext = cmd_args.strip()
+                ext = self._normalize_cog_name(cmd_args.strip())
                 if not ext.startswith(self.agent_allowed_prefixes):
                     return "❌ 只能操作 `cogs.` 開頭的模組。"
                 if cmd_name == "loadcog":
@@ -358,7 +359,7 @@ class AICog(commands.Cog):
                 return f"✅ 已卸載模組：`{ext}`"
 
             if cmd_name == "reloadcog":
-                ext = cmd_args.strip()
+                ext = self._normalize_cog_name(cmd_args.strip())
                 if not ext.startswith(self.agent_allowed_prefixes):
                     return "❌ 只能重新載入 `cogs.` 開頭的模組。"
                 await self.bot.unload_extension(ext)
