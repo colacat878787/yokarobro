@@ -1546,5 +1546,37 @@ class AdminCog(commands.Cog):
         embed.set_footer(text="提示：所有修改將即時儲存至 guild_settings.json")
         await ctx.send(embed=embed, view=ControlPanelView(self.bot))
 
+    admin_app = app_commands.Group(name="管理", description="Yokaro 高階管理功能")
+
+    @admin_app.command(name="後台", description="開啟高階管理後台")
+    async def admin_panel_app(self, interaction: discord.Interaction):
+        mgmt = self.bot.get_cog("ManagementCog")
+        if not (mgmt and mgmt.is_high_admin(interaction.user.id)):
+            return await interaction.response.send_message("❌ 只有高階管理員可以使用此功能。", ephemeral=True)
+        embed = discord.Embed(
+            title="🛠️ Yokaro 高階管理後台 V2",
+            description="歡迎來到全功能管理面板！請點擊下方按鈕進行細項設定。",
+            color=0x2c3e50
+        )
+        embed.set_footer(text="提示：所有修改將即時儲存至 guild_settings.json")
+        await interaction.response.send_message(embed=embed, view=ControlPanelView(self.bot), ephemeral=True)
+
+    @admin_app.command(name="伺服器清單", description="列出機器人所在伺服器")
+    async def admin_serverlist_app(self, interaction: discord.Interaction):
+        if interaction.user.id != OWNER_ID:
+            return await interaction.response.send_message("❌ 只有擁有者可以使用此功能！", ephemeral=True)
+        view = ServerListView(self.bot)
+        embed = discord.Embed(title="🔧 Bot 所在伺服器列表", description="選擇伺服器以取得邀請或離開", color=0x00ff00)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    @admin_app.command(name="加角色", description="打開角色新增介面")
+    async def admin_roleadd_app(self, interaction: discord.Interaction):
+        if interaction.user.id != OWNER_ID:
+            return await interaction.response.send_message("❌ 只有擁有者可以使用此功能！", ephemeral=True)
+        view = RoleAddView(self.bot)
+        await interaction.response.send_message("選擇要操作的伺服器：", view=view, ephemeral=True)
+
 async def setup(bot):
-    await bot.add_cog(AdminCog(bot))
+    cog = AdminCog(bot)
+    await bot.add_cog(cog)
+    bot.tree.add_command(cog.admin_app)

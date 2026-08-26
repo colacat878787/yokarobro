@@ -6,6 +6,7 @@ import asyncio
 import os
 import sys
 import platform
+from discord import app_commands
 
 class SystemCog(commands.Cog):
     def __init__(self, bot):
@@ -113,5 +114,69 @@ class SystemCog(commands.Cog):
         except ImportError:
             await ctx.send("⚠️ 缺少 `psutil` 模組，無法顯示精確負載。")
 
+    sys_app = app_commands.Group(name="系統", description="Yokaro 系統管理功能")
+
+    @sys_app.command(name="功能表", description="查看系統管理功能表")
+    @app_commands.default_permissions(administrator=True)
+    async def sys_menu(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="系統功能表",
+            description="這裡是正式版系統管理入口。",
+            color=0x3498db,
+        )
+        embed.add_field(name="/系統 診斷", value="檢查依賴與執行環境", inline=False)
+        embed.add_field(name="/系統 修復", value="嘗試修復缺少的依賴", inline=False)
+        embed.add_field(name="/系統 狀態", value="查看 CPU / RAM 狀態", inline=False)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @sys_app.command(name="診斷", description="診斷目前系統依賴狀態")
+    @app_commands.default_permissions(administrator=True)
+    async def sys_check_app(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="🩺 Yokaro 系統診斷報告", color=0x3498db)
+        embed.timestamp = discord.utils.utcnow()
+
+        status_text = ""
+        for tool, desc in self.tools.items():
+            path = shutil.which(tool)
+            if path:
+                status_text += f"✅ **{tool}**: 已就緒\n> *{desc}*\n> 📍 `{path}`\n\n"
+            else:
+                status_text += f"❌ **{tool}**: 找不到組件\n> *{desc}*\n\n"
+        embed.add_field(name="📦 依賴項狀態", value=status_text, inline=False)
+        await interaction.response.send_message(embed=embed, ephemeral=False)
+
+    @sys_app.command(name="修復", description="嘗試修復缺少的系統依賴")
+    @app_commands.default_permissions(administrator=True)
+    async def sys_repair_app(self, interaction: discord.Interaction):
+        await interaction.response.defer(thinking=True)
+        results = []
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "pip", "install", "--upgrade", "spotify-dlp",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                results.append("✅ `spotify-dlp` 已成功安裝或更新。")
+            else:
+                results.append(f"❌ `spotify-dlp` 安裝失敗: {stderr.decode()[:100]}")
+        except Exception as e:
+            results.append(f"❌ 修復過程發生異常: {e}")
+        await interaction.followup.send("⚙️ **修復完成！**\n" + "\n".join(results), ephemeral=True)
+
+    @sys_app.command(name="狀態", description="查看目前系統資源佔用")
+    @app_commands.default_permissions(administrator=True)
+    async def sys_info_app(self, interaction: discord.Interaction):
+        try:
+            import psutil
+            cpu = psutil.cpu_percent()
+            ram = psutil.virtual_memory().percent
+            await interaction.response.send_message(f"📊 **系統負載**：\n> CPU: {cpu}%\n> RAM: {ram}%", ephemeral=True)
+        except ImportError:
+            await interaction.response.send_message("⚠️ 缺少 `psutil` 模組，無法顯示精確負載。", ephemeral=True)
+
 async def setup(bot):
-    await bot.add_cog(SystemCog(bot))
+    cog = SystemCog(bot)
+    await bot.add_cog(cog)
+    bot.tree.add_command(cog.sys_app)
