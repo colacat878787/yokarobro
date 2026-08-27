@@ -22,6 +22,7 @@ import signal
 import urllib.request
 import urllib.error
 from datetime import datetime
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # ===== 設定 =====
 POLL_INTERVAL = 30              # 輪詢主伺服器的間隔（秒）
