@@ -7,6 +7,7 @@ import secrets
 import threading
 import re
 import json
+from datetime import datetime
 from flask import Flask, render_template_string, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 import psutil
@@ -541,6 +542,18 @@ def privacy_page():
         title="隱私與安全政策",
         content=PRIVACY_CONTENT,
     )
+
+
+@app.route('/status')
+def status_page():
+    status = {
+        "status": "ok",
+        "bot_name": bot_instance.user.name if bot_instance and bot_instance.user else "starting",
+        "guilds": len(bot_instance.guilds) if bot_instance and bot_instance.guilds else 0,
+        "latency": round(bot_instance.latency * 1000) if bot_instance and bot_instance.latency else None,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    return jsonify(status)
 
 
 @app.route('/')
