@@ -167,7 +167,14 @@ def check_main_server():
     
     try:
         # 發送請求到主伺服器的狀態端點
-        req = urllib.request.Request(f"{main_server_url}/status")
+        req = urllib.request.Request(
+            f"{main_server_url}/status",
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                "Accept": "application/json,text/plain,*/*",
+                "Cache-Control": "no-cache",
+            },
+        )
         with urllib.request.urlopen(req, timeout=10) as response:
             if response.status == 200:
                 data = json.loads(response.read().decode('utf-8'))
