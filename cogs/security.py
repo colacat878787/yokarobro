@@ -34,7 +34,7 @@ class SecurityView(discord.ui.View):
                 await interaction.user.add_roles(role)
                 await interaction.edit_original_response(content="✅ 驗證完成！歡迎加入星辰大合唱！嗷嗷嗷～")
             except discord.Forbidden:
-                await interaction.edit_original_response(content="❌ 矮油！洛洛權限不夠，請聯絡管理員檢查身分組順序！")
+                await interaction.edit_original_response(content="❌ 矮油！Fuwawa權限不夠，請聯絡管理員檢查身分組順序！")
             except Exception as e:
                 await interaction.edit_original_response(content=f"❌ 發生未知錯誤：{e}")
         else:
@@ -61,7 +61,7 @@ class SecurityCog(commands.Cog):
         
         # 註冊持久化視圖
         self.bot.add_view(SecurityView(self.role_name))
-        print("💠 洛洛護衛盾已啟動，惡意網址與群組資料庫同步中...")
+        print("💠 Fuwawa護衛盾已啟動，惡意網址與群組資料庫同步中...")
 
     def cog_unload(self):
         self.update_blacklist_task.cancel()
@@ -157,9 +157,9 @@ class SecurityCog(commands.Cog):
             await message.delete()
             
             if has_malicious:
-                warning = f"⚠️ **危險內容攔截** ⚠️\n> {message.author.mention} 剛剛發送了疑似惡意或整人的連結，洛洛已經幫大家把它吃掉啦！請大家保護好自己的帳號喔！🐾"
+                warning = f"⚠️ **危險內容攔截** ⚠️\n> {message.author.mention} 剛剛發送了疑似惡意或整人的連結，Fuwawa已經幫大家把它吃掉啦！請大家保護好自己的帳號喔！🐾"
                 await message.channel.send(warning)
-                try: await message.author.send(f"❌ 洛洛偵測到你發送了危險的內容 ({reason})，為了保護伺服器安全，該訊息已被刪除。")
+                try: await message.author.send(f"❌ Fuwawa偵測到你發送了危險的內容 ({reason})，為了保護伺服器安全，該訊息已被刪除。")
                 except: pass
             
             elif is_spam:

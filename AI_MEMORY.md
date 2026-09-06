@@ -1,4 +1,4 @@
-# AI Memory: Yokaro Bot Requirements
+# AI Memory: Fuwawa Bot Requirements
 
 ## Version Update Rules
 - Whenever a major version update is detected (e.g., version X.Y.Z → X+1.0.0), a title must be generated and sent to the bot owner (Discord User ID: 1113353915010920452).

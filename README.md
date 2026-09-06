@@ -1,12 +1,12 @@
-# 🤖 幽芙優 (小幽) - Yokaro Discord Bot
+# 🤖 Fuwawa Discord Bot
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
 ![Discord.py](https://img.shields.io/badge/Discord.py-2.0%2B-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-**幽芙優 (小幽)** 是一個功能豐富的 Discord 機器人，提供 AI 對話、音樂播放、錄影系統、經濟系統、股票市場等多種功能。支援自動備援機制，確保服務永不中斷。
+**Fuwawa** 是一個功能豐富的 Discord 機器人，提供 AI 對話、音樂播放、錄影系統、經濟系統、股票市場等多種功能。支援自動備援機制，確保服務永不中斷。
 
-> 💡 **名稱由來**：原本叫做「優卡洛」，2026-07-31 全面改版後改名為「幽芙優」，但開發者還是習慣叫它優卡洛 :D
+> 💡 **正式名稱**：Fuwawa
 
 ---
 
@@ -390,8 +390,8 @@ df -h
 
 ## 📝 更新日誌
 
-### 2026-07-31 - 全面改版 (幽芙優)
-- ✨ 改名為「幽芙優 (小幽)」
+### 2026-07-31 - 全面改版 (Fuwawa)
+- ✨ 改名為「Fuwawa」
 - 🤖 新增 AI 對話系統（Gemini/OpenAI/Ollama）
 - 🎥 全新錄影系統（AI 自動剪輯）
 - 💰 經濟系統全面升級
@@ -429,6 +429,6 @@ df -h
 - **Discord**: 邀請機器人到你的伺服器 培根的Discord:bacon710022
 ---
 
-**🍓 讓幽芙優(小幽)陪伴你的伺服器，永不離線！**
+**🍓 讓Fuwawa陪伴你的伺服器，永不離線！**
 
 *最後更新：2026-07-31*

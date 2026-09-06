@@ -68,7 +68,7 @@ class FinanceCog(commands.Cog):
             }
         return self.data[uid]
 
-    @commands.hybrid_command(name="辦卡", description="辦理一張 Yokaro 黑金信用卡 (費用 $50,000)")
+    @commands.hybrid_command(name="辦卡", description="辦理一張 Fuwawa 黑金信用卡 (費用 $50,000)")
     async def apply_card(self, ctx):
         uid = str(ctx.author.id)
         eco = self.bot.get_cog("EconomyCog")
@@ -84,7 +84,7 @@ class FinanceCog(commands.Cog):
         user_fin["has_card"] = True
         self._save()
         
-        embed = discord.Embed(title="💳 辦卡成功！", description=f"恭喜 {ctx.author.mention} 獲得 **Yokaro 黑金信用卡**！\n\n🔹 **信用額度:** $1,000,000\n🔹 **使用方式:** 當餘額不足時將自動由信用卡預支。", color=0x2f3136)
+        embed = discord.Embed(title="💳 辦卡成功！", description=f"恭喜 {ctx.author.mention} 獲得 **Fuwawa 黑金信用卡**！\n\n🔹 **信用額度:** $1,000,000\n🔹 **使用方式:** 當餘額不足時將自動由信用卡預支。", color=0x2f3136)
         embed.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/633/633611.png")
         await ctx.send(embed=embed)
 

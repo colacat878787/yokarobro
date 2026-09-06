@@ -77,7 +77,7 @@ HTML_TEMPLATE = """
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>Yokaro Dash | 系統控制中心</title>
+    <title>Fuwawa Dash | 系統控制中心</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         :root {
@@ -127,7 +127,7 @@ HTML_TEMPLATE = """
     <main>
         <div class="topbar">
             <div class="hero">
-                <h1>Yokaro Control Center</h1>
+                <h1>Fuwawa Control Center</h1>
                 <p>一個更像 App 的管理面板，讓你用機器人身份快速發送公告、私訊成員、上傳圖片與管理系統狀態。</p>
             </div>
             <div class="button-row">
@@ -337,7 +337,7 @@ SERVER_HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>優卡洛 伺服器後台</title>
+<title>Fuwawa 伺服器後台</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root{font-family:'Inter','Segoe UI',Tahoma,sans-serif;color:#e2e8f0;background:#0b1220;}
@@ -369,8 +369,8 @@ SERVER_HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
 <main>
-  <h1>⚙️ 優卡洛 伺服器後台</h1>
-  <p class="sub">管理優卡洛在本伺服器內的功能</p>
+  <h1>⚙️ Fuwawa 伺服器後台</h1>
+  <p class="sub">管理Fuwawa在本伺服器內的功能</p>
   <div class="card">
     <div class="guild-head">
       <img id="gicon" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
@@ -454,7 +454,7 @@ PUBLIC_POLICY_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ title }} | Yokaro</title>
+    <title>{{ title }} | Fuwawa</title>
     <style>
         :root { color-scheme: dark; font-family: "Segoe UI", system-ui, sans-serif; color: #e5eefb; background: #07111f; }
         * { box-sizing: border-box; }
@@ -477,12 +477,12 @@ PUBLIC_POLICY_TEMPLATE = """
 <body>
     <main>
         <header>
-            <div class="brand">Yokaro / 優卡洛</div>
+            <div class="brand">Fuwawa</div>
             <h1>{{ title }}</h1>
             <p class="updated">最後更新：2026-08-19</p>
         </header>
         <article>{{ content|safe }}</article>
-        <footer>本頁面適用於 Yokaro Discord 機器人及其相關服務。</footer>
+        <footer>本頁面適用於 Fuwawa Discord 機器人及其相關服務。</footer>
     </main>
 </body>
 </html>
@@ -491,10 +491,10 @@ PUBLIC_POLICY_TEMPLATE = """
 
 TERMS_CONTENT = """
 <h2>1. 服務說明</h2>
-<p>Yokaro 是提供 Discord 伺服器管理、娛樂、資訊與互動功能的機器人服務。使用本服務即表示你同意遵守 Discord 的使用條款、社群規範，以及所在伺服器的管理規則。</p>
+<p>Fuwawa 是提供 Discord 伺服器管理、娛樂、資訊與互動功能的機器人服務。使用本服務即表示你同意遵守 Discord 的使用條款、社群規範，以及所在伺服器的管理規則。</p>
 <h2>2. 使用規範</h2>
 <ul>
-    <li>不得利用 Yokaro 進行騷擾、詐騙、惡意散播、未經授權的資料蒐集或其他違法行為。</li>
+    <li>不得利用 Fuwawa 進行騷擾、詐騙、惡意散播、未經授權的資料蒐集或其他違法行為。</li>
     <li>不得嘗試破壞服務、繞過權限、濫用 API 或干擾其他使用者。</li>
     <li>伺服器管理員可以依伺服器規則停用功能或限制成員使用。</li>
 </ul>
@@ -503,7 +503,7 @@ TERMS_CONTENT = """
 <h2>4. 第三方服務</h2>
 <p>部分功能可能連接 Discord、Google Gemini、YouTube、Spotify 或其他第三方服務。這些服務有各自的條款與隱私政策，使用相關功能時也必須遵守其規範。</p>
 <h2>5. 條款更新</h2>
-<p>條款更新後會公布在本頁面。更新後繼續使用 Yokaro，即表示接受更新後的內容。</p>
+<p>條款更新後會公布在本頁面。更新後繼續使用 Fuwawa，即表示接受更新後的內容。</p>
 """
 
 
@@ -521,7 +521,7 @@ PRIVACY_CONTENT = """
 <h2>4. 資料分享與安全</h2>
 <p>除非為了提供你主動使用的第三方功能、遵守法律要求或處理安全事件，我們不會出售你的個人資料。網路傳輸與第三方服務仍可能存在風險，請勿透過機器人提交密碼、Token、信用卡號或其他敏感資訊。</p>
 <h2>5. 你的權利</h2>
-<p>如需查詢、修改或刪除與 Yokaro 相關的資料，請透過機器人的管理聯絡方式提出申請，並提供足以辨識資料的 Discord 使用者 ID 或伺服器 ID。</p>
+<p>如需查詢、修改或刪除與 Fuwawa 相關的資料，請透過機器人的管理聯絡方式提出申請，並提供足以辨識資料的 Discord 使用者 ID 或伺服器 ID。</p>
 <h2>6. 政策更新</h2>
 <p>本隱私政策可能因功能或法律要求更新。最新版本會持續公布於本頁面。</p>
 """
@@ -969,7 +969,7 @@ class WebPanelCog(commands.Cog):
         if not base_url: base_url = f"http://localhost:{self.port}"
         
         url = f"{base_url}/?token={panel_token}"
-        embed = discord.Embed(title="🌌 Yokaro 系統中樞", color=0x5865f2)
+        embed = discord.Embed(title="🌌 Fuwawa 系統中樞", color=0x5865f2)
         embed.description = f"大總裁，這是您的管理連結：\n\n🔗 **[點此進入後台介面]({url})**"
         try:
             await ctx.author.send(embed=embed)
@@ -993,12 +993,12 @@ class WebPanelCog(commands.Cog):
 
         token = get_server_token(ctx.guild.id)
         url = f"{base_url}/server?guild={ctx.guild.id}&key={token}"
-        embed = discord.Embed(title="⚙️ 優卡洛 伺服器後台", color=0x2ecc71)
+        embed = discord.Embed(title="⚙️ Fuwawa 伺服器後台", color=0x2ecc71)
         embed.description = (
             f"您好，{ctx.author.mention}！\n\n"
             f"這是 **{ctx.guild.name}** 的管理後台連結：\n\n"
             f"🔗 **[點此開啟伺服器後台]({url})**\n\n"
-            f"可在裡面管理優卡洛在貴伺服器內的功能開關與設定。"
+            f"可在裡面管理Fuwawa在貴伺服器內的功能開關與設定。"
         )
         embed.set_footer(text="僅限伺服器管理員使用")
         try:
@@ -1009,4 +1009,3 @@ class WebPanelCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(WebPanelCog(bot))
-

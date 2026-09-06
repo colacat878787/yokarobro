@@ -232,7 +232,7 @@ def check_network():
         return False
 
 def main():
-    print_header("🍓 幽芙優(小幽) Raspberry Pi 備援系統檢查")
+    print_header("🍓 Fuwawa Raspberry Pi 備援系統檢查")
     
     print(f"{Colors.BOLD}檢查時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{Colors.RESET}")
     print(f"{Colors.BOLD}檢查目錄: {os.getcwd()}{Colors.RESET}\n")

@@ -101,7 +101,7 @@ class OtakuCog(commands.Cog):
                                                 color=0x1DA1F2,
                                                 timestamp=datetime.utcnow()
                                             )
-                                            embed.set_footer(text="優卡洛 ‧ 肥宅監控衛星")
+                                            embed.set_footer(text="Fuwawa ‧ 肥宅監控衛星")
                                             await channel.send(embed=embed)
                                     success = True; break
                     except: continue

@@ -2,7 +2,7 @@
 
 ## 系統概述
 
-這是 **幽芙優(小幽)** 的備援系統，當主伺服器離線時，Raspberry Pi Zero 2W 會自動啟動備援機器人，確保服務不中斷。
+這是 **Fuwawa** 的備援系統，當主伺服器離線時，Raspberry Pi Zero 2W 會自動啟動備援機器人，確保服務不中斷。
 
 ### 運作流程
 1. **正常情況**：主伺服器每 30 秒發送心跳到 Pi
@@ -143,7 +143,7 @@ curl https://你的主伺服器網址/status
 ```json
 {
   "status": "ok",
-  "bot_name": "幽芙優",
+  "bot_name": "Fuwawa",
   "guilds": 10,
   "latency": 50,
   "timestamp": "2026-07-31 22:30:00"
@@ -529,4 +529,4 @@ hostname -I
 
 ---
 
-**🍓 祝你的幽芙優(小幽)永不離線！**
+**🍓 祝你的Fuwawa永不離線！**

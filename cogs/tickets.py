@@ -96,7 +96,7 @@ class TicketsCog(commands.Cog):
             color=0x3498db
         )
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.set_footer(text="洛洛支援系統 | 優質服務 嗷嗷嗷～")
+        embed.set_footer(text="Fuwawa支援系統 | 優質服務 嗷嗷嗷～")
         
         await ctx.send(embed=embed, view=TicketDashboardView(self))
 

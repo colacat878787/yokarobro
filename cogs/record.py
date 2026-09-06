@@ -128,7 +128,7 @@ class RecordCog(commands.Cog):
         
         try:
             ctx.voice_client.listen(sink)
-            embed = discord.Embed(title="🎙️ 洛洛錄影機：影視級開拍！", color=0xff0000)
+            embed = discord.Embed(title="🎙️ Fuwawa錄影機：影視級開拍！", color=0xff0000)
             embed.description = "正在錄製中... 結束後我會自動剪輯影片並上字幕。\n📢 **重要：請確保已取得所有成員同意錄製！**"
             embed.set_footer(text="輸入 !record stop 結束錄製")
             await ctx.send(embed=embed)
@@ -139,14 +139,14 @@ class RecordCog(commands.Cog):
     async def record_stop(self, ctx):
         """停止錄製並開始【AI 自動剪輯】"""
         if ctx.guild.id not in self.recordings:
-            return await ctx.send("❓ 洛洛目前沒有在錄影喔！")
+            return await ctx.send("❓ Fuwawa目前沒有在錄影喔！")
 
         sink = self.recordings.pop(ctx.guild.id)
         if ctx.voice_client:
             ctx.voice_client.stop_listening()
         
         sink.cleanup()
-        msg = await ctx.send("🎬 正在啟動【影視級 AI 剪輯模組】... 請稍候，洛洛正在努力畫圖中！🐾")
+        msg = await ctx.send("🎬 正在啟動【影視級 AI 剪輯模組】... 請稍候，Fuwawa正在努力畫圖中！🐾")
 
         loop = asyncio.get_event_loop()
         future = loop.run_in_executor(self.executor, self._process_render_sync, sink)
@@ -160,7 +160,7 @@ class RecordCog(commands.Cog):
                 await ctx.send(file=discord.File(video_path))
                 shutil.rmtree(os.path.dirname(video_path), ignore_errors=True)
             else:
-                await status_msg.edit(content="❌ 哎呀，影片合成時發生意外了！請培檢查後台 Log 幫助洛洛除錯。")
+                await status_msg.edit(content="❌ 哎呀，影片合成時發生意外了！請培檢查後台 Log 幫助Fuwawa除錯。")
         except Exception as e:
             await status_msg.edit(content=f"❌ 剪輯失敗: {e}")
 

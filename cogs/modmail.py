@@ -41,7 +41,7 @@ class ModmailCog(commands.Cog):
         self.channel_map = {} # user_id: channel_id
 
     async def get_or_create_category(self, guild):
-        category_name = "📩 | 聯絡洛洛 (Modmail)"
+        category_name = "📩 | 聯絡Fuwawa (Modmail)"
         category = discord.utils.get(guild.categories, name=category_name)
         if not category:
             overwrites = {
@@ -114,7 +114,7 @@ class ModmailCog(commands.Cog):
                 # 找出共享伺服器
                 common_guilds = [g for g in self.bot.guilds if g.get_member(message.author.id)]
                 if not common_guilds:
-                    await message.author.send("嗷～洛洛找不到你跟我在同一個伺服器耶...")
+                    await message.author.send("嗷～Fuwawa找不到你跟我在同一個伺服器耶...")
                     return
                 
                 if len(common_guilds) == 1:
@@ -122,7 +122,7 @@ class ModmailCog(commands.Cog):
                     # 重新處理這條訊息
                     await self.on_message(message)
                 else:
-                    embed = discord.Embed(title="📫 聯絡管理團隊", description="洛洛偵測到你位於多個有我的伺服器中，請選擇你想聯絡的對象：", color=0xf1c40f)
+                    embed = discord.Embed(title="📫 聯絡管理團隊", description="Fuwawa偵測到你位於多個有我的伺服器中，請選擇你想聯絡的對象：", color=0xf1c40f)
                     await message.author.send(embed=embed, view=ServerSelectView(self, common_guilds))
 
         # 2. 處理 Modmail 頻道訊息 (Staff -> User)

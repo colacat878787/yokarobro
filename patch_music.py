@@ -95,7 +95,7 @@ new_commands = """
     async def toggle_247(self, ctx):
         state = self.get_state(ctx.guild.id)
         state['247'] = not state.get('247', False)
-        status = "✅ 已開啟 (洛洛將永不離開)" if state['247'] else "❌ 已關閉"
+        status = "✅ 已開啟 (Fuwawa將永不離開)" if state['247'] else "❌ 已關閉"
         await ctx.send(f"🌌 **24/7 模式 {status}**")
 
     @commands.command(name='8d')
@@ -127,7 +127,7 @@ new_commands = """
         for i, (title, count) in enumerate(top_songs):
             desc += f"**{i+1}.** {title[:40]}... (點播 {count} 次)\n"
             
-        embed = discord.Embed(title="📊 Yokaro 年度聽歌排行", description=desc, color=0x9b59b6)
+        embed = discord.Embed(title="📊 Fuwawa 年度聽歌排行", description=desc, color=0x9b59b6)
         embed.set_footer(text=f"總點播次數: {len(songs)} 首", icon_url=target.display_avatar.url)
         await ctx.send(embed=embed)
 """

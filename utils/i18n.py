@@ -1,5 +1,5 @@
 """
-Yokaro 多語言系統 (i18n)
+Fuwawa 多語言系統 (i18n)
 支援語言: 繁體中文 (zh), 英文 (en), 日文 (ja), 阿拉伯文 (ar)
 
 用法:
@@ -120,7 +120,7 @@ TRANSLATIONS = {
     # ---- 趣味 (fun) ----
     "fun.fortune.title": {"zh": "🌸 {user} 的今日運勢", "en": "🌸 {user}'s fortune today", "ja": "🌸 {user} の今日の運勢", "ar": "🌸 حظ {user} اليوم"},
     "fun.fortune.result": {"zh": "你的運氣是：**{res}**", "en": "Your luck is: **{res}**", "ja": "あなたの運勢は：**{res}**", "ar": "حظك هو: **{res}**"},
-    "fun.fortune.advice": {"zh": "洛洛的叮嚀", "en": "Yokaro's advice", "ja": "ヨカロの助言", "ar": "نصيحة يوكارو"},
+    "fun.fortune.advice": {"zh": "Fuwawa的叮嚀", "en": "Fuwawa's advice", "ja": "Fuwawaの助言", "ar": "نصيحة Fuwawa"},
     "fun.fortune.date": {"zh": "日期：{date}", "en": "Date: {date}", "ja": "日付：{date}", "ar": "التاريخ: {date}"},
     "fun.fortune.daiji": {"zh": "大吉", "en": "Great Fortune", "ja": "大吉", "ar": "حظ عظيم"},
     "fun.fortune.ji": {"zh": "吉", "en": "Good Fortune", "ja": "吉", "ar": "حظ جيد"},
@@ -138,7 +138,7 @@ TRANSLATIONS = {
     "fun.fortune.matsu_shoji_d": {"zh": "生活中有些微小的小確幸等著你。", "en": "Small joys await you.", "ja": "小さな幸せが待っている。", "ar": "أفراح صغيرة تنتظرك."},
     "fun.fortune.kyo_d": {"zh": "今天要注意點，別漏掉重要訊息。", "en": "Be careful, don't miss important info.", "ja": "大事な情報を見逃さないように。", "ar": "كن حذراً، لا تفوت معلومات مهمة."},
     "fun.fortune.daikyo_d": {"zh": "沒關係，再衰一次明天就會轉運了！", "en": "Don't worry, tomorrow will be better!", "ja": "明日には運が好転する！", "ar": "لا تقلق، غداً سيكون أفضل!"},
-    "fun.slot.title": {"zh": "🎰 優卡洛拉霸機 🎰", "en": "🎰 Yokaro Slot Machine 🎰", "ja": "🎰 ヨカロ スロット 🎰", "ar": "🎰 آلة يوكارو 🎰"},
+    "fun.slot.title": {"zh": "🎰 Fuwawa拉霸機 🎰", "en": "🎰 Fuwawa Slot Machine 🎰", "ja": "🎰 Fuwawa スロット 🎰", "ar": "🎰 آلة Fuwawa 🎰"},
     "fun.slot.result": {"zh": "結果", "en": "Result", "ja": "結果", "ar": "النتيجة"},
     "fun.slot.jackpot": {"zh": "⚡ **中大獎！！！** ⚡ 恭喜你！", "en": "⚡ **JACKPOT!!!** ⚡ Congratulations!", "ja": "⚡ **ジャックポット！！** ⚡ おめでとう！", "ar": "⚡ **جائزة كبرى!!!** ⚡ مبروك!"},
     "fun.slot.small": {"zh": "✨ **小有驚喜！** ✨ 連中兩個！", "en": "✨ **Small surprise!** ✨ Two matched!", "ja": "✨ **小さな喜び！** ✨ 2個そろった！", "ar": "✨ **مفاجأة صغيرة!** ✨ اثنان متطابقان!"},
@@ -147,7 +147,7 @@ TRANSLATIONS = {
     "fun.giveaway.title": {"zh": "🎉 抽獎時間到！", "en": "🎉 Giveaway Time!", "ja": "🎉 プレゼント抽選！", "ar": "🎉 وقت السحب!"},
     "fun.giveaway.desc": {"zh": "獎品：**{prize}**\n時間：**{duration}** 秒\n\n點擊下方的 🎉 參與抽獎！", "en": "Prize: **{prize}**\nDuration: **{duration}s**\n\nClick 🎉 to enter!", "ja": "賞品：**{prize}**\n時間：**{duration}秒**\n\n🎉 をクリックして参加！", "ar": "الجائزة: **{prize}**\nالمدة: **{duration} ثانية**\n\nاضغط 🎉 للمشاركة!"},
     "fun.giveaway.footer": {"zh": "發起人：{user}", "en": "Host: {user}", "ja": "主催者：{user}", "ar": "المضيف: {user}"},
-    "fun.giveaway.none": {"zh": "沒人參加抽獎嗎？獎品被洛洛自己拿走囉！", "en": "No one joined? Yokaro keeps the prize!", "ja": "参加者がいない？賞品はヨカロのもの！", "ar": "لم يشارك أحد؟ يوكارو سيحتفظ بالجائزة!"},
+    "fun.giveaway.none": {"zh": "沒人參加抽獎嗎？獎品被Fuwawa自己拿走囉！", "en": "No one joined? Fuwawa keeps the prize!", "ja": "参加者がいない？賞品はFuwawaのもの！", "ar": "لم يشارك أحد؟ Fuwawa سيحتفظ بالجائزة!"},
     "fun.giveaway.winner": {"zh": "🎉 恭喜 {user} 抽中了 **{prize}**！", "en": "🎉 Congratulations {user}, you won **{prize}**!", "ja": "🎉 おめでとう {user}！**{prize}** を獲得！", "ar": "🎉 مبروك {user}، فزت بـ **{prize}**!"},
     "fun.giveaway.error": {"zh": "抽獎結算時發生了錯誤！", "en": "An error occurred while settling the giveaway!", "ja": "抽選の確定中にエラーが発生！", "ar": "حدث خطأ أثناء إتمام السحب!"},
     "fun.duihua.notfound": {"zh": "❌ 找不到路徑：`{path}`，請檢查資料夾是否存在！", "en": "❌ Path not found: `{path}`. Check the folder exists!", "ja": "❌ パスが見つかりません：`{path}`。フォルダを確認してください！", "ar": "❌ المسار غير موجود: `{path}`. تحقق من وجود المجلد!"},
@@ -157,7 +157,7 @@ TRANSLATIONS = {
     "hug.title": {"zh": "🐾 抱抱時間！", "en": "🐾 Hug Time!", "ja": "🐾 ハグタイム！", "ar": "🐾 وقت العناق!"},
     "hug.target": {"zh": "💝 傳送對象", "en": "💝 Sent to", "ja": "💝 送る相手", "ar": "💝 أُرسل إلى"},
     "hug.received": {"zh": "{mention} 收到了滿滿的愛心！", "en": "{mention} received lots of love!", "ja": "{mention} はたくさんの愛を受け取った！", "ar": "تلقى {mention} الكثير من الحب!"},
-    "hug.footer": {"zh": "✨ 洛洛的小爪子永遠為你敞開 ✨", "en": "✨ Yokaro's paws are always open for you ✨", "ja": "✨ ヨカロの手はいつでも君のために ✨", "ar": "✨ أيدي يوكارو مفتوحة دائماً لك ✨"},
+    "hug.footer": {"zh": "✨ Fuwawa的小爪子永遠為你敞開 ✨", "en": "✨ Fuwawa's paws are always open for you ✨", "ja": "✨ Fuwawaの手はいつでも君のために ✨", "ar": "✨ أيدي يوكارو مفتوحة دائماً لك ✨"},
     "hug.anim.1": {"zh": "伸出可愛的小爪爪緊緊抱住你 🤗", "en": "Reaches out cute little paws and hugs you tight 🤗", "ja": "可愛い小さな手でぎゅっと抱きしめる🤗", "ar": "يمد مخالب لطيفة ويعانقك بحرارة 🤗"},
     "hug.anim.2": {"zh": "用軟綿綿的爪子環抱住你 💕", "en": "Wraps you in soft fluffy paws 💕", "ja": "ふわふわの手で包み込む💕", "ar": "يلفك بمخالب ناعمة رقيقة 💕"},
     "hug.anim.3": {"zh": "輕輕地用爪子拍拍你的背 🐾", "en": "Gently pats your back with a paw 🐾", "ja": "そっと背中をトントン🐾", "ar": "يربت على ظهرك بلطف 🐾"},
@@ -183,7 +183,7 @@ TRANSLATIONS = {
     "level.profile.title": {"zh": "🌸 {user} 的冒險紀錄", "en": "🌸 {user}'s adventure record", "ja": "🌸 {user} の冒険記録", "ar": "🌸 سجل مغامرات {user}"},
     "level.profile.level": {"zh": "等級", "en": "Level", "ja": "レベル", "ar": "المستوى"},
     "level.profile.xp": {"zh": "目前 XP", "en": "Current XP", "ja": "現在のXP", "ar": "نقاط الخبرة الحالية"},
-    "level.no_data": {"zh": "洛洛還不認識你，快多聊天賺 XP 吧！", "en": "Yokaro doesn't know you yet. Chat more to earn XP!", "ja": "まだあなたを知りません。話してXPを稼ごう！", "ar": "يوكارو لا يعرفك بعد. تحدث أكثر لكسب النقاط!"},
+    "level.no_data": {"zh": "Fuwawa還不認識你，快多聊天賺 XP 吧！", "en": "Fuwawa doesn't know you yet. Chat more to earn XP!", "ja": "まだあなたを知りません。話してXPを稼ごう！", "ar": "Fuwawa لا يعرفك بعد. تحدث أكثر لكسب النقاط!"},
 
     # ---- 匿名告白 (confession) ----
     "confession.modal.title": {"zh": "💌 匿名告白", "en": "💌 Anonymous Confession", "ja": "💌 匿名の告白", "ar": "💌 اعتراف مجهول"},
@@ -220,8 +220,8 @@ TRANSLATIONS = {
     "games.pjsk.field_bio": {"zh": "📝 簡介", "en": "📝 Bio", "ja": "📝 自己紹介", "ar": "📝 السيرة"},
     "games.pjsk.mystery": {"zh": "這個玩家很神祕，什麼都沒寫。", "en": "This player is mysterious and wrote nothing.", "ja": "このプレイヤーは神秘的で何も書いていない。", "ar": "هذا اللاعب غامض ولم يكتب شيئاً."},
     "games.pjsk.notfound": {"zh": "❌ 找不到 ID 為 `{uid}` 的玩家。", "en": "❌ Player with ID `{uid}` not found.", "ja": "❌ そのIDのプレイヤーは見つかりません。", "ar": "❌ لم يتم العثور على لاعب بالمعرف `{uid}`."},
-    "games.pjsk.api_error": {"zh": "❌ API 暫時沒反應 (代碼: {code})，洛洛待會再試！", "en": "❌ API temporarily not responding (code: {code}), try again later!", "ja": "❌ APIが一時的に応答しません（コード:{code}）", "ar": "❌ واجهة البرمجة غير مستجيبة مؤقتاً (الرمز: {code})"},
-    "games.pjsk.fatal": {"zh": "API 壞掉惹，洛洛修不完嗚嗚...", "en": "The API is down and I can't fix it...", "ja": "APIが壊れた...直せない...", "ar": "واجهة البرمجة معطلة ولا أستطيع إصلاحها..."},
+    "games.pjsk.api_error": {"zh": "❌ API 暫時沒反應 (代碼: {code})，Fuwawa待會再試！", "en": "❌ API temporarily not responding (code: {code}), try again later!", "ja": "❌ APIが一時的に応答しません（コード:{code}）", "ar": "❌ واجهة البرمجة غير مستجيبة مؤقتاً (الرمز: {code})"},
+    "games.pjsk.fatal": {"zh": "API 壞掉惹，Fuwawa修不完嗚嗚...", "en": "The API is down and I can't fix it...", "ja": "APIが壊れた...直せない...", "ar": "واجهة البرمجة معطلة ولا أستطيع إصلاحها..."},
 
     # ---- HTTP Cat (httpcat) ----
     "httpcat.range": {"zh": "❌ HTTP 狀態碼必須在 100-599 之間！", "en": "❌ HTTP status code must be between 100-599!", "ja": "❌ HTTPステータスコードは100から599の間でなければなりません！", "ar": "❌ يجب أن يكون رمز حالة HTTP بين 100-599!"},
@@ -231,7 +231,7 @@ TRANSLATIONS = {
     "twitter.tracked": {"zh": "嗷～開始追蹤 **{user}** 的推特！會在這裡發送通知喔。", "en": "Now tracking **{user}**'s tweets! Notifications will be sent here.", "ja": "**{user}** のツイートの追跡を開始！ここに通知します。", "ar": "بدأ تتبع تغريدات **{user}**! سيتم إرسال الإشعارات هنا."},
     "twitter.already": {"zh": "嗷～**{user}** 已經在名單裡了。", "en": "**{user}** is already on the list.", "ja": "**{user}** は既にリストにいます。", "ar": "**{user}** موجود بالفعل في القائمة."},
     "twitter.new": {"zh": "🔔 {user} 發布了新推文！", "en": "🔔 {user} posted a new tweet!", "ja": "🔔 {user} が新しいツイートを投稿！", "ar": "🔔 نشر {user} تغريدة جديدة!"},
-    "twitter.footer": {"zh": "洛洛推特情報站 (via Nitter RSS)", "en": "Yokaro Twitter feed (via Nitter RSS)", "ja": "ヨカロのX情報 (Nitter RSS)", "ar": "تغذية يوكارو على تويتر (عبر Nitter RSS)"},
+    "twitter.footer": {"zh": "Fuwawa推特情報站 (via Nitter RSS)", "en": "Fuwawa Twitter feed (via Nitter RSS)", "ja": "FuwawaのX情報 (Nitter RSS)", "ar": "تغذية Fuwawa على تويتر (عبر Nitter RSS)"},
     "twitter.invalid": {"zh": "❌ 無法辨識 X/Twitter 個人檔案連結！請貼上類似 `https://x.com/username`、`https://twitter.com/username` 或 `@username` 的格式。", "en": "❌ Could not recognize that X/Twitter profile link! Please use something like `https://x.com/username`, `https://twitter.com/username` or `@username`.", "ja": "❌ X/Twitter のプロフィールリンクを認識できません！`https://x.com/username` や `@username` のような形式で貼ってください。", "ar": "❌ تعذر التعرف على رابط ملف X/Twitter الشخصي! استخدم `https://x.com/username` أو `@username`."},
     "twitter.updated": {"zh": "👌 已將 **{user}** 的貼文頻道更新為當前頻道！新貼文會發送到這裡。", "en": "👌 Updated **{user}**'s feed to this channel! New posts will be sent here.", "ja": "👌 **{user}** の配信先をこのチャンネルに更新しました！新しい投稿はここに送られます。", "ar": "👌 تم تحديث قناة تغريدات **{user}** إلى هذه القناة! سيتم إرسال المنشورات الجديدة هنا."},
     "twitter.stopped": {"zh": "⏹️ 已停止追蹤 **{user}**，此頻道不再接收該帳號的貼文。", "en": "⏹️ Stopped tracking **{user}**; this channel will no longer receive their posts.", "ja": "⏹️ **{user}** の追跡を停止しました。このチャンネルには投稿が届きません。", "ar": "⏹️ تم إيقاف تتبع **{user}**؛ لن تستقبل هذه القناة منشوراتهم بعد الآن."},

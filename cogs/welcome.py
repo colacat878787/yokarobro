@@ -66,7 +66,7 @@ class WelcomeCog(commands.Cog):
         else:
             self.welcome_channels.add(ctx.channel.id)
             self.save_welcome_channels()
-            await ctx.send("✨ 嗷嗷嗷！已將本頻道設定為【迎新大廳】！洛洛準備好畫筆，要用二次元美景迎接新人囉！🎨")
+            await ctx.send("✨ 嗷嗷嗷！已將本頻道設定為【迎新大廳】！Fuwawa準備好畫筆，要用二次元美景迎接新人囉！🎨")
 
     async def create_welcome_card(self, member):
         """異步執行緒包裝：防止繪圖卡死主執行緒"""
@@ -84,7 +84,7 @@ class WelcomeCog(commands.Cog):
             avatar_image = await load_image_async(str(member.display_avatar.url))
         except Exception as e:
             print(f"下載頭像失敗: {e}，使用預設頭像是最穩的備案")
-            # 預設頭像: 一張可愛的洛洛/動漫占位圖
+            # 預設頭像: 一張可愛的Fuwawa/動漫占位圖
             fallback_avatar = "https://i.imgur.com/83pPCQ8.png"
             avatar_image = await load_image_async(fallback_avatar)
 
@@ -159,7 +159,7 @@ class WelcomeCog(commands.Cog):
                 if file:
                     await channel.send(f"🌌 歡迎新星 <@{member.id}> 墜入 **{member.guild.name}**！", file=file)
                 else:
-                    await channel.send(f"🌌 歡迎新星 <@{member.id}> 墜入 **{member.guild.name}**！(洛洛今天畫圖手感不太好...嗷嗚)")
+                    await channel.send(f"🌌 歡迎新星 <@{member.id}> 墜入 **{member.guild.name}**！(Fuwawa今天畫圖手感不太好...嗷嗚)")
 
 async def setup(bot):
     await bot.add_cog(WelcomeCog(bot))

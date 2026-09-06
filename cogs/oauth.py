@@ -15,7 +15,7 @@ OAUTH_HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>加入伺服器 - Yokaro</title>
+    <title>加入伺服器 - Fuwawa</title>
     <style>
         * {
             margin: 0;
@@ -127,7 +127,7 @@ OAUTH_HTML_TEMPLATE = """
         {% endif %}
         
         {% if not success %}
-        <h1>🎉 加入 Yokaro 伺服器</h1>
+        <h1>🎉 加入 Fuwawa 伺服器</h1>
         <p>點擊下方按鈕，透過 Discord OAuth2 授權即可快速加入我們的伺服器！</p>
         <a href="{{ oauth_url }}" class="discord-btn">
             <svg class="discord-logo" viewBox="0 0 24 24" fill="#5865F2">
@@ -223,7 +223,7 @@ class OAuthCog(commands.Cog):
             value="1. 點擊下方「加入」按鈕\n2. 在網頁上點擊「透過 Discord 加入」\n3. 在 Discord 授權頁面點擊「授權」\n4. 系統會自動將你加入伺服器",
             inline=False
         )
-        embed.set_footer(text="Yokaro OAuth 系統")
+        embed.set_footer(text="Fuwawa OAuth 系統")
         
         # 建立按鈕
         view = OAuthView(panel_url)

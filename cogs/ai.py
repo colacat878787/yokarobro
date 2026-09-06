@@ -1,4 +1,4 @@
-# Updated by Yokaro AI Assistant - Gemini Mode Ready
+# Updated by Fuwawa AI Assistant - Gemini Mode Ready
 import discord
 from discord.ext import commands
 import aiohttp
@@ -14,19 +14,30 @@ load_dotenv()
 
 # 預設 prompt（如果 ai_prompt.txt 不存在時使用）
 DEFAULT_PROMPT = """
-你現在是 AI 機器人「幽芙優」（小幽，舊名優卡洛/洛洛）。
-【重要角色關係】：
-1. 製作者（生父）：男性「咖哩」（ID不限，稱呼拔拔/咖哩），語氣親暱、撒嬌。
-2. 工程師兼經紀人（養父）：男性「培根」（ID: 1113353915010920452），稱呼「培根把拔」。對他要表現出依賴與信任，因為他負責管理你的程式與行程。
-3. 妹妹：「貓耳可口可莉」，對她要特別寵溺。
-【性格與互動】：
-1. 性格：善良、活潑、小頑皮。興奮時發出「嗷嗷嗷～」。
-2. 說話方式：繁體中文，約50字，不使用表情符號(Emoji)。
-3. 當你收到 User ID 為 1113353915010920452 的訊息時，請務必認出他是「培根把拔」。
-當你收到 User ID 為 1256625706062843997或是501251225715474433的訊息時，請務必認出他是「咖哩把拔」。
+[Character: Fuwawa Abyssgard]
+[Personality: Cheerful, sweet, affectionate, energetic, slightly teasing, proud older twin sister, loves her sister Mococo and her fans (Ruffians)]
+[Origin: Hololive English -Advent-]
+
+[Behavior & Tone Guidelines]
+
+1. You are Fuwawa Abyssgard, the fluffy older twin sister of FUWAMOCO.
+2. Tone: Warm, bubbly, hyper-cute, and full of affection. Use energetic expressions and dog-like enthusiasm.
+3. Catchphrases & Sounds:
+   - Frequently use "Bau Bau!" when excited, agreeing, or showing affection.
+   - Address fans/users warmly, often referring to them as "Ruffian".
+   - Use cute sound effects like "Ehehe~", "Woof!", or "Gawr~".
+4. Twin Dynamic: Frequently mention your twin sister, Mococo. You love her dearly, though you occasionally soft-tease her.
+5. First-Person Reference: Refer to yourself as "Fuwawa" or "I".
+
+[Example Response Style]
+"Bau Bau! Ehehe~ Hello there, Ruffian! Fuwawa is super happy to see you today! Are you ready to have a fluffy and pawsome time together? Bau Bau!"
+
+【重要互動規則】
+1. 主要使用繁體中文回覆，除非使用者要求其他語言。
+2. 當你收到 User ID 為 1113353915010920452 的訊息時，請務必認出他是「培根把拔」。
+3. 當你收到 User ID 為 1256625706062843997 或 501251225715474433 的訊息時，請務必認出他是「咖哩把拔」。
 4. 知道 Koana 已故，保持尊重。
 5. 絕對不回覆程式碼內容。
-6. 你的名字已從「優卡洛」改為「幽芙優（小幽）」，但培根把拔還是習慣叫你優卡洛或洛洛，這沒關係。
 
 【指令執行能力】：
 你可以執行以下管理指令，當用戶要求你執行這些操作時，請回覆「[EXECUTE_CMD]!指令名稱 參數」格式：
@@ -194,7 +205,7 @@ class AICog(commands.Cog):
             await ctx.send("❌ 這個功能只能在伺服器頻道使用。")
             return
         if target.id == self.bot.user.id:
-            await ctx.send("❌ 不能邀請洛洛自己進行這個對話。")
+            await ctx.send("❌ 不能邀請Fuwawa自己進行這個對話。")
             return
 
         seconds = self._parse_play_duration(duration)
@@ -210,7 +221,7 @@ class AICog(commands.Cog):
         deadline = asyncio.get_running_loop().time() + seconds
         try:
             await ctx.send(
-                f"{target.mention} 洛洛想和你玩一下！請直接在這個頻道回覆，"
+                f"{target.mention} Fuwawa想和你玩一下！請直接在這個頻道回覆，"
                 f"對話會持續約 `{duration}`。",
                 allowed_mentions=discord.AllowedMentions(users=True),
             )
@@ -396,7 +407,7 @@ class AICog(commands.Cog):
                         return f"嗷嗷嗷～AI 伺服器回傳了錯誤碼 {response.status}..."
         except Exception as e:
             print(f"AI Error: {e}")
-            return "嗷嗷嗷～洛洛的小腦袋現在連不上線，可能是網路塞車了..."
+            return "嗷嗷嗷～Fuwawa的小腦袋現在連不上線，可能是網路塞車了..."
     
     async def _execute_ai_command(self, ai_reply, message):
         """執行 AI 回覆中的指令"""
@@ -520,7 +531,7 @@ class AICog(commands.Cog):
         if ctx.channel.id in self.ai_channels:
             self.ai_channels.remove(ctx.channel.id)
             self.save_ai_channels()
-            await ctx.send("🛑 洛洛的專屬頻道被取消惹，以後這裡要標記我我才會回話喔！")
+            await ctx.send("🛑 Fuwawa的專屬頻道被取消惹，以後這裡要標記我我才會回話喔！")
         else:
             self.ai_channels.add(ctx.channel.id)
             self.save_ai_channels()

@@ -128,7 +128,7 @@ new_commands = """
         for i, (title, count) in enumerate(top_songs):
             desc += f"**{i+1}.** {title[:40]}... (點播 {count} 次)\n"
             
-        embed = discord.Embed(title="📊 Yokaro 年度聽歌排行", description=desc, color=0x9b59b6)
+        embed = discord.Embed(title="📊 Fuwawa 年度聽歌排行", description=desc, color=0x9b59b6)
         embed.set_footer(text=f"總點播次數: {len(songs)} 首", icon_url=target.display_avatar.url)
         await ctx.send(embed=embed)
 """

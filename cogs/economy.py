@@ -31,7 +31,7 @@ class PasswordModal(discord.ui.Modal, title="🔑 輸入密碼"):
         elif self.mode == "login":
             if data.get("password") == hashed:
                 view = ATMLoggedInView(interaction.user, self.economy_cog)
-                embed = discord.Embed(title="🏦 洛洛銀行 — 已登入", description="請選擇服務：", color=0x2ecc71)
+                embed = discord.Embed(title="🏦 Fuwawa銀行 — 已登入", description="請選擇服務：", color=0x2ecc71)
                 embed.add_field(name="💛 錢包", value=f"${data['balance']}")
                 embed.add_field(name="🏦 銀行", value=f"${data.get('bank', 0)}")
                 await interaction.edit_original_response(content=None, embed=embed, view=view)
@@ -121,7 +121,7 @@ class ATMLoggedInView(discord.ui.View):
 
     @discord.ui.button(label="🔴 結束服務/退卡", style=discord.ButtonStyle.secondary, custom_id="econ_atm_logout")
     async def logout(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content="🏦 **洛洛銀行 — 已登出，歡迎下次光臨！🐾**", embed=None, view=None)
+        await interaction.response.edit_message(content="🏦 **Fuwawa銀行 — 已登出，歡迎下次光臨！🐾**", embed=None, view=None)
         self.stop()
 
 # ──────────────────────────────────────────
@@ -166,7 +166,7 @@ class LeafGameView(discord.ui.View):
         return callback
 
     def make_embed(self):
-        embed = discord.Embed(title="🧹 洛洛清道夫大進擊 (5x5)", color=0x27ae60)
+        embed = discord.Embed(title="🧹 Fuwawa清道夫大進擊 (5x5)", color=0x27ae60)
         embed.description = f"把葉子 🍃 通通掃掉！\n妳還有 **{self.time_left}** 秒可以努力！"
         embed.add_field(name="✨ 目前分數", value=f"**{self.score}** 片葉子")
         return embed
@@ -319,7 +319,7 @@ class EconomyCog(commands.Cog):
 
     @commands.command(name='ATM', aliases=['銀行'])
     async def atm(self, ctx):
-        embed = discord.Embed(title="🏪 Yokaro 24h 自動櫃員機", description="歡迎使用洛洛銀行！請點選下方按鈕。", color=0x2ecc71)
+        embed = discord.Embed(title="🏪 Fuwawa 24h 自動櫃員機", description="歡迎使用Fuwawa銀行！請點選下方按鈕。", color=0x2ecc71)
         await ctx.send(embed=embed, view=ATMMainView(ctx.author, self))
 
     @commands.hybrid_command(name='daily', aliases=['每日獎勵'])

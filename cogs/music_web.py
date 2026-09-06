@@ -18,7 +18,7 @@ MUSIC_HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yokaro Music | 線上音樂廳</title>
+    <title>Fuwawa Music | 線上音樂廳</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -205,7 +205,7 @@ MUSIC_HTML_TEMPLATE = """
         <div class="glass-panel player-card">
             <div id="no-track" style="display:none;">
                 <i class="fas fa-compact-disc fa-spin"></i>
-                <h2 style="color:var(--text-secondary)">優卡洛正在待機中...</h2>
+                <h2 style="color:var(--text-secondary)">Fuwawa正在待機中...</h2>
                 <p style="color:var(--text-secondary)">點擊右側來放首歌吧！</p>
             </div>
             <div id="player-content" style="width:100%; display:flex; flex-direction:column; align-items:center;">
@@ -253,7 +253,7 @@ MUSIC_HTML_TEMPLATE = """
                     <i class="fas fa-plug"></i> 加入頻道
                 </button>
                 <button class="action-btn btn-danger" onclick="leaveChannel()">
-                    <i class="fas fa-sign-out-alt"></i> 讓優卡洛退出語音
+                    <i class="fas fa-sign-out-alt"></i> 讓Fuwawa退出語音
                 </button>
 
                 <hr style="border:0; border-top:1px solid rgba(255,255,255,0.05); margin:16px 0;">
@@ -364,7 +364,7 @@ MUSIC_HTML_TEMPLATE = """
         }
 
         async function leaveChannel() {
-            if(!confirm('確定要讓優卡洛離開語音頻道嗎？')) return;
+            if(!confirm('確定要讓Fuwawa離開語音頻道嗎？')) return;
             await api('/leave', 'POST');
             setTimeout(loadChannels, 1000);
             update();
@@ -785,7 +785,7 @@ class MusicWebPanelCog(commands.Cog):
             return await ctx.send("❌ WebPanel 隧道未啟動，無法獲取連結。")
             
         url = f"{web_cog.tunnel_url}/music/{ctx.guild.id}"
-        embed = discord.Embed(title="🎵 Yokaro 線上音樂儀表板", color=0x5865f2)
+        embed = discord.Embed(title="🎵 Fuwawa 線上音樂儀表板", color=0x5865f2)
         embed.description = f"點擊下方連結即可進入專屬音樂廳，即時控制、點歌與查看歌單！\n\n🔗 **[進入音樂廳]({url})**"
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
         await ctx.send(embed=embed)

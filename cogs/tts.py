@@ -41,7 +41,7 @@ class TTSCog(commands.Cog):
         if ctx.guild.id not in self.queue:
             self.queue[ctx.guild.id] = []
             
-        await ctx.send(f"✅ 已綁定本頻道為【AI實況頻道】！洛洛也已經加入 `{voice_channel.name}` 囉！嗷嗷嗷～\n(只要你在這裡打字，我就會唸出來！)")
+        await ctx.send(f"✅ 已綁定本頻道為【AI實況頻道】！Fuwawa也已經加入 `{voice_channel.name}` 囉！嗷嗷嗷～\n(只要你在這裡打字，我就會唸出來！)")
 
     @commands.Cog.listener()
     async def on_message(self, message):

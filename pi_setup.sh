@@ -2,7 +2,7 @@
 # 🍓 Raspberry Pi Zero 2W 備援系統安裝腳本
 # 使用方式: chmod +x pi_setup.sh && ./pi_setup.sh
 
-echo "🍓 幽芙優(小幽) Raspberry Pi 備援系統安裝程式"
+echo "🍓 Fuwawa Raspberry Pi 備援系統安裝程式"
 echo "================================================"
 
 # 檢查是否為 root
@@ -74,7 +74,7 @@ echo ""
 echo "🔧 建立 systemd 服務..."
 cat > /etc/systemd/system/yokaro-failover.service << 'EOF'
 [Unit]
-Description=Yokaro Failover Monitor (Raspberry Pi)
+Description=Fuwawa Failover Monitor (Raspberry Pi)
 After=network-online.target
 Wants=network-online.target
 

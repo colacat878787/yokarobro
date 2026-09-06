@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 🍓 Raspberry Pi Zero 2W 備援系統
-當主伺服器的優卡洛(幽芙優)離線時，自動啟動備援機器人
+當主伺服器的Fuwawa(Fuwawa)離線時，自動啟動備援機器人
 當主伺服器恢復上線時，自動關閉備援機器人
 
 使用方式：
@@ -70,7 +70,7 @@ def start_backup_bot():
                       capture_output=True, timeout=120)
         
         # 啟動機器人
-        log("🤖 正在啟動幽芙優(小幽)備援機器人...")
+        log("🤖 正在啟動Fuwawa備援機器人...")
         backup_process = subprocess.Popen(
             [sys.executable, "yokaro.py"],
             stdout=subprocess.PIPE,
@@ -232,7 +232,7 @@ def signal_handler(sig, frame):
 
 def main():
     log("=" * 50)
-    log("🍓 幽芙優(小幽) Raspberry Pi 備援系統")
+    log("🍓 Fuwawa Raspberry Pi 備援系統")
     log(f"📡 輪詢間隔: {POLL_INTERVAL}秒")
     log(f"⏱️ 備援觸發: {FAILOVER_THRESHOLD}次連續失敗")
     log(f"📁 工作目錄: {os.getcwd()}")

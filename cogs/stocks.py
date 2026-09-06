@@ -82,7 +82,7 @@ class StockMarketView(discord.ui.View):
     
     async def _build_market_embed(self):
         embed = discord.Embed(
-            title="📈 Yokaro 股票市場",
+            title="📈 Fuwawa 股票市場",
             description=f"🕐 更新時間：{datetime.now().strftime('%H:%M:%S')}\n💡 點擊下方按鈕進行交易",
             color=0x00d4aa
         )
@@ -509,7 +509,7 @@ class StocksCog(commands.Cog):
             channel = guild.get_channel(int(channel_id))
             if not channel: continue
             embed = discord.Embed(
-                title="📈 Yokaro 股票市場即時行情",
+                title="📈 Fuwawa 股票市場即時行情",
                 description=f"🕐 {datetime.now().strftime('%H:%M:%S')} | 每15秒自動更新",
                 color=0x00d4aa
             )

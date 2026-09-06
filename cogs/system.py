@@ -55,7 +55,7 @@ class SystemCog(commands.Cog):
     @sys_group.command(name='check', aliases=['診斷'])
     async def check(self, ctx):
         """專業診斷目前系統依賴項狀態"""
-        embed = discord.Embed(title="🩺 Yokaro 系統診斷報告", color=0x3498db)
+        embed = discord.Embed(title="🩺 Fuwawa 系統診斷報告", color=0x3498db)
         embed.timestamp = discord.utils.utcnow()
 
         status_text = ""
@@ -82,7 +82,7 @@ class SystemCog(commands.Cog):
     @sys_group.command(name='repair', aliases=['修復'])
     async def repair(self, ctx):
         """手動觸發自癒程序，嘗試補齊缺失套件"""
-        msg = await ctx.send("🛠️ **正在啟動修復程序...** 請耐心等候洛洛搬運零件。")
+        msg = await ctx.send("🛠️ **正在啟動修復程序...** 請耐心等候Fuwawa搬運零件。")
         
         results = []
         # 強制執行一次 pip install spotify-dlp
@@ -114,7 +114,7 @@ class SystemCog(commands.Cog):
         except ImportError:
             await ctx.send("⚠️ 缺少 `psutil` 模組，無法顯示精確負載。")
 
-    sys_app = app_commands.Group(name="系統", description="Yokaro 系統管理功能")
+    sys_app = app_commands.Group(name="系統", description="Fuwawa 系統管理功能")
 
     @sys_app.command(name="功能表", description="查看系統管理功能表")
     @app_commands.default_permissions(administrator=True)
@@ -132,7 +132,7 @@ class SystemCog(commands.Cog):
     @sys_app.command(name="診斷", description="診斷目前系統依賴狀態")
     @app_commands.default_permissions(administrator=True)
     async def sys_check_app(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="🩺 Yokaro 系統診斷報告", color=0x3498db)
+        embed = discord.Embed(title="🩺 Fuwawa 系統診斷報告", color=0x3498db)
         embed.timestamp = discord.utils.utcnow()
 
         status_text = ""

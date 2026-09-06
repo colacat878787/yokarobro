@@ -47,7 +47,7 @@ class AlarmPanelView(discord.ui.View):
     def build_embed(self, channel_id):
         gid = str(self.cog._current_guild_id)
         lst = self.cog.alarms.get(gid, {}).get(str(channel_id), [])
-        embed = discord.Embed(title="⏰ 優卡洛鬧鐘面板", color=0x2ecc71)
+        embed = discord.Embed(title="⏰ Fuwawa鬧鐘面板", color=0x2ecc71)
         embed.description = "點擊下方按鈕來新增或取消鬧鐘。"
         if lst:
             desc_lines = []
@@ -317,7 +317,7 @@ class AlarmCog(commands.Cog):
         reason = alarm.get("reason") or "起床"
         user = self.bot.get_user(int(user_id)) if user_id else None
         mention = user.mention if user else f"<@{user_id}>"
-        text = f"{mention} 您該{reason}了!! By.幽芙優Yofuyu"
+        text = f"{mention} 您該{reason}了!! By.Fuwawa"
         for _ in range(MSGS):
             try:
                 await channel.send(text)

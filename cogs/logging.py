@@ -51,7 +51,7 @@ class LoggingCog(commands.Cog):
                     embed.add_field(name=name, value=value, inline=False)
             if thumbnail:
                 embed.set_thumbnail(url=thumbnail)
-            embed.set_footer(text="優卡洛 Log 系統")
+            embed.set_footer(text="Fuwawa Log 系統")
             print(f"📋 [LOG] {title}: {description}")
             if channel:
                 await channel.send(embed=embed)
@@ -158,7 +158,7 @@ class LoggingCog(commands.Cog):
                     "👤 使用者": f"{user} (`{user.id}`)",
                     "📍 位置": f"{guild_name} / #{channel_name}" if guild_name else "DM",
                     "💬 用戶說": f"```{user_input[:800]}```",
-                    "✨ 小幽回": f"```{reply[:800]}```",
+                    "✨ Fuwawa回": f"```{reply[:800]}```",
                 },
             )
         except Exception as e:

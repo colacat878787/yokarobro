@@ -211,7 +211,7 @@ class VotingView(discord.ui.View):
             color=0x2ecc71
         )
         embed.add_field(name="決議", value=exiled_msg, inline=False)
-        embed.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手")
+        embed.set_footer(text="Fuwawa ⚖️ 庫拉吉法官助手")
         
         await self.voting_message.channel.send(embed=embed)
         
@@ -357,7 +357,7 @@ class WerewolfCog(commands.Cog):
                   "💡 輸入 `!lssha setup [自訂角色]` 可重新配置遊戲！",
             inline=False
         )
-        embed.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手", icon_url=self.bot.user.display_avatar.url)
+        embed.set_footer(text="Fuwawa ⚖️ 庫拉吉法官助手", icon_url=self.bot.user.display_avatar.url)
         return embed
 
     def create_status_embed(self):
@@ -389,7 +389,7 @@ class WerewolfCog(commands.Cog):
             inline=False
         )
         
-        embed.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手", icon_url=self.bot.user.display_avatar.url)
+        embed.set_footer(text="Fuwawa ⚖️ 庫拉吉法官助手", icon_url=self.bot.user.display_avatar.url)
         return embed
 
     async def set_member_nick(self, member, nick):
@@ -574,10 +574,10 @@ class WerewolfCog(commands.Cog):
     async def lssha_cmd(self, ctx):
         """狼人殺遊戲管理系統"""
         if ctx.invoked_subcommand is None:
-            await ctx.send("📢 **優卡洛法官已被喚醒！本頻道已設定為本局【狼人殺專屬文字頻道】。**")
+            await ctx.send("📢 **Fuwawa法官已被喚醒！本頻道已設定為本局【狼人殺專屬文字頻道】。**")
             await self.setup_cmd(ctx, roles_str=None) # Call setup command as default behavior
             embed = discord.Embed(
-                title="🐺 👑 優卡洛 ⚖️ 庫拉吉法官助手",
+                title="🐺 👑 Fuwawa ⚖️ 庫拉吉法官助手",
                 description="本助手協助管理 Discord 語音狼人殺遊戲，自動管理暱稱、語音房禁言、權限，並支援文字發言 TTS 自動朗讀！",
                 color=0x9b59b6
             )
@@ -605,7 +605,7 @@ class WerewolfCog(commands.Cog):
                 value="🔹 `!過` (或 `!pass`、`!狼人殺 過`) - 正在發言的玩家結束發言，自動交給下一位存活者。",
                 inline=False
             )
-            embed.set_footer(text="優卡洛 | Werewolf Judge Assistant")
+            embed.set_footer(text="Fuwawa | Werewolf Judge Assistant")
             await ctx.send(embed=embed)
 
     @lssha_cmd.command(name='設定', aliases=['setup'])
@@ -708,7 +708,7 @@ class WerewolfCog(commands.Cog):
                                 f"💡 請遵守法官與語音頻道指示，祝您遊戲愉快！",
                     color=0x9b59b6
                 )
-                embed_dm.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手")
+                embed_dm.set_footer(text="Fuwawa ⚖️ 庫拉吉法官助手")
                 await member.send(embed=embed_dm)
             except discord.Forbidden:
                 dm_warnings.append(member.mention)
@@ -1009,7 +1009,7 @@ class WerewolfCog(commands.Cog):
             value="\n".join(players_list),
             inline=False
         )
-        embed.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手")
+        embed.set_footer(text="Fuwawa ⚖️ 庫拉吉法官助手")
         
         view = VotingView(self, living_players, timeout)
         msg = await ctx.send(embed=embed, view=view)
@@ -1091,7 +1091,7 @@ class WerewolfCog(commands.Cog):
                                 f"請點選下方按鈕回覆您的參戰意願！",
                     color=0xc0392b
                 )
-                embed_invite.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手")
+                embed_invite.set_footer(text="Fuwawa ⚖️ 庫拉吉法官助手")
                 view = CombatInviteView(member, target_channel)
                 await member.send(embed=embed_invite, view=view)
             except discord.Forbidden:
@@ -1135,7 +1135,7 @@ class WerewolfCog(commands.Cog):
                 color=0x2ecc71
             )
             embed_invite.add_field(name="語音頻道", value=voice_channel.mention, inline=False)
-            embed_invite.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手")
+            embed_invite.set_footer(text="Fuwawa ⚖️ 庫拉吉法官助手")
             view = VoiceInviteView(member, voice_channel, target_channel)
             await member.send(embed=embed_invite, view=view)
             await ctx.send(f"✅ 已向 {member.mention} 私訊語音邀請，請等待他回覆。")
@@ -1312,8 +1312,8 @@ class WerewolfCog(commands.Cog):
 
     @lssha_cmd.command(name='ai幫助', aliases=['ai_help','幫助'])
     async def ai_help_cmd(self, ctx, *, question: str):
-        """詢問優卡洛狼人殺相關問題或尋求協助"""
-        await ctx.send(f"您好，我就是優卡洛助手。您可以直接向我提出您的狼人殺問題：\n\n{question}\n\n我會盡力為您提供幫助。")
+        """詢問Fuwawa狼人殺相關問題或尋求協助"""
+        await ctx.send(f"您好，我就是Fuwawa助手。您可以直接向我提出您的狼人殺問題：\n\n{question}\n\n我會盡力為您提供幫助。")
 
     @lssha_cmd.command(name='自動', aliases=['auto'])
     async def auto_cmd(self, ctx, *, roles_str: str = None):
@@ -1339,8 +1339,8 @@ class WerewolfCog(commands.Cog):
         self.pending_players = {member.id: member for member in members_in_vc}
         self.reported_numbers = {member.id: idx + 1 for idx, member in enumerate(members_in_vc)}
 
-        await ctx.send("優卡洛法官已啟動自動狼人殺模式，10 秒後將直接以語音房玩家開局。")
-        self.queue_tts("優卡洛法官已啟動自動狼人殺模式，10 秒後將直接以語音房玩家開局。", ctx.guild)
+        await ctx.send("Fuwawa法官已啟動自動狼人殺模式，10 秒後將直接以語音房玩家開局。")
+        self.queue_tts("Fuwawa法官已啟動自動狼人殺模式，10 秒後將直接以語音房玩家開局。", ctx.guild)
 
         self.auto_game_task = self.bot.loop.create_task(self._delayed_auto_start(ctx, members_in_vc))
 
@@ -1450,7 +1450,7 @@ class WerewolfCog(commands.Cog):
                                 f"💡 請遵守法官與語音頻道指示，祝您遊戲愉快！",
                     color=0x9b59b6
                 )
-                embed_dm.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手")
+                embed_dm.set_footer(text="Fuwawa ⚖️ 庫拉吉法官助手")
                 await member.send(embed=embed_dm)
             except discord.Forbidden:
                 dm_warnings.append(member.mention)
@@ -1654,7 +1654,7 @@ class WerewolfCog(commands.Cog):
             value="\n".join(players_list),
             inline=False
         )
-        embed.set_footer(text="優卡洛 ⚖️ 庫拉吉法官助手")
+        embed.set_footer(text="Fuwawa ⚖️ 庫拉吉法官助手")
 
         view = VotingView(self, living_players, timeout=30)
         msg = await ctx.send(embed=embed, view=view)

@@ -17,7 +17,7 @@ MUSIC_HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yokaro Music | 蝺??單?撱?/title>
+    <title>Fuwawa Music | 蝺??單?撱?/title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -611,7 +611,7 @@ class MusicWebPanelCog(commands.Cog):
             return await ctx.send("??WebPanel ?折??芸????⊥??脣??????)
             
         url = f"{web_cog.tunnel_url}/music/{ctx.guild.id}"
-        embed = discord.Embed(title="? Yokaro 蝺??單??銵冽", color=0x5865f2)
+        embed = discord.Embed(title="? Fuwawa 蝺??單??銵冽", color=0x5865f2)
         embed.description = f"暺?銝????喳?脣撠惇?單?撱喉??單??批??甇??亦?甇嚗n\n?? **[?脣?單?撱設({url})**"
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
         await ctx.send(embed=embed)

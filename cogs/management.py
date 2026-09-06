@@ -17,7 +17,7 @@ class ServerListView(discord.ui.View):
         super().__init__(timeout=60)
         self.cog = cog
 
-    @discord.ui.button(label="🚪 讓洛洛退出伺服器", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="🚪 讓Fuwawa退出伺服器", style=discord.ButtonStyle.danger)
     async def leave_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         class LeaveModal(discord.ui.Modal, title="🚪 執行撤退指令"):
             num = discord.ui.TextInput(label="請輸入列表中的編號 (如: 1)", placeholder="編號...", min_length=1, max_length=2)
@@ -27,7 +27,7 @@ class ServerListView(discord.ui.View):
                     guilds = self.cog.last_guild_list
                     if 0 <= idx < len(guilds):
                         target = guilds[idx]
-                        await inter.response.send_message(f"🚨 洛洛正在執行撤退... 即將離開 **{target.name}** (`{target.id}`)！", ephemeral=True)
+                        await inter.response.send_message(f"🚨 Fuwawa正在執行撤退... 即將離開 **{target.name}** (`{target.id}`)！", ephemeral=True)
                         await target.leave()
                     else:
                         await inter.response.send_message("❌ 編號超出範圍囉！", ephemeral=True)
@@ -308,7 +308,7 @@ class ManagementCog(commands.Cog):
     async def manage_root(self, ctx):
         """監管系統主指令 (僅限擁有者)"""
         if ctx.author.id != 1113353915010920452:
-            return await ctx.send("❌ 嘿！只有洛洛的親爸爸（擁有者）才能使用這個指令喔！")
+            return await ctx.send("❌ 嘿！只有Fuwawa的親爸爸（擁有者）才能使用這個指令喔！")
         await ctx.send("❓ 請輸入子指令：`serverlist`, `userlist`, `blacklist`, `whitelist`, `admin`")
 
     @manage_root.group(name="admin", invoke_without_command=True)
@@ -328,7 +328,7 @@ class ManagementCog(commands.Cog):
         self.high_admins.append(uid)
         self._save_data(ADMINS_FILE, self.high_admins)
         
-        await ctx.send(f"🎊 **【洛洛重要公告】** 🎊\n\n感謝親爸爸的信任！恭喜 {user.mention} 正式受封為 **高階管理員**！\n從現在起，妳也擁有了進入洛洛機密後台的權限喔！嗷嗷嗷～✨")
+        await ctx.send(f"🎊 **【Fuwawa重要公告】** 🎊\n\n感謝親爸爸的信任！恭喜 {user.mention} 正式受封為 **高階管理員**！\n從現在起，妳也擁有了進入Fuwawa機密後台的權限喔！嗷嗷嗷～✨")
 
     @admin_group.command(name="remove")
     async def admin_remove(self, ctx, user: discord.User):
@@ -350,15 +350,15 @@ class ManagementCog(commands.Cog):
         self.last_guild_list = guilds # 暫存清單供退出使用
         count = len(guilds)
         
-        desc = f"📊 目前洛洛所在的伺服器數量：**{count}**\n\n"
+        desc = f"📊 目前Fuwawa所在的伺服器數量：**{count}**\n\n"
         for i, g in enumerate(guilds[:25], 1): # 限制顯示前 25 個
             desc += f"**[{i}]** **{g.name}** (`{g.id}`) - 👥 {g.member_count} 人\n"
         
         if count > 25:
             desc += f"\n*...以及其他 {count-25} 個伺服器*"
 
-        embed = discord.Embed(title="🌐 洛洛伺服器清單", description=desc, color=0x3498db)
-        embed.set_footer(text="點擊下方按鈕並輸入編號，可讓洛洛退出該伺服器")
+        embed = discord.Embed(title="🌐 Fuwawa伺服器清單", description=desc, color=0x3498db)
+        embed.set_footer(text="點擊下方按鈕並輸入編號，可讓Fuwawa退出該伺服器")
         
         view = ServerListView(self)
         await ctx.send(embed=embed, view=view)
@@ -366,7 +366,7 @@ class ManagementCog(commands.Cog):
     @manage_root.command(name="userlist", aliases=["用戶清單", "ul"])
     async def user_list(self, ctx):
         if ctx.author.id != 1113353915010920452: return
-        """列出曾經使用過洛洛指令的用戶 (自動追蹤)"""
+        """列出曾經使用過Fuwawa指令的用戶 (自動追蹤)"""
         count = len(self.known_users)
         if count == 0:
             return await ctx.send("🌚 目前還沒有捕獲到任何活躍用戶資料。")
@@ -377,7 +377,7 @@ class ManagementCog(commands.Cog):
         for uid, info in sorted_users[:20]:
             desc += f"• **{info['display_name']}** (`{uid}`) - 🕒 {info['last_seen'][:16]}\n"
 
-        embed = discord.Embed(title="👥 洛洛活躍用戶名冊", description=desc, color=0x2ecc71)
+        embed = discord.Embed(title="👥 Fuwawa活躍用戶名冊", description=desc, color=0x2ecc71)
         embed.set_footer(text="僅顯示最近活躍的前 20 名")
         await ctx.send(embed=embed)
 
@@ -394,7 +394,7 @@ class ManagementCog(commands.Cog):
         
         notification_status = "✅ 已成功發送私訊通知"
         try:
-            embed = discord.Embed(title="🚫 洛洛服務狀態通知", color=0xff0000)
+            embed = discord.Embed(title="🚫 Fuwawa服務狀態通知", color=0xff0000)
             embed.description = f"您的使用權限已被管理員暫停。\n**原因：** {reason}\n\n如有疑問請聯絡開發者。"
             embed.set_thumbnail(url=self.bot.user.display_avatar.url)
             await user.send(embed=embed)

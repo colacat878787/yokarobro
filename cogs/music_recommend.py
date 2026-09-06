@@ -65,7 +65,7 @@ class MusicRecommendCog(commands.Cog):
                 duration = video.get('duration')
                 
                 embed = discord.Embed(
-                    title=f"🎵 {'定時' if is_auto else '洛洛'}隨機推歌！",
+                    title=f"🎵 {'定時' if is_auto else 'Fuwawa'}隨機推歌！",
                     description=f"今日推薦歌手：**{artist}**\n正在為您點播：**{title}**",
                     color=0xe91e63,
                     url=url
@@ -73,7 +73,7 @@ class MusicRecommendCog(commands.Cog):
                 embed.set_thumbnail(url=video.get('thumbnail'))
                 if duration:
                     embed.add_field(name="⏱️ 長度", value=f"{duration // 60}:{duration % 60:02d}", inline=True)
-                embed.set_footer(text="洛洛音樂電台 | 給您不一樣的驚喜 嗷嗷嗷～")
+                embed.set_footer(text="Fuwawa音樂電台 | 給您不一樣的驚喜 嗷嗷嗷～")
                 
                 # 使用 ctx.send (若為整點推送則需特殊處理)
                 if isinstance(ctx, commands.Context):

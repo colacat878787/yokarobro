@@ -27,7 +27,7 @@ class MenuView(discord.ui.View):
             value="• 隨機可愛的動畫描述\n• 溫暖的愛心傳送\n• 30% 機率觸發愛心反應",
             inline=False
         )
-        embed.set_footer(text="💕 洛洛的小爪子永遠為你敞開")
+        embed.set_footer(text="💕 Fuwawa的小爪子永遠為你敞開")
         await interaction.response.send_message(embed=embed, ephemeral=True)
     
     @discord.ui.button(label="🎵 音樂", style=discord.ButtonStyle.success, custom_id="menu_music", emoji="🎧")
@@ -55,12 +55,12 @@ class MenuView(discord.ui.View):
         """經濟系統介紹"""
         embed = discord.Embed(
             title="💰 經濟系統",
-            description="賺取、儲蓄、投資，成為洛洛幣大亨！",
+            description="賺取、儲蓄、投資，成為Fuwawa幣大亨！",
             color=0xf1c40f
         )
         embed.add_field(
             name="📝 主要指令",
-            value="`!錢包` - 查看資產\n`!打工` - 賺取洛洛幣\n`!簽到` - 每日獎勵\n`!賭博 [金額]` - 試試手氣",
+            value="`!錢包` - 查看資產\n`!打工` - 賺取Fuwawa幣\n`!簽到` - 每日獎勵\n`!賭博 [金額]` - 試試手氣",
             inline=False
         )
         embed.add_field(
@@ -161,7 +161,7 @@ class MenuCog(commands.Cog):
     async def menu(self, ctx):
         """顯示互動式功能選單面板"""
         embed = discord.Embed(
-            title="🎯 洛洛功能選單",
+            title="🎯 Fuwawa功能選單",
             description="點擊下方按鈕查看各項功能的詳細介紹！\n\n"
                         "💡 **提示**：所有功能都支援 `!指令` 和 `/指令` 兩種使用方式",
             color=0xffc0cb
@@ -169,10 +169,10 @@ class MenuCog(commands.Cog):
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
         embed.add_field(
             name="🚀 快速開始",
-            value="• 點擊按鈕查看功能說明\n• 按照說明使用指令\n• 享受洛洛帶來的樂趣！",
+            value="• 點擊按鈕查看功能說明\n• 按照說明使用指令\n• 享受Fuwawa帶來的樂趣！",
             inline=False
         )
-        embed.set_footer(text="✨ 洛洛會一直陪伴著你哦～")
+        embed.set_footer(text="✨ Fuwawa會一直陪伴著你哦～")
         
         await ctx.send(embed=embed, view=MenuView())
 

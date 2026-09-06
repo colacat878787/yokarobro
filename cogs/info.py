@@ -48,7 +48,7 @@ class InfoCog(commands.Cog):
                 search_data = await response.json()
                 results = search_data.get('query', {}).get('search', [])
                 if not results:
-                    return await ctx.send("嗷～這在洛洛的資料庫裡找不到喔！")
+                    return await ctx.send("嗷～這在Fuwawa的資料庫裡找不到喔！")
                 
                 title = results[0]['title']
                 pageid = results[0]['pageid']

@@ -337,7 +337,7 @@ class WidgetCog(commands.Cog):
                   "4. 最後點選 **「4. 一鍵同步到 Discord ⚡」**，資料就會立刻同步至您的 Widget！",
             inline=False
         )
-        embed.set_footer(text="優卡洛 ⚙️ Widget v2 助手")
+        embed.set_footer(text="Fuwawa ⚙️ Widget v2 助手")
         
         view = WidgetControlView(self, ctx.author.id, oauth_url)
         await ctx.send(embed=embed, view=view)

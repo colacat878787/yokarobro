@@ -308,7 +308,7 @@ class KujiCog(commands.Cog):
         stats = {}
         for item in self.pool: stats[item] = stats.get(item, 0) + 1
         desc = "**目前剩餘獎項：**\n```\n" + "\n".join([f"{k}: {v}" for k, v in sorted(stats.items())]) + "```"
-        embed = discord.Embed(title="🎟️ 優卡洛一番賞", description=desc, color=0x3498db)
+        embed = discord.Embed(title="🎟️ Fuwawa一番賞", description=desc, color=0x3498db)
         await ctx.send(embed=embed, view=KujiView(self.bot.get_cog("EconomyCog")))
 
 

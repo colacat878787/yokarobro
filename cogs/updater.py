@@ -31,7 +31,7 @@ class AutoUpdaterCog(commands.Cog):
                     user = await self.bot.fetch_user(self.OWNER_ID)
                     embed = discord.Embed(
                         title="🚀 大版本更新通知",
-                        description=f"洛洛偵測到大版本更新 v{new_major}.0.0！\n\n感謝使用幽芙優(小幽)！嗷嗷嗷～",
+                        description=f"Fuwawa偵測到大版本更新 v{new_major}.0.0！\n\n感謝使用Fuwawa！嗷嗷嗷～",
                         color=0xf1c40f
                     )
                     embed.set_footer(text=f"通知時間：<t:{int(datetime.now().timestamp())}:F>")
@@ -120,8 +120,8 @@ class AutoUpdaterCog(commands.Cog):
 
         log = self._get_git_log(old_hash, new_hash)
         embed = discord.Embed(
-            title="🔄 優卡洛 自動更新完成！",
-            description="洛洛剛剛更新完了喔！以下是本次的更新內容：",
+            title="🔄 Fuwawa 自動更新完成！",
+            description="Fuwawa剛剛更新完了喔！以下是本次的更新內容：",
             color=0x2ecc71
         )
         embed.add_field(name="📦 版本變化", value=f"`{old_hash[:7]}` → `{new_hash[:7]}`", inline=False)
@@ -130,7 +130,7 @@ class AutoUpdaterCog(commands.Cog):
             value=f"```\n{log[:1000]}\n```" if log else "無詳細紀錄",
             inline=False
         )
-        embed.set_footer(text="洛洛更新完畢後已自動重啟！嗷嗷嗷～")
+        embed.set_footer(text="Fuwawa更新完畢後已自動重啟！嗷嗷嗷～")
 
         # 檢查是否為大版本更新
         last_major = self._load_last_major()
@@ -228,7 +228,7 @@ class AutoUpdaterCog(commands.Cog):
                 if ch:
                     embed = discord.Embed(
                         title="🔄 優雅重啟中",
-                        description="洛洛正在重新載入模組，期間音樂播放與 AI 對話不受影響！",
+                        description="Fuwawa正在重新載入模組，期間音樂播放與 AI 對話不受影響！",
                         color=0xf1c40f
                     )
                     await ch.send(embed=embed)
@@ -286,7 +286,7 @@ class AutoUpdaterCog(commands.Cog):
             return await ctx.send(f"✅ **#{ctx.channel.name}** 已經是更新通知頻道之一，無需重複新增。")
         self.changelog_channel_ids.append(channel_id)
         self._save_channels(self.changelog_channel_ids)
-        await ctx.send(f"✅ 已新增 **#{ctx.channel.name}** 為更新通知頻道！\n以後洛洛每次自動更新，都會在這裡發布更新內容喔。嗷嗷嗷～")
+        await ctx.send(f"✅ 已新增 **#{ctx.channel.name}** 為更新通知頻道！\n以後Fuwawa每次自動更新，都會在這裡發布更新內容喔。嗷嗷嗷～")
 
     @commands.command(name='changelog', aliases=['更新紀錄', '版本紀錄', '更新速遞'])
     async def changelog(self, ctx, arg: str = "5"):
@@ -294,7 +294,7 @@ class AutoUpdaterCog(commands.Cog):
         # 如果使用者輸入 set 或 頻道 相關字眼，跳轉到設定功能
         if arg.lower() in ['set', '設定', '頻道', 'channel']:
             if not ctx.author.guild_permissions.administrator:
-                await ctx.send("洛洛偵測到你沒有權限設定頻道喔！這需要管理員權限。嗷～")
+                await ctx.send("Fuwawa偵測到你沒有權限設定頻道喔！這需要管理員權限。嗷～")
                 return
             await self.set_changelog(ctx)
             return
@@ -303,7 +303,7 @@ class AutoUpdaterCog(commands.Cog):
         try:
             count = int(arg)
         except ValueError:
-            await ctx.send(f"嗷嗷嗷～洛洛看不懂「{arg}」是什麼意思耶。請輸入數字（如：`!更新紀錄 10`）或是 `!更新紀錄 set` 喔！")
+            await ctx.send(f"嗷嗷嗷～Fuwawa看不懂「{arg}」是什麼意思耶。請輸入數字（如：`!更新紀錄 10`）或是 `!更新紀錄 set` 喔！")
             return
 
         try:
@@ -315,7 +315,7 @@ class AutoUpdaterCog(commands.Cog):
                 await ctx.send("嗷～找不到任何更新紀錄耶。")
                 return
             embed = discord.Embed(
-                title=f"📜 洛洛最近 {min(count, 15)} 筆更新紀錄",
+                title=f"📜 Fuwawa最近 {min(count, 15)} 筆更新紀錄",
                 description=f"```\n{log}\n```",
                 color=0x3498db
             )
@@ -328,7 +328,7 @@ class AutoUpdaterCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def manual_update(self, ctx):
         """手動觸發強制更新"""
-        msg = await ctx.send("🏃 洛洛正在向 GitHub 小跑步...")
+        msg = await ctx.send("🏃 Fuwawa正在向 GitHub 小跑步...")
         try:
             env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
             await asyncio.to_thread(subprocess.run, ["git", "fetch", "--all"], check=True, timeout=15, env=env, capture_output=True)
@@ -346,7 +346,7 @@ class AutoUpdaterCog(commands.Cog):
                 ["git", "reset", "--hard", "origin/main"],
                 check=True, timeout=15, env=env, capture_output=True
             )
-            await msg.edit(content="✅ 同步完成！洛洛馬上重啟...")
+            await msg.edit(content="✅ 同步完成！Fuwawa馬上重啟...")
             await self._notify_changelog(local, remote)
             # 由外部 start.sh 負責程序重啟與重新載入所有 Cog。
             os._exit(0)

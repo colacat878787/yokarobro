@@ -1461,7 +1461,7 @@ class MusicCog(commands.Cog):
         if state.get('247'): filters.append("∞ 續播")
         
         status = f"音量 {int(state['volume']*100)}% | 音調 {state['pitch']:.2f}x | {' | '.join(filters) if filters else '純淨模式'}"
-        embed.set_footer(text=f"Yokaro Music Theater | {status}")
+        embed.set_footer(text=f"Fuwawa Music Theater | {status}")
         return embed
 
     async def reload_current(self, guild):
@@ -1522,7 +1522,7 @@ class MusicCog(commands.Cog):
                                 # 抓取 meta data 裡面的歌曲資訊 (最穩定)
                                 meta_songs = re.findall(r'<meta property="music:song" content="https://open\.spotify\.com/track/([a-zA-Z0-9]+)"', html)
                                 if meta_songs:
-                                    # 這裡洛洛比較懶，直接用 oembed 一個個解析前 10 首 (保證正確性)
+                                    # 這裡Fuwawa比較懶，直接用 oembed 一個個解析前 10 首 (保證正確性)
                                     for tid in meta_songs[:20]:
                                         t_url = f"https://open.spotify.com/track/{tid}"
                                         async with session.get(f"https://open.spotify.com/oembed?url={t_url}") as o_resp:
@@ -1532,7 +1532,7 @@ class MusicCog(commands.Cog):
                 except: pass
 
             if not tracks:
-                return await ctx.send("❌ 抱歉！洛洛無法精準解析這個 Spotify 連結，可能被加密了。")
+                return await ctx.send("❌ 抱歉！Fuwawa無法精準解析這個 Spotify 連結，可能被加密了。")
 
             added_count = 0
             if tracks:
@@ -1618,7 +1618,7 @@ class MusicCog(commands.Cog):
         if not vc or not vc.is_playing():
             return await ctx.send("❌ 劇院沒有在播歌喔！")
             
-        embed = discord.Embed(title="📜 Yokaro 劇院播放清單", color=0x3498db)
+        embed = discord.Embed(title="📜 Fuwawa 劇院播放清單", color=0x3498db)
         source = vc.source
         embed.add_field(name="▶️ 正在播放", value=f"**{source.title}**\n(點歌者: {source.requester.mention})", inline=False)
         
@@ -1760,7 +1760,7 @@ class MusicCog(commands.Cog):
             await ctx.voice_client.disconnect()
             self.queue[ctx.guild.id] = []
             if ctx.guild.id in self.panels: self.panels.pop(ctx.guild.id)
-            await ctx.send("🛑 劇院已關閉，洛洛下班啦～")
+            await ctx.send("🛑 劇院已關閉，Fuwawa下班啦～")
 
     @commands.command(name='loop', aliases=['循環', '重複', '單曲循環'])
     async def loop_cmd(self, ctx, mode: str = None):
@@ -1817,7 +1817,7 @@ class MusicCog(commands.Cog):
     async def toggle_247_cmd(self, ctx):
         state = self.get_state(ctx.guild.id)
         state['247'] = not state.get('247', False)
-        status = "✅ 已開啟 (洛洛將永不離開)" if state['247'] else "❌ 已關閉"
+        status = "✅ 已開啟 (Fuwawa將永不離開)" if state['247'] else "❌ 已關閉"
         await ctx.send(f"🌌 **24/7 模式 {status}**")
 
     @commands.command(name='8d')
@@ -1868,7 +1868,7 @@ class MusicCog(commands.Cog):
         for i, (title, count) in enumerate(top_songs):
             desc += f"**{i+1}.** {title[:40]}... (點播 {count} 次)\n"
             
-        embed = discord.Embed(title="📊 Yokaro 年度聽歌排行", description=desc, color=0x9b59b6)
+        embed = discord.Embed(title="📊 Fuwawa 年度聽歌排行", description=desc, color=0x9b59b6)
         embed.set_footer(text=f"總點播次數: {len(songs)} 首", icon_url=target.display_avatar.url)
         await ctx.send(embed=embed)
 
@@ -1932,7 +1932,7 @@ class MusicCog(commands.Cog):
     async def ai_playlist(self, ctx, *, prompt: str = None):
         """透過 Gemini AI 根據您的喜好生成專屬歌單並自動加入播放隊列！"""
         if not prompt:
-            return await ctx.send("💡 請告訴洛洛你想聽什麼風格或心情的歌，例如：`!ai_playlist 想聽輕鬆適合打程式的日文歌曲 5 首`")
+            return await ctx.send("💡 請告訴Fuwawa你想聽什麼風格或心情的歌，例如：`!ai_playlist 想聽輕鬆適合打程式的日文歌曲 5 首`")
 
         ai_cog = self.bot.get_cog("AICog")
         if not ai_cog or not getattr(ai_cog, 'active_key', None):

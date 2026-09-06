@@ -219,7 +219,7 @@ class ControlPanelView(discord.ui.View):
         mem = process.memory_info().rss / 1024 / 1024
         cpu = psutil.cpu_percent(interval=0.1)
         
-        embed = discord.Embed(title="📊 Yokaro 實時監測", color=0x3498db)
+        embed = discord.Embed(title="📊 Fuwawa 實時監測", color=0x3498db)
         embed.add_field(name="🌡️ CPU", value=f"{cpu}%", inline=True)
         embed.add_field(name="🧠 RAM", value=f"{mem:.1f} MB", inline=True)
         embed.add_field(name="🛰️ 延遲", value=f"{round(self.bot.latency * 1000)}ms", inline=True)
@@ -255,7 +255,7 @@ class ControlPanelView(discord.ui.View):
             return
         view = BotSettingsView(self.bot, self)
         embed = discord.Embed(
-            title="🤖 Yokaro Bot 設定",
+            title="🤖 Fuwawa Bot 設定",
             description=f"**當前資訊：**\n👤 名稱：{self.bot.user.name}\n🆔 ID：{self.bot.user.id}\n🖼️ 頭貼：當前頭貼\n\n選擇要修改的項目：",
             color=0x00d4aa
         )
@@ -1537,16 +1537,16 @@ class AdminCog(commands.Cog):
         """高階管理後台 (僅限擁有者與受權管理員)"""
         mgmt = self.bot.get_cog("ManagementCog")
         if not (mgmt and mgmt.is_high_admin(ctx.author.id)):
-            return await ctx.send("❌ 嘿！妳沒有進入洛洛管理後台的通行證喔！🐾")
+            return await ctx.send("❌ 嘿！妳沒有進入Fuwawa管理後台的通行證喔！🐾")
         embed = discord.Embed(
-            title="🛠️ Yokaro 高階管理後台 V2",
+            title="🛠️ Fuwawa 高階管理後台 V2",
             description="歡迎來到全功能管理面板！請點擊下方按鈕進行細項設定。",
             color=0x2c3e50
         )
         embed.set_footer(text="提示：所有修改將即時儲存至 guild_settings.json")
         await ctx.send(embed=embed, view=ControlPanelView(self.bot))
 
-    admin_app = app_commands.Group(name="管理", description="Yokaro 高階管理功能")
+    admin_app = app_commands.Group(name="管理", description="Fuwawa 高階管理功能")
 
     @admin_app.command(name="後台", description="開啟高階管理後台")
     async def admin_panel_app(self, interaction: discord.Interaction):
@@ -1554,7 +1554,7 @@ class AdminCog(commands.Cog):
         if not (mgmt and mgmt.is_high_admin(interaction.user.id)):
             return await interaction.response.send_message("❌ 只有高階管理員可以使用此功能。", ephemeral=True)
         embed = discord.Embed(
-            title="🛠️ Yokaro 高階管理後台 V2",
+            title="🛠️ Fuwawa 高階管理後台 V2",
             description="歡迎來到全功能管理面板！請點擊下方按鈕進行細項設定。",
             color=0x2c3e50
         )

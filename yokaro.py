@@ -29,7 +29,7 @@ from utils import mobile_status # 啟用手機在線模式
 
 # 設定基礎日誌，這樣我們就能看到報錯詳情
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
-logger = logging.getLogger("Yokaro")
+logger = logging.getLogger("Fuwawa")
 
 class StatusServerHandler(BaseHTTPRequestHandler):
     """處理 Pi 的狀態查詢請求"""
@@ -54,7 +54,7 @@ class StatusServerHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # 靜默 HTTP 日誌
 
-class YokaroBot(commands.Bot):
+class FuwawaBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix='!', intents=intents, help_command=None)
         # Track deleted roles for restore functionality
@@ -168,7 +168,7 @@ class YokaroBot(commands.Bot):
             if mgmt:
                 # 1. 攔截黑名單
                 if mgmt.is_blacklisted(str(interaction.user.id)):
-                    await interaction.response.send_message("❌ 您已被禁止使用洛洛的服務。如有疑問請聯絡開發者。", ephemeral=True)
+                    await interaction.response.send_message("❌ 您已被禁止使用Fuwawa的服務。如有疑問請聯絡開發者。", ephemeral=True)
                     return False
                 
                 # 2. 追蹤用戶 (Log User)
@@ -181,7 +181,7 @@ class YokaroBot(commands.Bot):
             logger.error(f"❌ 交互出錯 (來自 {interaction.user}): {error}")
             if not interaction.response.is_done():
                 try:
-                    await interaction.response.send_message(f"⚠️ 洛洛偵測到交互內部錯誤：{error}", ephemeral=True)
+                    await interaction.response.send_message(f"⚠️ Fuwawa偵測到交互內部錯誤：{error}", ephemeral=True)
                 except:
                     pass
 
@@ -196,10 +196,10 @@ class YokaroBot(commands.Bot):
         elif os.getenv("OPENAI_API_KEY"): ai_mode = "OpenAI GPT 模式"
         
         print("====================================")
-        print(f"🤖 幽芙優 (小幽) / Yokaro 啟動成功！")
+        print(f"🤖 Fuwawa 啟動成功！")
         print(f"👤 登入身分: {self.user.name} (ID: {self.user.id})")
         print(f"🧠 AI 核心: {ai_mode}")
-        print(f"📦 版本狀態: 2026-07-31 全面改版 (幽芙優)")
+        print(f"📦 版本狀態: 2026-07-31 全面改版 (Fuwawa)")
         
         # 備援系統：啟動狀態查詢伺服器
         main_server_url = os.getenv("MAIN_SERVER_URL")
@@ -323,7 +323,7 @@ class YokaroBot(commands.Bot):
             matches = difflib.get_close_matches(cmd_name, all_commands, n=1, cutoff=0.6)
             
             if matches:
-                return await ctx.send(f"嗷嗷～洛洛找不到 `!{cmd_name}` 這個指令，你是不是要打 `!{matches[0]}` 呢？")
+                return await ctx.send(f"嗷嗷～Fuwawa找不到 `!{cmd_name}` 這個指令，你是不是要打 `!{matches[0]}` 呢？")
             
             # 3. 推薦其他機器人的功能 (映射表)
             OTHER_BOTS = {
@@ -335,23 +335,23 @@ class YokaroBot(commands.Bot):
             }
             
             if cmd_name in OTHER_BOTS:
-                return await ctx.send(f"嗷～洛洛沒有 `!{cmd_name}` 功能，但這看起來像是 **{OTHER_BOTS[cmd_name]}** 機器人的指令，你可以去呼喚它喔！")
+                return await ctx.send(f"嗷～Fuwawa沒有 `!{cmd_name}` 功能，但這看起來像是 **{OTHER_BOTS[cmd_name]}** 機器人的指令，你可以去呼喚它喔！")
             
             # 4. 真的找不到時的賣萌回應
-            try: await ctx.send(f"嗷嗷嗷～洛洛找不到 `!{cmd_name}` 這個指令喔！可以輸入 `!help` 查看洛洛會什麼！")
+            try: await ctx.send(f"嗷嗷嗷～Fuwawa找不到 `!{cmd_name}` 這個指令喔！可以輸入 `!help` 查看Fuwawa會什麼！")
             except: pass
             return
         
         try:
             if isinstance(error, commands.MissingPermissions):
-                await ctx.send("洛洛偵測到你沒有權限執行這個動作喔！嗷～")
+                await ctx.send("Fuwawa偵測到你沒有權限執行這個動作喔！嗷～")
             else:
                 await ctx.send(f"嗷嗷嗷～發生錯誤了：{error}")
         except:
             print(f"⚠️ [Error Handler Log] 指令錯誤且無法傳回訊息: {error}")
 
 # 機器人實例
-bot = YokaroBot()
+bot = FuwawaBot()
 
 # --- 基礎全域指令 ---
 @bot.hybrid_command(name='ping', aliases=['延遲'])
@@ -371,7 +371,7 @@ async def version(ctx):
     import subprocess
     try:
         commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode('utf-8').strip()
-        await ctx.send(f"🤖 目前 Yokaro 運行的版本是: `{commit}`")
+        await ctx.send(f"🤖 目前 Fuwawa 運行的版本是: `{commit}`")
     except:
         await ctx.send("🤖 目前無法取得版本資訊（可能不是透過 Git 啟動的）。")
 
@@ -379,7 +379,7 @@ async def version(ctx):
 @commands.has_permissions(administrator=True)
 async def reboot(ctx):
     """(管理員) 重啟機器人"""
-    await ctx.send("⚙️ 洛洛正在重啟中，請稍候一下喔！嗷～")
+    await ctx.send("⚙️ Fuwawa正在重啟中，請稍候一下喔！嗷～")
     exit(0) # 搭配 start.sh 循環實現自動重啟
 
 class FeatureMenuView(discord.ui.View):
@@ -390,8 +390,8 @@ class FeatureMenuView(discord.ui.View):
 
     def _base_embed(self):
         embed = discord.Embed(
-            title="✨ 祈星·優卡洛 互動指令面板",
-            description="洛洛現在支援全新的按鈕選單囉！\n請點擊下方的按鈕來切換不同的指令分類：",
+            title="✨ Fuwawa 互動指令面板",
+            description="Fuwawa現在支援全新的按鈕選單囉！\n請點擊下方的按鈕來切換不同的指令分類：",
             color=0xf7b9c4,
         )
         if self.bot.user:
@@ -417,7 +417,7 @@ class FeatureMenuView(discord.ui.View):
             embed.add_field(name="伺服器控制", value="`!用戶面板` `!功能列表` `!後台` `!webpanel`", inline=False)
             embed.add_field(name="AI 代理", value="`!ai` 可執行受限的 cog 管理動作", inline=False)
         else:
-            embed.add_field(name="洛洛現在支援全新的按鈕選單囉！", value="請點擊下方的按鈕來切換不同的指令分類。", inline=False)
+            embed.add_field(name="Fuwawa現在支援全新的按鈕選單囉！", value="請點擊下方的按鈕來切換不同的指令分類。", inline=False)
             embed.add_field(name="提示", value="所有指令皆支援中英雙語通用喔！", inline=False)
         return embed
 
@@ -450,7 +450,7 @@ class FeatureMenuView(discord.ui.View):
         embed = self._base_embed()
         embed.title = "💰 經濟/股票"
         embed.add_field(name="!balance / !錢包", value="查看資產", inline=False)
-        embed.add_field(name="!work / !打工", value="賺取洛洛幣", inline=False)
+        embed.add_field(name="!work / !打工", value="賺取Fuwawa幣", inline=False)
         embed.add_field(name="!stock / !股價", value="查詢報價", inline=False)
         await interaction.response.edit_message(embed=embed, view=self)
 

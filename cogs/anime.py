@@ -1,5 +1,5 @@
 """
-Yokaro 動漫搜索系統 (!動漫搜索)
+Fuwawa 動漫搜索系統 (!動漫搜索)
 使用 Jikan API (MyAnimeList 非官方 API) - 免費、免 API Key
 搜尋動畫或漫畫的詳細資料。
 """
