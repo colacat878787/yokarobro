@@ -46,6 +46,8 @@ TOGGLEABLE_COGS = {
     "AntiRaidCog": "🛡️ 防突襲",
     "StickyCog": "📌 常駐訊息",
     "CustomCmdsCog": "🧩 自訂指令",
+    "VoiceReconnectCog": "🔊 重啟後重回語音",
+    "VoiceInviteCog": "📬 私訊語音邀請加入",
 }
 
 # 不可切換的核心模組

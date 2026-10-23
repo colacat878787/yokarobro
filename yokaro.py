@@ -138,6 +138,8 @@ class FuwawaBot(commands.Bot):
             'cogs.anti_raid',          # 🛡️ 防突襲系統
             'cogs.sticky',             # 📌 常駐訊息
             'cogs.custom_cmds',        # 🧩 自訂指令
+            'cogs.voice_reconnect',    # 🔊 重啟後重回語音頻道
+            'cogs.voice_invite',       # 📬 私訊語音邀請自動加入
         ]
         self.core_cogs = {
             "SecurityCog", "WebPanelCog", "ManagementCog", "SystemCog",
@@ -388,6 +390,14 @@ async def version(ctx):
 async def reboot(ctx):
     """(管理員) 重啟機器人"""
     await ctx.send("⚙️ Fuwawa正在重啟中，請稍候一下喔！嗷～")
+    # 重啟前：停播音訊、乾淨離開語音並記住所在頻道（重啟後會自動重回）
+    try:
+        import asyncio as _asyncio
+        vrc = bot.get_cog("VoiceReconnectCog")
+        if vrc:
+            await _asyncio.wait_for(vrc.save_and_leave_all(), timeout=15)
+    except Exception as e:
+        print(f"[reboot] 語音清理失敗（不影響重啟）: {e}")
     exit(0) # 搭配 start.sh 循環實現自動重啟
 
 class FeatureMenuView(discord.ui.View):
