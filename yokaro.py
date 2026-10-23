@@ -130,6 +130,14 @@ class FuwawaBot(commands.Bot):
             'cogs.auto_role',          # 🤖 自動身分組系統
             'cogs.alarm',              # ⏰ 鬧鐘系統
             'cogs.logging',             # 📋 機器人 Log 系統
+            # ===== 2026-10 新功能模組 =====
+            'cogs.modutils',           # 🧹 清訊 / 慢速模式
+            'cogs.temp_punish',        # ⏳ 限時懲罰（tempmute / tempban）
+            'cogs.polls',              # 🗳️ 原生投票
+            'cogs.feeds',              # 📺 YouTube / Twitch 通知
+            'cogs.anti_raid',          # 🛡️ 防突襲系統
+            'cogs.sticky',             # 📌 常駐訊息
+            'cogs.custom_cmds',        # 🧩 自訂指令
         ]
         self.core_cogs = {
             "SecurityCog", "WebPanelCog", "ManagementCog", "SystemCog",

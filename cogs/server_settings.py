@@ -39,6 +39,13 @@ TOGGLEABLE_COGS = {
     "CasinoCog": "🎰 賭場系統",
     "PetsCog": "🐾 寵物系統",
     "FinanceCog": "💳 財務系統",
+    "ModUtilsCog": "🧹 清訊/慢速",
+    "TempPunishCog": "⏳ 限時懲罰",
+    "PollCog": "🗳️ 投票系統",
+    "FeedCog": "📺 YouTube/Twitch 通知",
+    "AntiRaidCog": "🛡️ 防突襲",
+    "StickyCog": "📌 常駐訊息",
+    "CustomCmdsCog": "🧩 自訂指令",
 }
 
 # 不可切換的核心模組

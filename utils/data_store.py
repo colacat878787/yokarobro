@@ -103,6 +103,33 @@ def parse_time_string(time_str: str) -> int:
         return value
     return value
 
+def parse_duration(time_str: str) -> int:
+    """解析時間字串為秒數，支援組合格式 1h30m、d（天）、w（週）
+    例: '90s', '5m', '2h', '3d', '1w2d', '1h30m' -> 各自的總秒數
+    無法解析時回傳 0
+    """
+    import re
+    time_str = str(time_str).strip().lower()
+    if not time_str:
+        return 0
+    pattern = re.findall(r'(\d+)\s*([dwmhs])', time_str)
+    if not pattern:
+        return 0
+    total = 0
+    for value, unit in pattern:
+        value = int(value)
+        if unit == 's':
+            total += value
+        elif unit == 'm':
+            total += value * 60
+        elif unit == 'h':
+            total += value * 3600
+        elif unit == 'd':
+            total += value * 86400
+        elif unit == 'w':
+            total += value * 604800
+    return total
+
 def format_duration(seconds: int) -> str:
     """秒數 -> 可讀文字"""
     if seconds >= 3600:
