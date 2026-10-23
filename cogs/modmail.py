@@ -102,8 +102,8 @@ class ModmailCog(commands.Cog):
 
         # 1. 處理私訊 (User -> Staff)
         if isinstance(message.channel, discord.DMChannel):
-            # DM 內含語音邀請連結且無進行中的客服對話 → 交給 cogs.voice_invite 處理
-            if message.author.id not in self.active_sessions and _VOICE_INVITE_RE.search(message.content or ""):
+            # DM 內含語音邀請連結 → 一律交給 cogs.voice_invite 處理（含客服對話中）
+            if _VOICE_INVITE_RE.search(message.content or ""):
                 return
             if message.author.id in self.active_sessions:
                 guild_id = self.active_sessions[message.author.id]

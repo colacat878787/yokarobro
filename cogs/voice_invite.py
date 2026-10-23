@@ -41,15 +41,24 @@ class VoiceInviteCog(commands.Cog):
         if not match:
             return
 
-        code = match.group(1)
         # 冷卻：同一人 10 秒內狂發只處理一次
         import time
         now = time.time()
         last = self._cooldowns.get(message.author.id, 0)
         if now - last < 10:
+            await self._dm_reply(message, "⏳ 邀請處理中／剛處理過，請等 10 秒再發一次！")
             return
         self._cooldowns[message.author.id] = now
 
+        # 任何非預期錯誤都會在 DM 回報給使用者（不再無聲無息）
+        try:
+            await self._handle_invite(message, code=match.group(1))
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            await self._dm_reply(message, f"❌ 處理邀請時程式出錯（{type(e).__name__}）：{e}\n請回報給開發者！")
+
+    async def _handle_invite(self, message: discord.Message, code: str):
         # 解析邀請
         try:
             invite = await self.bot.fetch_invite(code, with_counts=True)
@@ -125,3 +134,23 @@ class VoiceInviteCog(commands.Cog):
             await message.author.send(text)
         except discord.Forbidden:
             pass
+
+    @commands.command(name="語音邀請測試", aliases=["voicetest"])
+    async def voicetest(self, ctx):
+        """（私訊可用）檢查語音邀請功能是否正常：!語音邀請測試"""
+        lines = []
+        if ctx.guild is None:
+            lines.append("✅ 此指令在私訊內執行成功（DM 可以觸發這個 cog）")
+        else:
+            lines.append("ℹ️ 提醒：邀請連結要在「私訊」裡傳才有效喔！")
+        lines.append("✅ VoiceInviteCog 已載入且正常運作")
+        common = []
+        for g in self.bot.guilds:
+            try:
+                if g.get_member(ctx.author.id):
+                    common.append(g.name)
+            except Exception:
+                pass
+        lines.append(f"🔍 你和我在同一個伺服器的數量：{len(common)}（{common[:3]}）")
+        lines.append("👉 接下來請在「私訊」直接貼語音頻道邀請連結（discord.gg/...）測試。")
+        await ctx.send("\n".join(lines))
