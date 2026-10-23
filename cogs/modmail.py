@@ -1,7 +1,12 @@
+import re
+
 import discord
 from discord.ext import commands
 import asyncio
 from utils.config import config_manager
+
+# 語音邀請連結（與 cogs.voice_invite 相同格式）— DM 偵測到時讓位給語音邀請功能
+_VOICE_INVITE_RE = re.compile(r"(?:discord\.gg|discord(?:app)?\.com/invite)/([A-Za-z0-9-]{2,20})")
 
 class ModmailView(discord.ui.View):
     def __init__(self, cog, user_id, guild_id):
@@ -97,6 +102,9 @@ class ModmailCog(commands.Cog):
 
         # 1. 處理私訊 (User -> Staff)
         if isinstance(message.channel, discord.DMChannel):
+            # DM 內含語音邀請連結且無進行中的客服對話 → 交給 cogs.voice_invite 處理
+            if message.author.id not in self.active_sessions and _VOICE_INVITE_RE.search(message.content or ""):
+                return
             if message.author.id in self.active_sessions:
                 guild_id = self.active_sessions[message.author.id]
                 channel_id = self.channel_map.get(message.author.id)
