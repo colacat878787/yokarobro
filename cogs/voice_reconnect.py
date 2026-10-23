@@ -25,6 +25,7 @@ class VoiceReconnectCog(commands.Cog):
         # {guild_id: channel_id}
         self.store = DataStore("voice_reconnect.json")
         self._closed = False
+        self._shutting_down = False
         # 攔截 bot.close()：任何 graceful 關閉前先乾淨離開語音
         self._orig_close = bot.close
         bot.close = self._wrapped_close
@@ -33,6 +34,22 @@ class VoiceReconnectCog(commands.Cog):
         # 還原 close（reload 時不重複包裹）
         if getattr(self.bot, "close", None) is self._wrapped_close:
             self.bot.close = self._orig_close
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member, before, after):
+        """隨時記錄機器人所在的語音頻道（含被 o._exit 硬重啟前的狀態）"""
+        if member.id != self.bot.user.id:
+            return
+        guild = member.guild
+        if not guild:
+            return
+        if after.channel:
+            # 被踢進 Stage 上台這種狀態也算，先記頻道
+            if not self._shutting_down:
+                self.store.set(guild.id, after.channel.id)
+        elif before.channel and not self._shutting_down:
+            # 主動離開（管理員踢出、!stop 離開等）→ 清掉記錄，重啟後不會誤重返虎口
+            self.store.delete(guild.id)
 
     # ===== 關閉攔截 =====
     async def _wrapped_close(self, *args, **kwargs):
@@ -44,6 +61,7 @@ class VoiceReconnectCog(commands.Cog):
 
     async def save_and_leave_all(self):
         """記住所有語音所在的頻道、停播、乾淨離開"""
+        self._shutting_down = True
         for vc in list(self.bot.voice_clients):
             try:
                 if not vc.is_connected():
